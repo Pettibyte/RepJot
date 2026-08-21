@@ -1,0 +1,36 @@
+{
+  "name": "rep-jot-devcontainer",
+  "dockerComposeFile": [
+    "docker-compose.yml",
+    "docker-compose.local.yml"
+  ],
+  "initializeCommand": ".devcontainer/init-compose-env.sh",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": false,
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "RepJot Vite development server",
+      "onAutoForward": "notify",
+      "requireLocalPort": true
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "openai.chatgpt"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "files.trimTrailingWhitespace": true
+      }
+    }
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh"
+}
