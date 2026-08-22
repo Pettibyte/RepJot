@@ -62,6 +62,35 @@ For every later deployment, run the same checks and build, commit the updated `d
 alongside its source changes, and run the same `git subtree push` command. Do not edit
 the `gh-pages` branch directly; treat it as generated deployment output.
 
+### Recover from a non-fast-forward subtree push
+
+Do not run `git pull origin gh-pages` on `main`: the `gh-pages` branch contains the
+contents of `dist/` at its root, so it cannot be merged into the repository root as a
+normal branch. `git subtree pull` also does not work for this repository because
+`dist/` was originally committed as a normal directory rather than created with
+`git subtree add`.
+
+The current `gh-pages` branch diverged because GitHub added a `CNAME` file directly to
+it. That file now lives at `src/public/CNAME`, so every `bun run build` preserves it in
+`dist/CNAME`. After building and committing `dist/`, reconcile the deployment branch
+once with these guarded commands:
+
+```sh
+git fetch origin gh-pages
+deployment_commit=$(git subtree split --prefix dist)
+git diff --stat "$deployment_commit" origin/gh-pages
+git push --force-with-lease=gh-pages:$(git rev-parse origin/gh-pages) \
+  origin "$deployment_commit":gh-pages
+```
+
+Review the `git diff --stat` output before pushing. This replaces only `gh-pages`, and
+the explicit force-with-lease refuses to proceed if that branch changes after the
+fetch. Once reconciled, future deployments return to the normal command:
+
+```sh
+git subtree push --prefix dist origin gh-pages
+```
+
 To enable Google sign-in on Pages, also add `https://pettijohn.github.io` as an
 authorized JavaScript origin for the Google OAuth client. Origins do not include the
 `/RepJot/` path.
