@@ -22,6 +22,49 @@ storage, networking, file, media, worker, and device APIs. It does not request s
 permissions or transmit results. Use **Download HTML report** to save a standalone
 snapshot that can be compared with later browser or application versions.
 
+## Deploy to GitHub Pages
+
+This repository publishes the committed `dist/` build from a dedicated `gh-pages`
+branch. GitHub Actions are not required.
+
+For the first deployment:
+
+1. Build and verify the site with Bun:
+
+   ```sh
+   bun ci
+   bun run check
+   bun run build
+   ```
+
+2. Commit the generated `dist/` files together with the source changes that produced
+   them. Stage any other source files you intentionally changed as well:
+
+   ```sh
+   git add README.md CAPABILITIES.md src vite.config.ts dist
+   git commit -m "Build site for GitHub Pages"
+   ```
+
+3. Publish only `dist/` to the deployment branch:
+
+   ```sh
+   git subtree push --prefix dist origin gh-pages
+   ```
+
+4. In the GitHub repository, open **Settings → Pages**, choose **Deploy from a branch**,
+   and select the `gh-pages` branch and `/(root)` folder.
+
+The site will be available at `https://pettijohn.github.io/RepJot/`, with the browser
+report at `https://pettijohn.github.io/RepJot/capabilities.html`.
+
+For every later deployment, run the same checks and build, commit the updated `dist/`
+alongside its source changes, and run the same `git subtree push` command. Do not edit
+the `gh-pages` branch directly; treat it as generated deployment output.
+
+To enable Google sign-in on Pages, also add `https://pettijohn.github.io` as an
+authorized JavaScript origin for the Google OAuth client. Origins do not include the
+`/RepJot/` path.
+
 ## Configure Google OAuth
 
 1. Create or select a project in the Google Cloud Console.

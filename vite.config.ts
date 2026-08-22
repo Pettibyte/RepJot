@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   root: 'src',
+  base: './',
   envDir: '..',
   plugins: [svelte()],
   server: {
