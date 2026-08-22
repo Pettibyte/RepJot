@@ -102,9 +102,11 @@ fetch. Once reconciled, future deployments return to the normal command:
 git subtree push --prefix dist origin gh-pages
 ```
 
-To enable Google sign-in on Pages, also add `https://pettijohn.github.io` as an
-authorized JavaScript origin for the Google OAuth client. Origins do not include the
-`/RepJot/` path.
+To enable Google sign-in on Pages, add `https://repjot.com` as an authorized JavaScript
+origin and `https://repjot.com/` as an authorized redirect URI for the Google OAuth
+client. Origins do not include a path, while redirect URIs do. If you use the default
+Pages hostname instead, configure `https://pettijohn.github.io` as the origin and
+`https://pettijohn.github.io/RepJot/` as the redirect URI.
 
 ## Configure Google OAuth
 
@@ -116,7 +118,9 @@ authorized JavaScript origin for the Google OAuth client. Origins do not include
    `https://www.googleapis.com/auth/drive.appdata` scope.
 5. Under **Clients**, create a client with application type **Web application**.
 6. Add `http://localhost` and `http://localhost:5173` as **Authorized JavaScript origins**.
-   No redirect URI is needed for this popup-based flow.
+   Add the exact site URL, including its trailing slash, under **Authorized redirect
+   URIs**. For production this is `https://repjot.com/`; for the default local dev
+   server it is `http://localhost:5173/`.
 7. Create `.env.local` from the example and insert the generated client ID:
 
    ```dotenv
@@ -125,3 +129,8 @@ authorized JavaScript origin for the Google OAuth client. Origins do not include
 
 The web client ID is public configuration and is embedded in `dist/app.js`. Do not add
 the client secret to this project. Restart `bun run dev` after changing `.env.local`.
+REP JOT currently uses Google's legacy full-page implicit flow as a compatibility test
+for the Kindle browser. Google recommends an authorization-code flow with a backend for
+production applications.
+
+Note: current prototype uses deprecated Google auth flow https://developers.google.com/identity/oauth2/web/guides/use-token-model

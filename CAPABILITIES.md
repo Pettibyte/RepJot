@@ -4,19 +4,19 @@
 
 | Field | Value |
 | --- | --- |
-| Started | 2026-08-22T18:49:29.021Z |
-| Finished | 2026-08-22T18:49:29.317Z |
+| Started | 2026-08-22T19:05:12.985Z |
+| Finished | 2026-08-22T19:05:13.437Z |
 | URL | https://repjot.com/capabilities.html |
 
 ## Summary
 
 | Result | Count |
 | --- | ---: |
-| Supported | 90 |
+| Supported | 94 |
 | Unsupported | 10 |
-| Limited or Error | 2 |
+| Limited or Error | 1 |
 | Informational | 14 |
-| Total checks displayed | 116 |
+| Total checks displayed | 119 |
 
 ## Browser and display
 
@@ -75,8 +75,8 @@
 | Inline classic script execution | Supported | This test runner is executing as an inline classic script |
 | Defer attribute | Supported | Classic scripts recognize the defer attribute |
 | Deferred external classic script execution | Unsupported | Deferred script did not execute after the document body was parsed |
-| External module script execution | Supported | Same-origin external script loaded and executed |
 | External classic script execution | Supported | Same-origin external script loaded and executed |
+| External module script execution | Supported | Same-origin external script loaded and executed |
 
 ## HTML and CSS
 
@@ -121,6 +121,7 @@
 | --- | --- | --- |
 | localStorage | Supported | Write, read, and remove succeeded |
 | sessionStorage | Supported | Write, read, and remove succeeded |
+| First-party cookie round trip | Supported | A same-site cookie was written, read, and removed |
 | IndexedDB | Supported | API is present; an open/write check will follow |
 | Cache Storage | Supported | Available |
 | IndexedDB open test | Supported | Temporary database opened successfully and deletion was requested |
@@ -142,8 +143,10 @@
 | Crypto method polyfills | Supported | The Crypto host object accepted a temporary method |
 | Random UUID | Unsupported | crypto.randomUUID is absent |
 | Popup API | Supported | window.open is exposed; popup policy still requires a user gesture |
-| Popup behavior | Limited | Not tested automatically; use “Test Google OAuth prerequisites” |
-| Google Identity script | Limited | Not tested automatically; use “Test Google OAuth prerequisites” (contacts accounts.google.com) |
+| Popupless Google authorization | Limited | Not automatically testable without initiating authorization; no window will be opened by this report |
+| Google Identity script | Supported | Google Identity Services loaded and exposes initTokenClient |
+| Google token client initialization | Supported | initTokenClient returned a token client; requestAccessToken was not called |
+| Credential Management API | Supported | Available |
 | Same-origin fetch request | Supported | Fetch, Response.ok, and Response.text succeeded |
 
 ## Files and sharing

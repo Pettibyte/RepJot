@@ -1,88 +1,68 @@
-const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client';
+const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const OAUTH_STATE_KEY = 'repjot-google-oauth-state';
 
-interface TokenResponse {
-  access_token: string;
-  error?: string;
-  error_description?: string;
+function redirectUri(): string {
+  return new URL('./', window.location.href).href;
 }
 
-interface TokenClientConfig {
-  client_id: string;
-  scope: string;
-  callback: (response: TokenResponse) => void;
-  error_callback?: (error: { type: string; message?: string }) => void;
+function createState(): string {
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+
+  let state = '';
+  for (let index = 0; index < bytes.length; index += 1) {
+    const hex = bytes[index].toString(16);
+    state += hex.length === 1 ? `0${hex}` : hex;
+  }
+  return state;
 }
 
-interface TokenClient {
-  requestAccessToken(options?: { prompt?: string }): void;
-}
-
-interface GoogleIdentityServices {
-  accounts: {
-    oauth2: {
-      initTokenClient(config: TokenClientConfig): TokenClient;
-    };
-  };
-}
-
-declare global {
-  interface Window {
-    google?: GoogleIdentityServices;
+function clearOAuthFragment(): void {
+  if (typeof window.history.replaceState === 'function') {
+    window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
   }
 }
 
-let scriptPromise: Promise<void> | undefined;
+export function beginDriveAuthorization(clientId: string): void {
+  const state = createState();
+  window.sessionStorage.setItem(OAUTH_STATE_KEY, state);
 
-function loadGoogleIdentityServices(): Promise<void> {
-  if (window.google !== undefined) {
-    return Promise.resolve();
-  }
+  const parameters = new URLSearchParams();
+  parameters.set('client_id', clientId);
+  parameters.set('redirect_uri', redirectUri());
+  parameters.set('response_type', 'token');
+  parameters.set('scope', DRIVE_SCOPE);
+  parameters.set('include_granted_scopes', 'true');
+  parameters.set('state', state);
 
-  scriptPromise ??= new Promise<void>((resolve, reject) => {
-    const existing: HTMLScriptElement | null = document.querySelector(
-      `script[src="${GOOGLE_IDENTITY_SCRIPT}"]`
-    );
-    const script: HTMLScriptElement = existing ?? document.createElement('script');
-
-    script.addEventListener('load', () => resolve(), { once: true });
-    script.addEventListener('error', () => reject(new Error('Google Identity Services failed to load.')), {
-      once: true
-    });
-
-    if (existing === null) {
-      script.src = GOOGLE_IDENTITY_SCRIPT;
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  });
-
-  return scriptPromise;
+  window.location.assign(`${GOOGLE_AUTHORIZATION_ENDPOINT}?${parameters.toString()}`);
 }
 
-export async function requestDriveAccessToken(clientId: string): Promise<string> {
-  await loadGoogleIdentityServices();
+export function consumeDriveAuthorizationResponse(): string | null {
+  if (window.location.hash.length < 2) return null;
 
-  const google: GoogleIdentityServices | undefined = window.google;
-  if (google === undefined) {
-    throw new Error('Google Identity Services is unavailable.');
+  const parameters = new URLSearchParams(window.location.hash.slice(1));
+  if (!parameters.has('access_token') && !parameters.has('error')) return null;
+
+  const expectedState = window.sessionStorage.getItem(OAUTH_STATE_KEY);
+  window.sessionStorage.removeItem(OAUTH_STATE_KEY);
+  clearOAuthFragment();
+
+  const returnedState = parameters.get('state');
+  if (expectedState === null || returnedState !== expectedState) {
+    throw new Error('Google authorization returned an invalid state value. Please try again.');
   }
 
-  return new Promise<string>((resolve, reject) => {
-    const tokenClient: TokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/drive.appdata',
-      callback: (response: TokenResponse): void => {
-        if (response.error !== undefined) {
-          reject(new Error(response.error_description ?? response.error));
-          return;
-        }
-        resolve(response.access_token);
-      },
-      error_callback: (error): void => reject(new Error(error.message ?? error.type))
-    });
+  const oauthError = parameters.get('error');
+  if (oauthError !== null) {
+    throw new Error(parameters.get('error_description') ?? oauthError);
+  }
 
-    tokenClient.requestAccessToken();
-  });
+  const accessToken = parameters.get('access_token');
+  if (accessToken === null || accessToken.length === 0) {
+    throw new Error('Google authorization did not return an access token.');
+  }
+
+  return accessToken;
 }
-
-export {};

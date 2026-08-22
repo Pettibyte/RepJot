@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import {
     createHelloWorld,
     findHelloWorldFile,
@@ -6,7 +7,7 @@
     updateHelloWorld,
     type HelloWorldDocument
   } from './google-drive';
-  import { requestDriveAccessToken } from './google-identity';
+  import { beginDriveAuthorization, consumeDriveAuthorizationResponse } from './google-identity';
 
   const clientId: string = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
   const configured: boolean = clientId.length > 0 && !clientId.startsWith('YOUR_CLIENT_ID');
@@ -23,30 +24,52 @@
     return error instanceof Error ? error.message : String(error);
   }
 
-  async function signIn(): Promise<void> {
+  async function loadFromDrive(token: string): Promise<void> {
+    const file = await findHelloWorldFile(token);
+    if (file === null) {
+      fileId = null;
+      status = 'Signed in. No saved document yet.';
+    } else {
+      fileId = file.id;
+      const document: HelloWorldDocument = await readHelloWorld(token, file.id);
+      helloWorld = document.helloWorld;
+      status = 'Loaded from Google Drive.';
+    }
+  }
+
+  function signIn(): void {
     if (!configured) return;
     busy = true;
-    status = 'Signing in…';
+    status = 'Redirecting to Google…';
     try {
-      accessToken = await requestDriveAccessToken(clientId);
-      status = 'Loading from Google Drive…';
-      const file = await findHelloWorldFile(accessToken);
-      if (file === null) {
-        fileId = null;
-        status = 'Signed in. No saved document yet.';
-      } else {
-        fileId = file.id;
-        const document: HelloWorldDocument = await readHelloWorld(accessToken, file.id);
-        helloWorld = document.helloWorld;
-        status = 'Loaded from Google Drive.';
-      }
+      beginDriveAuthorization(clientId);
     } catch (error: unknown) {
-      accessToken = null;
       status = `Error: ${errorMessage(error)}`;
-    } finally {
       busy = false;
     }
   }
+
+  onMount(() => {
+    let returnedToken: string | null;
+    try {
+      returnedToken = consumeDriveAuthorizationResponse();
+    } catch (error: unknown) {
+      status = `Error: ${errorMessage(error)}`;
+      return;
+    }
+
+    if (returnedToken === null) return;
+
+    accessToken = returnedToken;
+    busy = true;
+    status = 'Loading from Google Drive…';
+    loadFromDrive(returnedToken).catch((error: unknown) => {
+      accessToken = null;
+      status = `Error: ${errorMessage(error)}`;
+    }).finally(() => {
+      busy = false;
+    });
+  });
 
   async function save(): Promise<void> {
     if (accessToken === null) return;
