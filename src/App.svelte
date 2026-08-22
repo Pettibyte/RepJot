@@ -81,4 +81,6 @@
   {/if}
 
   <p>{status}</p>
+
+  <p><a href="/capabilities.html">Run browser capability report</a></p>
 </main>

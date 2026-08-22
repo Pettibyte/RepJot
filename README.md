@@ -12,7 +12,15 @@ document in the signed-in user's private Google Drive `appDataFolder`.
 3. Start the app with `bun run dev` and open `http://localhost:5173`.
 
 Run `bun run check` for strict TypeScript/Svelte checks and `bun run build` to produce
-the two-file static bundle in `dist/`.
+the static bundle in `dist/`.
+
+## Probe a browser
+
+Open `http://localhost:5173/capabilities.html` in the browser you want to evaluate.
+The page runs non-destructive checks for JavaScript, HTML/CSS, touch and pointer input,
+storage, networking, file, media, worker, and device APIs. It does not request sensitive
+permissions or transmit results. Use **Download HTML report** to save a standalone
+snapshot that can be compared with later browser or application versions.
 
 ## Configure Google OAuth
 

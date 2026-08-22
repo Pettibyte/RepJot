@@ -1,5 +1,6 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
+import { resolve } from 'node:path';
 
 export default defineConfig({
   root: 'src',
@@ -16,6 +17,10 @@ export default defineConfig({
     assetsDir: '',
     cssCodeSplit: false,
     rollupOptions: {
+      input: {
+        app: resolve(import.meta.dirname, 'src/index.html'),
+        capabilities: resolve(import.meta.dirname, 'src/capabilities.html')
+      },
       output: {
         entryFileNames: 'app.js',
         chunkFileNames: 'app.js',

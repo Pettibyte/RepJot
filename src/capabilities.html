@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RepJot browser capability report</title>
+    <style>
+      :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f4f1e8; color: #171713; line-height: 1.45; }
+      main { width: 100%; max-width: 980px; margin: 0 auto; padding: 20px; }
+      h1 { margin: 0 0 4px; font-size: 1.8rem; }
+      h2 { margin: 28px 0 8px; border-bottom: 2px solid #171713; font-size: 1.25rem; }
+      p { margin: 8px 0; }
+      .lede { max-width: 65rem; }
+      .controls { margin: 18px 0; }
+      button, a.button { display: inline-block; min-height: 44px; margin: 0 8px 8px 0; padding: 10px 14px; border: 2px solid #171713; border-radius: 3px; background: #fff; color: #171713; font: inherit; font-weight: bold; text-decoration: none; cursor: pointer; }
+      button:focus, a:focus { outline: 3px solid #5b79c9; outline-offset: 2px; }
+      button[disabled] { color: #666; cursor: wait; }
+      .summary { display: table; width: 100%; border-spacing: 8px; table-layout: fixed; }
+      .summary-item { display: table-cell; padding: 12px 6px; border: 2px solid #555; background: #fff; text-align: center; }
+      .summary-item strong { display: block; font-size: 1.5rem; }
+      table { width: 100%; border-collapse: collapse; background: #fff; }
+      th, td { padding: 8px; border: 1px solid #888; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+      th { background: #dedbd2; }
+      td:first-child { width: 28%; font-weight: bold; }
+      td:nth-child(2) { width: 9rem; }
+      .supported { color: #185c2b; }
+      .unsupported, .error { color: #8c1d18; }
+      .limited { color: #765600; }
+      .pending, .info { color: #444; }
+      code { font-family: Consolas, monospace; font-size: .9em; }
+      .note { padding: 10px; border-left: 5px solid #765600; background: #fff8d9; }
+      .noscript { padding: 14px; border: 3px solid #8c1d18; background: #fff; }
+      footer { margin-top: 28px; font-size: .9rem; }
+      @media (max-width: 600px) {
+        main { padding: 12px; }
+        .summary { display: block; }
+        .summary-item { display: inline-block; width: 47%; margin: 1%; }
+        table, thead, tbody, tr, th, td { display: block; }
+        thead { position: absolute; left: -9999px; }
+        tr { border: 1px solid #555; margin-bottom: 10px; }
+        td { width: auto !important; border: 0; border-bottom: 1px solid #ccc; }
+        td:before { display: block; color: #555; font-size: .75rem; font-weight: normal; text-transform: uppercase; }
+        td:nth-child(1):before { content: "Capability"; }
+        td:nth-child(2):before { content: "Result"; }
+        td:nth-child(3):before { content: "Details"; }
+      }
+      @media print {
+        body { background: #fff; }
+        main { max-width: none; padding: 0; }
+        .controls, .note, footer a { display: none; }
+        h2 { break-after: avoid; }
+        tr { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>RepJot browser capability report</h1>
+      <p class="lede">This page tests browser features relevant to RepJot without requesting sensitive permissions or sending data anywhere. Results describe this browser in its current security context.</p>
+
+      <noscript><p class="noscript"><strong>JavaScript did not run.</strong> RepJot requires JavaScript, so this browser cannot run the application as currently designed.</p></noscript>
+
+      <div class="controls">
+        <button id="run" type="button">Run tests again</button>
+        <button id="download" type="button" disabled>Download HTML report</button>
+        <button id="copy" type="button" disabled>Copy text report</button>
+        <a class="button" href="/">Back to RepJot</a>
+      </div>
+
+      <p id="progress" role="status" aria-live="polite">Waiting to run…</p>
+      <div id="summary" class="summary" aria-label="Test summary"></div>
+      <p class="note"><strong>Interpretation:</strong> “Supported” means a small non-destructive check passed. “Limited” means the API exists but could not be fully exercised here. Permission-gated APIs are only detected; this page does not prompt for access.</p>
+      <div id="results"></div>
+
+      <footer>
+        <p>Generated locally by RepJot. No results leave this device.</p>
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        'use strict';
+
+        var results = [];
+        var startedAt = null;
+        var finishedAt = null;
+        var categoryOrder = [
+          'Browser and display',
+          'JavaScript',
+          'HTML and CSS',
+          'Input',
+          'Storage',
+          'Networking and security',
+          'Files and sharing',
+          'Graphics and media',
+          'Background and device APIs'
+        ];
+
+        function byId(id) { return document.getElementById(id); }
+        function own(object, key) { return Object.prototype.hasOwnProperty.call(object, key); }
+        function text(value) {
+          if (value === undefined) return 'undefined';
+          if (value === null) return 'null';
+          if (typeof value === 'boolean') return value ? 'true' : 'false';
+          return String(value);
+        }
+        function safe(getter, fallback) {
+          try { return getter(); } catch (error) { return fallback + ' (' + errorText(error) + ')'; }
+        }
+        function errorText(error) {
+          return error && error.message ? error.message : String(error);
+        }
+        function escapeHtml(value) {
+          return text(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+        function add(category, name, status, details) {
+          results.push({ category: category, name: name, status: status, details: text(details) });
+        }
+        function support(category, name, condition, yes, no) {
+          add(category, name, condition ? 'Supported' : 'Unsupported', condition ? (yes || 'Available') : (no || 'Not available'));
+        }
+        function syntax(name, source) {
+          try {
+            Function(source);
+            add('JavaScript', name, 'Supported', 'Syntax parsed successfully');
+          } catch (error) {
+            add('JavaScript', name, 'Unsupported', errorText(error));
+          }
+        }
+        function testStorage(label, storage) {
+          if (!storage) {
+            add('Storage', label, 'Unsupported', 'API is absent');
+            return;
+          }
+          var key = '__repjot_capability_test__';
+          try {
+            storage.setItem(key, 'ok');
+            var passed = storage.getItem(key) === 'ok';
+            storage.removeItem(key);
+            add('Storage', label, passed ? 'Supported' : 'Error', passed ? 'Write, read, and remove succeeded' : 'Value did not round-trip');
+          } catch (error) {
+            add('Storage', label, 'Limited', 'API exists but access failed: ' + errorText(error));
+          }
+        }
+        function testInputType(typeName) {
+          var input = document.createElement('input');
+          input.setAttribute('type', typeName);
+          var recognized = input.type === typeName;
+          add('HTML and CSS', 'Input type: ' + typeName, recognized ? 'Supported' : 'Unsupported', recognized ? 'Browser recognizes this input type' : 'Falls back to text');
+        }
+        function codec(element, mime) {
+          if (!element || !element.canPlayType) return 'API absent';
+          return element.canPlayType(mime) || 'no';
+        }
+
+        function runSynchronousTests() {
+          var nav = window.navigator || {};
+          var screenObject = window.screen || {};
+          var documentElement = document.documentElement;
+          var canvas = document.createElement('canvas');
+          var video = document.createElement('video');
+          var audio = document.createElement('audio');
+
+          add('Browser and display', 'User agent', 'Info', safe(function () { return nav.userAgent; }, 'Unavailable'));
+          add('Browser and display', 'Platform', 'Info', safe(function () { return nav.platform || 'Not reported'; }, 'Unavailable'));
+          add('Browser and display', 'Language', 'Info', safe(function () { return nav.language || nav.userLanguage || 'Not reported'; }, 'Unavailable'));
+          add('Browser and display', 'Viewport', 'Info', documentElement.clientWidth + ' × ' + documentElement.clientHeight + ' CSS pixels');
+          add('Browser and display', 'Screen', 'Info', text(screenObject.width) + ' × ' + text(screenObject.height) + ' pixels; color depth ' + text(screenObject.colorDepth));
+          add('Browser and display', 'Pixel ratio', 'Info', text(window.devicePixelRatio || 1));
+          add('Browser and display', 'Online status', 'Info', own(nav, 'onLine') || typeof nav.onLine !== 'undefined' ? text(nav.onLine) : 'Not reported');
+          add('Browser and display', 'Cookies enabled', 'Info', typeof nav.cookieEnabled === 'boolean' ? text(nav.cookieEnabled) : 'Not reported');
+          add('Browser and display', 'Logical processors', 'Info', nav.hardwareConcurrency || 'Not reported');
+          add('Browser and display', 'Device memory', 'Info', nav.deviceMemory ? nav.deviceMemory + ' GiB (approximate)' : 'Not reported');
+
+          support('JavaScript', 'Promises', typeof window.Promise === 'function');
+          support('JavaScript', 'Fetch', typeof window.fetch === 'function');
+          support('JavaScript', 'Map and Set', typeof window.Map === 'function' && typeof window.Set === 'function');
+          support('JavaScript', 'WeakMap and WeakSet', typeof window.WeakMap === 'function' && typeof window.WeakSet === 'function');
+          support('JavaScript', 'Symbol', typeof window.Symbol === 'function');
+          support('JavaScript', 'Proxy and Reflect', typeof window.Proxy === 'function' && typeof window.Reflect === 'object');
+          support('JavaScript', 'globalThis', typeof globalThis === 'object');
+          support('JavaScript', 'MutationObserver', typeof window.MutationObserver === 'function');
+          support('JavaScript', 'queueMicrotask', typeof window.queueMicrotask === 'function');
+          support('JavaScript', 'String.replaceAll', typeof String.prototype.replaceAll === 'function');
+          support('JavaScript', 'Array.from and includes', typeof Array.from === 'function' && typeof Array.prototype.includes === 'function');
+          support('JavaScript', 'BigInt', typeof window.BigInt === 'function');
+          support('JavaScript', 'WebAssembly', typeof window.WebAssembly === 'object');
+          support('JavaScript', 'Internationalization (Intl)', typeof window.Intl === 'object');
+          support('JavaScript', 'ES modules', 'noModule' in document.createElement('script'), 'Module scripts recognized', 'Module scripts not recognized');
+          syntax('Arrow functions', 'return (() => 1)();');
+          syntax('Classes', 'class Example {}');
+          syntax('Async functions', 'async function example() { return 1; }');
+          syntax('Object and array spread', 'var a = { value: 1 }; return { ...a, items: [...[1]] };');
+          syntax('Private class fields', 'class Example { #value = 1; get() { return this.#value; } }');
+          syntax('Optional chaining', 'var a = {}; return a?.value;');
+          syntax('Nullish coalescing', 'return null ?? 1;');
+
+          support('HTML and CSS', 'querySelector', typeof document.querySelector === 'function');
+          support('HTML and CSS', 'Template element', 'content' in document.createElement('template'));
+          support('HTML and CSS', 'Details element', 'open' in document.createElement('details'));
+          support('HTML and CSS', 'Dialog element', typeof document.createElement('dialog').showModal === 'function');
+          support('HTML and CSS', 'Constraint validation', typeof document.createElement('input').checkValidity === 'function');
+          testInputType('number');
+          testInputType('date');
+          testInputType('time');
+          testInputType('range');
+          support('HTML and CSS', 'CSS feature queries', window.CSS && typeof window.CSS.supports === 'function');
+          if (window.CSS && typeof window.CSS.supports === 'function') {
+            support('HTML and CSS', 'Flexbox', window.CSS.supports('display', 'flex'));
+            support('HTML and CSS', 'CSS Grid', window.CSS.supports('display', 'grid'));
+            support('HTML and CSS', 'Custom properties', window.CSS.supports('--repjot-test', '0'));
+            support('HTML and CSS', 'Sticky positioning', window.CSS.supports('position', 'sticky'));
+          }
+          support('HTML and CSS', 'Media queries', typeof window.matchMedia === 'function');
+
+          add('Input', 'Touch points', (nav.maxTouchPoints || 'ontouchstart' in window) ? 'Supported' : 'Unsupported', 'maxTouchPoints: ' + text(nav.maxTouchPoints || 0) + '; touch events exposed: ' + text('ontouchstart' in window));
+          support('Input', 'Pointer events', typeof window.PointerEvent === 'function');
+          support('Input', 'Keyboard events', typeof window.KeyboardEvent === 'function');
+          support('Input', 'Selection API', typeof window.getSelection === 'function');
+          if (typeof window.matchMedia === 'function') {
+            add('Input', 'Primary pointer', 'Info', window.matchMedia('(pointer: fine)').matches ? 'fine' : (window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'none or not reported'));
+            add('Input', 'Hover input', 'Info', window.matchMedia('(hover: hover)').matches ? 'available' : 'unavailable or not reported');
+          }
+
+          testStorage('localStorage', safe(function () { return window.localStorage; }, null));
+          testStorage('sessionStorage', safe(function () { return window.sessionStorage; }, null));
+          support('Storage', 'IndexedDB', !!window.indexedDB, 'API is present; an open/write check will follow', 'API is absent');
+          support('Storage', 'Cache Storage', !!window.caches);
+
+          support('Networking and security', 'XMLHttpRequest', typeof window.XMLHttpRequest === 'function');
+          support('Networking and security', 'WebSocket', typeof window.WebSocket === 'function');
+          support('Networking and security', 'Server-sent events', typeof window.EventSource === 'function');
+          support('Networking and security', 'Beacon', typeof nav.sendBeacon === 'function');
+          add('Networking and security', 'Secure context', window.isSecureContext ? 'Supported' : 'Limited', window.isSecureContext ? 'Page is a secure context' : 'Page is not a secure context; HTTPS or localhost is required for several APIs');
+          support('Networking and security', 'URL API', typeof window.URL === 'function');
+          support('Networking and security', 'URLSearchParams', typeof window.URLSearchParams === 'function');
+          support('Networking and security', 'Web Crypto', !!(window.crypto && window.crypto.subtle), 'crypto.subtle is present', 'crypto.subtle is absent (often requires a secure context)');
+          support('Networking and security', 'Random UUID', !!(window.crypto && window.crypto.randomUUID), 'crypto.randomUUID is present (used when creating a Drive file)', 'crypto.randomUUID is absent');
+          support('Networking and security', 'Popup API', typeof window.open === 'function', 'window.open is exposed; popup policy still requires a user gesture', 'window.open is absent');
+
+          support('Files and sharing', 'Blob', typeof window.Blob === 'function');
+          support('Files and sharing', 'File', typeof window.File === 'function');
+          support('Files and sharing', 'FileReader', typeof window.FileReader === 'function');
+          support('Files and sharing', 'Object URLs', !!(window.URL && window.URL.createObjectURL));
+          support('Files and sharing', 'Download attribute', 'download' in document.createElement('a'));
+          support('Files and sharing', 'Web Share', typeof nav.share === 'function');
+          support('Files and sharing', 'Async Clipboard', !!(nav.clipboard && nav.clipboard.writeText));
+
+          var context2d = null;
+          var webgl = null;
+          try { context2d = canvas.getContext('2d'); } catch (ignore) {}
+          try { webgl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl'); } catch (ignore) {}
+          support('Graphics and media', 'Canvas 2D', !!context2d);
+          support('Graphics and media', 'WebGL', !!webgl);
+          support('Graphics and media', 'SVG', !!(document.createElementNS && document.createElementNS('http://www.w3.org/2000/svg', 'svg').createSVGRect));
+          add('Graphics and media', 'Video codecs', typeof video.canPlayType === 'function' ? 'Info' : 'Unsupported', 'H.264: ' + codec(video, 'video/mp4; codecs="avc1.42E01E"') + '; WebM VP8: ' + codec(video, 'video/webm; codecs="vp8"'));
+          add('Graphics and media', 'Audio codecs', typeof audio.canPlayType === 'function' ? 'Info' : 'Unsupported', 'MP3: ' + codec(audio, 'audio/mpeg') + '; AAC: ' + codec(audio, 'audio/mp4; codecs="mp4a.40.2"'));
+          support('Graphics and media', 'Web Audio', typeof (window.AudioContext || window.webkitAudioContext) === 'function');
+
+          support('Background and device APIs', 'Web Workers', typeof window.Worker === 'function');
+          support('Background and device APIs', 'Service Workers', !!nav.serviceWorker, 'API is exposed; registration was not attempted', 'API is absent (or unavailable outside a secure context)');
+          support('Background and device APIs', 'Page visibility', typeof document.hidden === 'boolean');
+          support('Background and device APIs', 'Notifications', typeof window.Notification === 'function', 'API is exposed; permission was not requested', 'API is absent');
+          support('Background and device APIs', 'Geolocation', !!nav.geolocation, 'API is exposed; permission was not requested', 'API is absent');
+          support('Background and device APIs', 'Vibration', typeof nav.vibrate === 'function');
+          support('Background and device APIs', 'Fullscreen', !!(documentElement.requestFullscreen || documentElement.webkitRequestFullscreen));
+          support('Background and device APIs', 'Screen orientation', !!screenObject.orientation);
+          support('Background and device APIs', 'Wake Lock', !!nav.wakeLock);
+        }
+
+        function testIndexedDb(done) {
+          if (!window.indexedDB) { done(); return; }
+          var name = '__repjot_capability_test__';
+          var completed = false;
+          var timer = window.setTimeout(function () {
+            if (completed) return;
+            completed = true;
+            add('Storage', 'IndexedDB open test', 'Limited', 'Open operation timed out after 4 seconds');
+            done();
+          }, 4000);
+          try {
+            var request = window.indexedDB.open(name, 1);
+            request.onupgradeneeded = function () {
+              try { request.result.createObjectStore('test'); } catch (ignore) {}
+            };
+            request.onsuccess = function () {
+              if (completed) { try { request.result.close(); } catch (ignore) {} return; }
+              completed = true;
+              window.clearTimeout(timer);
+              try { request.result.close(); } catch (ignore) {}
+              try { window.indexedDB.deleteDatabase(name); } catch (ignore) {}
+              add('Storage', 'IndexedDB open test', 'Supported', 'Temporary database opened successfully and deletion was requested');
+              done();
+            };
+            request.onerror = function () {
+              if (completed) return;
+              completed = true;
+              window.clearTimeout(timer);
+              add('Storage', 'IndexedDB open test', 'Limited', 'API exists but open failed: ' + (request.error ? errorText(request.error) : 'unknown error'));
+              done();
+            };
+            request.onblocked = function () {
+              if (completed) return;
+              completed = true;
+              window.clearTimeout(timer);
+              add('Storage', 'IndexedDB open test', 'Limited', 'Temporary database was blocked');
+              done();
+            };
+          } catch (error) {
+            completed = true;
+            window.clearTimeout(timer);
+            add('Storage', 'IndexedDB open test', 'Limited', 'Open threw an error: ' + errorText(error));
+            done();
+          }
+        }
+
+        function counts() {
+          var output = { Supported: 0, Unsupported: 0, Limited: 0, Error: 0, Info: 0 };
+          var index;
+          for (index = 0; index < results.length; index += 1) {
+            if (own(output, results[index].status)) output[results[index].status] += 1;
+          }
+          return output;
+        }
+        function renderSummary() {
+          var count = counts();
+          var labels = ['Supported', 'Unsupported', 'Limited', 'Info'];
+          var html = '';
+          var index;
+          for (index = 0; index < labels.length; index += 1) {
+            var label = labels[index];
+            var value = count[label] + (label === 'Limited' ? count.Error : 0);
+            html += '<div class="summary-item ' + label.toLowerCase() + '"><strong>' + value + '</strong>' + label + '</div>';
+          }
+          byId('summary').innerHTML = html;
+        }
+        function renderResults() {
+          var html = '';
+          var categoryIndex;
+          var resultIndex;
+          for (categoryIndex = 0; categoryIndex < categoryOrder.length; categoryIndex += 1) {
+            var category = categoryOrder[categoryIndex];
+            var rows = '';
+            for (resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+              var item = results[resultIndex];
+              if (item.category === category) {
+                rows += '<tr><td>' + escapeHtml(item.name) + '</td><td class="' + item.status.toLowerCase() + '">' + escapeHtml(item.status) + '</td><td>' + escapeHtml(item.details) + '</td></tr>';
+              }
+            }
+            if (rows) html += '<section><h2>' + escapeHtml(category) + '</h2><table><thead><tr><th>Capability</th><th>Result</th><th>Details</th></tr></thead><tbody>' + rows + '</tbody></table></section>';
+          }
+          byId('results').innerHTML = html;
+          renderSummary();
+        }
+        function plainTextReport() {
+          var lines = [
+            'RepJot browser capability report',
+            'Started: ' + (startedAt ? startedAt.toISOString() : 'unknown'),
+            'Finished: ' + (finishedAt ? finishedAt.toISOString() : 'unknown'),
+            'URL: ' + window.location.href,
+            ''
+          ];
+          var categoryIndex;
+          var resultIndex;
+          for (categoryIndex = 0; categoryIndex < categoryOrder.length; categoryIndex += 1) {
+            var category = categoryOrder[categoryIndex];
+            lines.push(category);
+            for (resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+              var item = results[resultIndex];
+              if (item.category === category) lines.push('- ' + item.name + ': ' + item.status + ' — ' + item.details);
+            }
+            lines.push('');
+          }
+          return lines.join('\n');
+        }
+        function htmlReport() {
+          var count = counts();
+          var tables = byId('results').innerHTML;
+          var reportStyles = 'body{font-family:Arial,Helvetica,sans-serif;line-height:1.45;color:#171713;margin:24px}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:2px solid #171713}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #888;text-align:left;vertical-align:top}th{background:#dedbd2}.supported{color:#185c2b}.unsupported,.error{color:#8c1d18}.limited{color:#765600}footer{margin-top:28px;font-size:.9em}';
+          return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RepJot browser capability report</title><style>' + reportStyles + '</style></head><body><h1>RepJot browser capability report</h1><p>Generated ' + escapeHtml(finishedAt ? finishedAt.toISOString() : '') + '</p><p><strong>' + count.Supported + '</strong> supported · <strong>' + count.Unsupported + '</strong> unsupported · <strong>' + (count.Limited + count.Error) + '</strong> limited · <strong>' + count.Info + '</strong> informational</p>' + tables + '<footer><p>Generated locally by RepJot. No results were transmitted.</p></footer></body></html>';
+        }
+        function downloadReport() {
+          try {
+            var blob = new Blob([htmlReport()], { type: 'text/html;charset=utf-8' });
+            var url = window.URL.createObjectURL(blob);
+            var anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = 'repjot-browser-capabilities.html';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 1000);
+          } catch (error) {
+            window.alert('This browser could not create the download: ' + errorText(error) + '\n\nUse Print instead, or copy the text report.');
+          }
+        }
+        function fallbackCopy(value) {
+          var area = document.createElement('textarea');
+          area.value = value;
+          area.setAttribute('readonly', 'readonly');
+          area.style.position = 'fixed';
+          area.style.left = '-9999px';
+          document.body.appendChild(area);
+          area.select();
+          var copied = false;
+          try { copied = document.execCommand('copy'); } catch (ignore) {}
+          document.body.removeChild(area);
+          byId('progress').textContent = copied ? 'Text report copied.' : 'Copy was not available in this browser.';
+        }
+        function copyReport() {
+          var value = plainTextReport();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () {
+              byId('progress').textContent = 'Text report copied.';
+            }, function () { fallbackCopy(value); });
+          } else {
+            fallbackCopy(value);
+          }
+        }
+        function finishRun() {
+          finishedAt = new Date();
+          renderResults();
+          byId('progress').textContent = 'Completed ' + results.length + ' checks in ' + (finishedAt.getTime() - startedAt.getTime()) + ' ms.';
+          byId('run').disabled = false;
+          byId('copy').disabled = false;
+          byId('download').disabled = !(window.Blob && window.URL && window.URL.createObjectURL && 'download' in document.createElement('a'));
+        }
+        function runTests() {
+          results = [];
+          startedAt = new Date();
+          finishedAt = null;
+          byId('run').disabled = true;
+          byId('copy').disabled = true;
+          byId('download').disabled = true;
+          byId('progress').textContent = 'Running checks…';
+          byId('summary').innerHTML = '';
+          byId('results').innerHTML = '';
+          try {
+            runSynchronousTests();
+            renderResults();
+            testIndexedDb(finishRun);
+          } catch (error) {
+            add('JavaScript', 'Test runner', 'Error', errorText(error));
+            finishRun();
+          }
+        }
+
+        byId('run').onclick = runTests;
+        byId('download').onclick = downloadReport;
+        byId('copy').onclick = copyReport;
+        runTests();
+      }());
+    </script>
+  </body>
+</html>
