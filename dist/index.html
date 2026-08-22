@@ -1,12 +1,40 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RepJot Google Drive prototype</title>
-    <script type="module" crossorigin src="./app.js"></script>
-  </head>
-  <body>
-    <div id="app"></div>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>REP JOT Google Drive prototype</title>
+  <script defer src="./app.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <p id="boot-status">Loading RepJot…</p>
+  </div>
+  <script>
+    (function () {
+      'use strict';
+      var finished = false;
+      var status = document.getElementById('boot-status');
+
+      function showFailure(details) {
+        if (finished || !status) return;
+        status.textContent = 'REP JOT could not start in this browser. ' + details;
+      }
+
+      window.addEventListener('error', function (event) {
+        showFailure(event.message || 'A JavaScript error occurred.');
+      });
+      window.setTimeout(function () {
+        showFailure('The application script did not finish loading.');
+      }, 5000);
+
+      window.__repjotBooted = function () {
+        finished = true;
+      };
+    }());
+  </script>
+</body>
+
 </html>

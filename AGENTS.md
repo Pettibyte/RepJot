@@ -1,8 +1,8 @@
-# Rep Jot
+# REP JOT
 
 ## Overview
 
-Rep Jot is a lightweight fitness tracker.
+REP JOT is a lightweight fitness tracker.
 
 - Exercise library and programs stored as global and user JSON files hosted in the static bundle.
 - User authenticates with Google OAuth.
@@ -17,3 +17,7 @@ Rep Jot is a lightweight fitness tracker.
 - Publish to static hosting at `dist/`.
 - Develop in a devcontainer; any systemwide dependencies MUST be kept up to date with devcontainer.
 - Bundled HTML & JS MUST respect features in `CAPABILITIES.md` to support targeted devices, which includes Kindle Scribe web browser.
+
+## Branding
+
+The user-facing brand name is ALWAYS stylized in all caps -- "REP JOT" -- though in source files it MAY appear as "rep-jot", "RepJot", "repjot" or similar.

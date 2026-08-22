@@ -1,4 +1,4 @@
-# RepJot
+# REP JOT
 
 Lightweight fitness journal tool. Works on not-so-modern browsers such as Kindle Scribe so you can log workouts on a distraction-free device.
 
@@ -16,7 +16,9 @@ the static bundle in `dist/`. Run `bun run check:compat` to build and verify tha
 application bundle contains no syntax newer than ES2019, matching the Kindle Scribe's
 Silk 80 JavaScript parser. The production entry also includes a `String.replaceAll`
 polyfill required by Svelte. Drive multipart uploads use Web Crypto when available and
-fall back to a locally generated UUID when `crypto.randomUUID` is unavailable.
+fall back to a locally generated UUID when `crypto.randomUUID` is unavailable. The
+production bundle is loaded as a deferred classic script because the Scribe reports
+module support but does not reliably execute the external application module.
 
 ## Probe a browser
 
@@ -26,6 +28,9 @@ storage, networking, file, media, worker, and device APIs. It does not request s
 permissions or transmit results. Use **Download HTML report** to save a standalone
 snapshot in a conventional browser. On Kindle, use **Download Markdown (.txt)**; its
 contents are Markdown, while its `.txt` extension is accepted by the Kindle browser.
+Before downloading, optionally use **Test Google OAuth prerequisites** to behavior-test
+a user-gesture popup and loading Google's Identity Services script. This contacts
+`accounts.google.com` but does not initiate sign-in or request permissions.
 
 ## Deploy to GitHub Pages
 

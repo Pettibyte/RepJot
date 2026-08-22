@@ -9,3 +9,11 @@ if (target === null) {
 }
 
 mount(App, { target });
+document.getElementById('boot-status')?.remove();
+window.__repjotBooted?.();
+
+declare global {
+  interface Window {
+    __repjotBooted?: () => void;
+  }
+}
