@@ -64,6 +64,7 @@
 
       <div class="controls">
         <button id="run" type="button">Run tests again</button>
+        <button id="download-markdown" type="button" disabled>Download Markdown (.txt)</button>
         <button id="download" type="button" disabled>Download HTML report</button>
         <button id="copy" type="button" disabled>Copy text report</button>
         <a class="button" href="./">Back to RepJot</a>
@@ -380,26 +381,76 @@
           }
           return lines.join('\n');
         }
+        function markdownCell(value) {
+          return text(value).replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+        }
+        function markdownReport() {
+          var count = counts();
+          var lines = [
+            '# RepJot browser capability report',
+            '',
+            '## Run information',
+            '',
+            '| Field | Value |',
+            '| --- | --- |',
+            '| Started | ' + markdownCell(startedAt ? startedAt.toISOString() : 'unknown') + ' |',
+            '| Finished | ' + markdownCell(finishedAt ? finishedAt.toISOString() : 'unknown') + ' |',
+            '| URL | ' + markdownCell(window.location.href) + ' |',
+            '',
+            '## Summary',
+            '',
+            '| Result | Count |',
+            '| --- | ---: |',
+            '| Supported | ' + count.Supported + ' |',
+            '| Unsupported | ' + count.Unsupported + ' |',
+            '| Limited or Error | ' + (count.Limited + count.Error) + ' |',
+            '| Informational | ' + count.Info + ' |',
+            '| Total checks displayed | ' + results.length + ' |',
+            ''
+          ];
+          var categoryIndex;
+          var resultIndex;
+          for (categoryIndex = 0; categoryIndex < categoryOrder.length; categoryIndex += 1) {
+            var category = categoryOrder[categoryIndex];
+            lines.push('## ' + category, '', '| Capability | Result | Details |', '| --- | --- | --- |');
+            for (resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+              var item = results[resultIndex];
+              if (item.category === category) {
+                lines.push('| ' + markdownCell(item.name) + ' | ' + markdownCell(item.status) + ' | ' + markdownCell(item.details) + ' |');
+              }
+            }
+            lines.push('');
+          }
+          lines.push('Generated locally by RepJot. No results were transmitted.', '');
+          return lines.join('\n');
+        }
         function htmlReport() {
           var count = counts();
           var tables = byId('results').innerHTML;
           var reportStyles = 'body{font-family:Arial,Helvetica,sans-serif;line-height:1.45;color:#171713;margin:24px}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:2px solid #171713}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #888;text-align:left;vertical-align:top}th{background:#dedbd2}.supported{color:#185c2b}.unsupported,.error{color:#8c1d18}.limited{color:#765600}footer{margin-top:28px;font-size:.9em}';
           return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RepJot browser capability report</title><style>' + reportStyles + '</style></head><body><h1>RepJot browser capability report</h1><p>Generated ' + escapeHtml(finishedAt ? finishedAt.toISOString() : '') + '</p><p><strong>' + count.Supported + '</strong> supported · <strong>' + count.Unsupported + '</strong> unsupported · <strong>' + (count.Limited + count.Error) + '</strong> limited · <strong>' + count.Info + '</strong> informational</p>' + tables + '<footer><p>Generated locally by RepJot. No results were transmitted.</p></footer></body></html>';
         }
-        function downloadReport() {
+        function downloadFile(contents, mimeType, filename, description) {
           try {
-            var blob = new Blob([htmlReport()], { type: 'text/html;charset=utf-8' });
+            var blob = new Blob([contents], { type: mimeType });
             var url = window.URL.createObjectURL(blob);
             var anchor = document.createElement('a');
             anchor.href = url;
-            anchor.download = 'repjot-browser-capabilities.html';
+            anchor.download = filename;
             document.body.appendChild(anchor);
             anchor.click();
             document.body.removeChild(anchor);
             window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 1000);
+            byId('progress').textContent = description + ' download requested.';
           } catch (error) {
             window.alert('This browser could not create the download: ' + errorText(error) + '\n\nUse Print instead, or copy the text report.');
           }
+        }
+        function downloadMarkdownReport() {
+          downloadFile(markdownReport(), 'text/plain;charset=utf-8', 'repjot-browser-capabilities.txt', 'Markdown (.txt) report');
+        }
+        function downloadHtmlReport() {
+          downloadFile(htmlReport(), 'text/html;charset=utf-8', 'repjot-browser-capabilities.html', 'HTML report');
         }
         function fallbackCopy(value) {
           var area = document.createElement('textarea');
@@ -430,7 +481,9 @@
           byId('progress').textContent = 'Completed ' + results.length + ' checks in ' + (finishedAt.getTime() - startedAt.getTime()) + ' ms.';
           byId('run').disabled = false;
           byId('copy').disabled = false;
-          byId('download').disabled = !(window.Blob && window.URL && window.URL.createObjectURL && 'download' in document.createElement('a'));
+          var downloadUnavailable = !(window.Blob && window.URL && window.URL.createObjectURL && 'download' in document.createElement('a'));
+          byId('download-markdown').disabled = downloadUnavailable;
+          byId('download').disabled = downloadUnavailable;
         }
         function runTests() {
           results = [];
@@ -438,6 +491,7 @@
           finishedAt = null;
           byId('run').disabled = true;
           byId('copy').disabled = true;
+          byId('download-markdown').disabled = true;
           byId('download').disabled = true;
           byId('progress').textContent = 'Running checks…';
           byId('summary').innerHTML = '';
@@ -453,7 +507,8 @@
         }
 
         byId('run').onclick = runTests;
-        byId('download').onclick = downloadReport;
+        byId('download-markdown').onclick = downloadMarkdownReport;
+        byId('download').onclick = downloadHtmlReport;
         byId('copy').onclick = copyReport;
         runTests();
       }());

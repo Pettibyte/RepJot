@@ -20,7 +20,8 @@ Open `http://localhost:5173/capabilities.html` in the browser you want to evalua
 The page runs non-destructive checks for JavaScript, HTML/CSS, touch and pointer input,
 storage, networking, file, media, worker, and device APIs. It does not request sensitive
 permissions or transmit results. Use **Download HTML report** to save a standalone
-snapshot that can be compared with later browser or application versions.
+snapshot in a conventional browser. On Kindle, use **Download Markdown (.txt)**; its
+contents are Markdown, while its `.txt` extension is accepted by the Kindle browser.
 
 ## Deploy to GitHub Pages
 
