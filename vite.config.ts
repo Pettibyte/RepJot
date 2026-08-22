@@ -3,6 +3,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { resolve } from 'node:path';
 
 function kindleClassicEntry(): Plugin {
+  const buildId = Date.now().toString(36);
   return {
     name: 'kindle-classic-entry',
     apply: 'build',
@@ -16,7 +17,11 @@ function kindleClassicEntry(): Plugin {
           throw new Error('The expected app module tag was not found in built index.html.');
         }
 
-        return html.replace(moduleTag, '<script defer src="./app.js"></script>');
+        const withoutModuleTag = html.replace(moduleTag, '').replace(/^[ \t]+$/gm, '');
+        return withoutModuleTag.replace(
+          '</body>',
+          `<script>window.__repjotLoadApp("./app.js?v=${buildId}");</script>\n</body>`
+        );
       }
     }
   };

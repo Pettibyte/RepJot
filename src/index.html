@@ -32,6 +32,16 @@
       window.__repjotBooted = function () {
         finished = true;
       };
+
+      window.__repjotLoadApp = function (source) {
+        var script = document.createElement('script');
+        script.src = source;
+        script.async = true;
+        script.onerror = function () {
+          showFailure('The application script could not be loaded.');
+        };
+        document.head.appendChild(script);
+      };
     }());
   </script>
   <script type="module" src="/main.ts"></script>

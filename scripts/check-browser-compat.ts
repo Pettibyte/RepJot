@@ -13,11 +13,17 @@ parse(bundle, {
 });
 
 const index = await Bun.file(new URL('../dist/index.html', import.meta.url)).text();
-if (!index.includes('<script defer src="./app.js"></script>')) {
-  throw new Error('dist/index.html does not load app.js as a deferred classic script.');
+if (!index.includes('window.__repjotLoadApp("./app.js?v=')) {
+  throw new Error('dist/index.html does not dynamically load the classic app.js bundle.');
+}
+const loaderDefinition = index.indexOf('window.__repjotLoadApp = function');
+const loaderCall = index.indexOf('window.__repjotLoadApp("./app.js?v=');
+const appTarget = index.indexOf('id="app"');
+if (loaderDefinition === -1 || loaderCall < loaderDefinition || loaderCall < appTarget) {
+  throw new Error('The dynamic app loader runs before its function or DOM target is ready.');
 }
 if (index.includes('type="module"')) {
   throw new Error('dist/index.html still contains a module script.');
 }
 
-console.log('dist/app.js parses as an ES2019 classic script.');
+console.log('dist/app.js parses as an ES2019 dynamically loaded classic script.');

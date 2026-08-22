@@ -15,5 +15,6 @@ window.__repjotBooted?.();
 declare global {
   interface Window {
     __repjotBooted?: () => void;
+    __repjotLoadApp?: (source: string) => void;
   }
 }

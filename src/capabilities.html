@@ -260,8 +260,8 @@
   <main>
     <h1>REP JOT browser capability report</h1>
     <p class="lede">This page tests browser features relevant to REP JOT without requesting sensitive permissions or
-      sending results anywhere. Automatic network checks only request files from this site. The optional Google OAuth
-      prerequisite test contacts accounts.google.com but does not request sign-in or permissions.</p>
+      sending report results anywhere. Automatic network checks request files from this site and load Google Identity
+      Services from accounts.google.com, but do not open a window, initiate sign-in, or request permissions.</p>
 
     <noscript>
       <p class="noscript"><strong>JavaScript did not run.</strong> REP JOT requires JavaScript, so this browser cannot
@@ -273,7 +273,6 @@
       <button id="download-markdown" type="button" disabled>Download Markdown (.txt)</button>
       <button id="download" type="button" disabled>Download HTML report</button>
       <button id="copy" type="button" disabled>Copy text report</button>
-      <button id="oauth-test" type="button" disabled>Test Google OAuth prerequisites</button>
       <a class="button" href="./">Back to REP JOT</a>
     </div>
 
@@ -369,6 +368,17 @@
           add('Storage', label, passed ? 'Supported' : 'Error', passed ? 'Write, read, and remove succeeded' : 'Value did not round-trip');
         } catch (error) {
           add('Storage', label, 'Limited', 'API exists but access failed: ' + errorText(error));
+        }
+      }
+      function testFirstPartyCookie() {
+        var key = '__repjot_cookie_probe__';
+        try {
+          document.cookie = key + '=ok; Path=/; SameSite=Lax';
+          var passed = document.cookie.indexOf(key + '=ok') !== -1;
+          document.cookie = key + '=; Max-Age=0; Path=/; SameSite=Lax';
+          add('Storage', 'First-party cookie round trip', passed ? 'Supported' : 'Unsupported', passed ? 'A same-site cookie was written, read, and removed' : 'The cookie was not readable after writing');
+        } catch (error) {
+          add('Storage', 'First-party cookie round trip', 'Unsupported', errorText(error));
         }
       }
       function testInputType(typeName) {
@@ -495,6 +505,7 @@
 
         testStorage('localStorage', safe(function () { return window.localStorage; }, null));
         testStorage('sessionStorage', safe(function () { return window.sessionStorage; }, null));
+        testFirstPartyCookie();
         support('Storage', 'IndexedDB', !!window.indexedDB, 'API is present; an open/write check will follow', 'API is absent');
         support('Storage', 'Cache Storage', !!window.caches);
 
@@ -519,8 +530,10 @@
         support('Networking and security', 'Crypto method polyfills', !!window.crypto && canExtend(window.crypto, '__repjotCryptoProbe'), 'The Crypto host object accepted a temporary method', 'The Crypto host object could not be extended');
         support('Networking and security', 'Random UUID', !!(window.crypto && window.crypto.randomUUID), 'crypto.randomUUID is present (used when creating a Drive file)', 'crypto.randomUUID is absent');
         support('Networking and security', 'Popup API', typeof window.open === 'function', 'window.open is exposed; popup policy still requires a user gesture', 'window.open is absent');
-        add('Networking and security', 'Popup behavior', 'Limited', 'Not tested automatically; use “Test Google OAuth prerequisites”');
-        add('Networking and security', 'Google Identity script', 'Limited', 'Not tested automatically; use “Test Google OAuth prerequisites” (contacts accounts.google.com)');
+        add('Networking and security', 'Popupless Google authorization', 'Limited', 'Not automatically testable without initiating authorization; no window will be opened by this report');
+        add('Networking and security', 'Google Identity script', 'Limited', 'Pending automatic Google Identity Services check (contacts accounts.google.com)');
+        add('Networking and security', 'Google token client initialization', 'Limited', 'Pending automatic token-client initialization check');
+        support('Networking and security', 'Credential Management API', !!(nav.credentials && typeof nav.credentials.get === 'function'));
 
         support('Files and sharing', 'Blob', typeof window.Blob === 'function');
         support('Files and sharing', 'File', typeof window.File === 'function');
@@ -677,7 +690,7 @@
       }
 
       function runAsynchronousTests(done) {
-        var remaining = 3;
+        var remaining = 4;
         function next() {
           remaining -= 1;
           if (remaining === 0) done();
@@ -685,6 +698,7 @@
         testIndexedDb(next);
         testExternalScripts(next);
         testSameOriginFetch(next);
+        testGoogleOAuthLibrary(next);
       }
 
       function counts() {
@@ -840,37 +854,38 @@
           fallbackCopy(value);
         }
       }
-      function testGoogleOAuthPrerequisites() {
-        var button = byId('oauth-test');
-        var popup = null;
-        button.disabled = true;
-        byId('progress').textContent = 'Testing popup behavior and loading Google Identity Services…';
-
-        try {
-          popup = window.open('about:blank', 'repjot_capability_popup', 'width=320,height=240');
-          if (popup === null) {
-            update('Networking and security', 'Popup behavior', 'Unsupported', 'window.open returned null during a button click');
-          } else {
-            update('Networking and security', 'Popup behavior', 'Supported', 'A popup opened during a button click and a close was requested');
-            try { popup.close(); } catch (ignore) { }
-          }
-        } catch (error) {
-          update('Networking and security', 'Popup behavior', 'Unsupported', errorText(error));
-        }
-
+      function testGoogleOAuthLibrary(done) {
         function googleApiAvailable() {
           return !!(window.google && window.google.accounts && window.google.accounts.oauth2 && typeof window.google.accounts.oauth2.initTokenClient === 'function');
         }
-        function finishGoogleTest(status, details) {
-          update('Networking and security', 'Google Identity script', status, details);
-          finishedAt = new Date();
-          renderResults();
-          byId('progress').textContent = 'Google OAuth prerequisite test completed.';
-          button.disabled = false;
+        function finishGoogleTest() {
+          done();
+        }
+        function inspectGoogleApi() {
+          if (!googleApiAvailable()) {
+            update('Networking and security', 'Google Identity script', 'Error', 'The script load event fired, but google.accounts.oauth2.initTokenClient is absent');
+            update('Networking and security', 'Google token client initialization', 'Unsupported', 'The OAuth API is absent');
+            finishGoogleTest();
+            return;
+          }
+
+          update('Networking and security', 'Google Identity script', 'Supported', 'Google Identity Services loaded and exposes initTokenClient');
+          try {
+            var client = window.google.accounts.oauth2.initTokenClient({
+              client_id: '123456789-repjot-capability-probe.apps.googleusercontent.com',
+              scope: 'https://www.googleapis.com/auth/drive.appdata',
+              callback: function () { },
+              error_callback: function () { }
+            });
+            update('Networking and security', 'Google token client initialization', client && typeof client.requestAccessToken === 'function' ? 'Supported' : 'Error', client && typeof client.requestAccessToken === 'function' ? 'initTokenClient returned a token client; requestAccessToken was not called' : 'initTokenClient returned an unexpected value');
+          } catch (error) {
+            update('Networking and security', 'Google token client initialization', 'Unsupported', errorText(error));
+          }
+          finishGoogleTest();
         }
 
         if (googleApiAvailable()) {
-          finishGoogleTest('Supported', 'Google Identity Services was already loaded and exposes initTokenClient');
+          inspectGoogleApi();
           return;
         }
 
@@ -879,7 +894,9 @@
         var timer = window.setTimeout(function () {
           if (completed) return;
           completed = true;
-          finishGoogleTest('Unsupported', 'Google Identity Services did not load and execute within 10 seconds');
+          update('Networking and security', 'Google Identity script', 'Unsupported', 'Google Identity Services did not load and execute within 10 seconds');
+          update('Networking and security', 'Google token client initialization', 'Unsupported', 'The Google Identity script did not load');
+          finishGoogleTest();
         }, 10000);
         script.src = 'https://accounts.google.com/gsi/client';
         script.async = true;
@@ -887,16 +904,17 @@
           if (completed) return;
           completed = true;
           window.clearTimeout(timer);
-          finishGoogleTest(googleApiAvailable() ? 'Supported' : 'Error', googleApiAvailable() ? 'Google Identity Services loaded and exposes initTokenClient' : 'The script load event fired, but the expected OAuth API is absent');
+          inspectGoogleApi();
         };
         script.onerror = function () {
           if (completed) return;
           completed = true;
           window.clearTimeout(timer);
-          finishGoogleTest('Unsupported', 'The Google Identity Services script emitted an error event');
+          update('Networking and security', 'Google Identity script', 'Unsupported', 'The Google Identity Services script emitted an error event');
+          update('Networking and security', 'Google token client initialization', 'Unsupported', 'The Google Identity script did not load');
+          finishGoogleTest();
         };
         document.head.appendChild(script);
-        renderResults();
       }
       function finishRun() {
         finishedAt = new Date();
@@ -904,7 +922,6 @@
         byId('progress').textContent = 'Completed ' + results.length + ' checks in ' + (finishedAt.getTime() - startedAt.getTime()) + ' ms.';
         byId('run').disabled = false;
         byId('copy').disabled = false;
-        byId('oauth-test').disabled = false;
         var downloadUnavailable = !(window.Blob && window.URL && window.URL.createObjectURL && 'download' in document.createElement('a'));
         byId('download-markdown').disabled = downloadUnavailable;
         byId('download').disabled = downloadUnavailable;
@@ -915,7 +932,6 @@
         finishedAt = null;
         byId('run').disabled = true;
         byId('copy').disabled = true;
-        byId('oauth-test').disabled = true;
         byId('download-markdown').disabled = true;
         byId('download').disabled = true;
         byId('progress').textContent = 'Running checks…';
@@ -935,7 +951,6 @@
       byId('download-markdown').onclick = downloadMarkdownReport;
       byId('download').onclick = downloadHtmlReport;
       byId('copy').onclick = copyReport;
-      byId('oauth-test').onclick = testGoogleOAuthPrerequisites;
       runTests();
     }());
   </script>
