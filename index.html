@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>REP JOT Google Drive prototype</title>
-  <script defer src="./app.js"></script>
+
 </head>
 
 <body>
@@ -33,8 +33,19 @@
       window.__repjotBooted = function () {
         finished = true;
       };
+
+      window.__repjotLoadApp = function (source) {
+        var script = document.createElement('script');
+        script.src = source;
+        script.async = true;
+        script.onerror = function () {
+          showFailure('The application script could not be loaded.');
+        };
+        document.head.appendChild(script);
+      };
     }());
   </script>
+<script>window.__repjotLoadApp("./app.js?v=mt4qr1pd");</script>
 </body>
 
 </html>
