@@ -13,6 +13,7 @@ export default defineConfig({
     strictPort: true
   },
   build: {
+    target: 'es2019',
     outDir: '../dist',
     emptyOutDir: true,
     assetsDir: '',

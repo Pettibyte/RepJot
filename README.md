@@ -12,7 +12,11 @@ document in the signed-in user's private Google Drive `appDataFolder`.
 3. Start the app with `bun run dev` and open `http://localhost:5173`.
 
 Run `bun run check` for strict TypeScript/Svelte checks and `bun run build` to produce
-the static bundle in `dist/`.
+the static bundle in `dist/`. Run `bun run check:compat` to build and verify that the
+application bundle contains no syntax newer than ES2019, matching the Kindle Scribe's
+Silk 80 JavaScript parser. The production entry also includes a `String.replaceAll`
+polyfill required by Svelte. Drive multipart uploads use Web Crypto when available and
+fall back to a locally generated UUID when `crypto.randomUUID` is unavailable.
 
 ## Probe a browser
 

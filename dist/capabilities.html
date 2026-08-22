@@ -197,6 +197,7 @@
           support('JavaScript', 'ES modules', 'noModule' in document.createElement('script'), 'Module scripts recognized', 'Module scripts not recognized');
           syntax('Arrow functions', 'return (() => 1)();');
           syntax('Classes', 'class Example {}');
+          syntax('Public class fields', 'class Example { value = 1; }');
           syntax('Async functions', 'async function example() { return 1; }');
           syntax('Object and array spread', 'var a = { value: 1 }; return { ...a, items: [...[1]] };');
           syntax('Private class fields', 'class Example { #value = 1; get() { return this.#value; } }');
@@ -243,6 +244,7 @@
           support('Networking and security', 'URL API', typeof window.URL === 'function');
           support('Networking and security', 'URLSearchParams', typeof window.URLSearchParams === 'function');
           support('Networking and security', 'Web Crypto', !!(window.crypto && window.crypto.subtle), 'crypto.subtle is present', 'crypto.subtle is absent (often requires a secure context)');
+          support('Networking and security', 'Secure random values', !!(window.crypto && window.crypto.getRandomValues), 'crypto.getRandomValues is present', 'crypto.getRandomValues is absent');
           support('Networking and security', 'Random UUID', !!(window.crypto && window.crypto.randomUUID), 'crypto.randomUUID is present (used when creating a Drive file)', 'crypto.randomUUID is absent');
           support('Networking and security', 'Popup API', typeof window.open === 'function', 'window.open is exposed; popup policy still requires a user gesture', 'window.open is absent');
 

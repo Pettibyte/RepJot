@@ -1,3 +1,5 @@
+import { randomUuid } from './random-uuid';
+
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FILE_NAME = 'hello-world.json';
@@ -69,7 +71,7 @@ export async function createHelloWorld(
   accessToken: string,
   document: HelloWorldDocument
 ): Promise<DriveFile> {
-  const boundary = `repjot_${crypto.randomUUID()}`;
+  const boundary = `repjot_${randomUuid()}`;
   const body = [
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
