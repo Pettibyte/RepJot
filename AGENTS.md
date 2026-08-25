@@ -16,8 +16,12 @@ REP JOT is a lightweight fitness tracker.
 - Svelte UI with Vite packaging.
 - Publish to static hosting at `dist/`.
 - Develop in a devcontainer; any systemwide dependencies MUST be kept up to date with devcontainer.
-- Bundled HTML & JS MUST respect features in `CAPABILITIES.md` to support targeted devices, which includes Kindle Scribe web browser.
+- Bundled HTML & JS MUST respect features in `docs/CAPABILITIES-kindle-scribe.md` to support targeted devices, which includes Kindle Scribe web browser.
 
 ## Branding
 
 The user-facing brand name is ALWAYS stylized in all caps -- "REP JOT" -- though in source files it MAY appear as "rep-jot", "RepJot", "repjot" or similar.
+
+## Product and UI Requirements
+
+See `specs/requirements.md`

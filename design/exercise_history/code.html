@@ -1,0 +1,231 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Rep Jot - Back Squat History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed": "#e2e2e2",
+                    "on-secondary-container": "#616363",
+                    "on-secondary": "#ffffff",
+                    "tertiary-container": "#1b1b1b",
+                    "on-surface-variant": "#4c4546",
+                    "surface-container": "#efeded",
+                    "surface-container-highest": "#e3e2e2",
+                    "on-primary-container": "#848484",
+                    "secondary-container": "#dfe0e0",
+                    "inverse-surface": "#303031",
+                    "primary-fixed-dim": "#c6c6c6",
+                    "outline-variant": "#cfc4c5",
+                    "secondary-fixed-dim": "#c6c6c7",
+                    "on-secondary-fixed": "#1a1c1c",
+                    "surface": "#fbf9f9",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#848484",
+                    "surface-bright": "#fbf9f9",
+                    "on-surface": "#1b1c1c",
+                    "primary": "#000000",
+                    "tertiary": "#000000",
+                    "outline": "#7e7576",
+                    "primary-fixed": "#e2e2e2",
+                    "on-primary": "#ffffff",
+                    "surface-dim": "#dbdad9",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed": "#1b1b1b",
+                    "inverse-primary": "#c6c6c6",
+                    "on-primary-fixed": "#1b1b1b",
+                    "surface-tint": "#5e5e5e",
+                    "surface-container-low": "#f5f3f3",
+                    "tertiary-fixed": "#e2e2e2",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#fbf9f9",
+                    "on-secondary-fixed-variant": "#454747",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#474747",
+                    "surface-variant": "#e3e2e2",
+                    "inverse-on-surface": "#f2f0f0",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#c6c6c6",
+                    "secondary": "#5d5f5f",
+                    "on-primary-fixed-variant": "#474747",
+                    "primary-container": "#1b1b1b",
+                    "surface-container-high": "#e9e8e7",
+                    "on-background": "#1b1c1c"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "stack-gap": "32px",
+                    "unit": "4px",
+                    "xl": "48px",
+                    "md": "16px",
+                    "container-margin": "20px"
+            },
+            "fontFamily": {
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "data-lg": [
+                            "JetBrains Mono"
+                    ],
+                    "display": [
+                            "Inter"
+                    ],
+                    "headline-lg-mobile": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "data-lg": [
+                            "36px",
+                            {
+                                    "lineHeight": "1.0",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "display": [
+                            "48px",
+                            {
+                                    "lineHeight": "1.1",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.0",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col">
+<!-- Top Navigation (Task-focused, suppressed main shell, simple back nav) -->
+<header class="w-full top-0 sticky bg-surface border-b-2 border-primary py-md px-container-margin z-10 flex items-center gap-md">
+<a class="text-primary hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-[32px]">arrow_back</span>
+</a>
+<h1 class="font-headline-md text-headline-md text-primary truncate flex-1">Back Squat — History</h1>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-3xl mx-auto px-container-margin py-stack-gap flex flex-col gap-stack-gap">
+<!-- Data List Container -->
+<div class="flex flex-col border-2 border-primary rounded">
+<!-- Session 1 -->
+<div class="border-b-2 border-primary p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-secondary">Aug 9</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">calendar_today</span>
+</div>
+<div class="font-data-lg text-data-lg text-primary">
+                    8x225, 7x205, 8x185
+                </div>
+</div>
+<!-- Session 2 -->
+<div class="border-b-2 border-primary p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-secondary">Aug 2</span>
+</div>
+<div class="font-data-lg text-data-lg text-primary">
+                    8x215, 8x195, 9x175
+                </div>
+</div>
+<!-- Session 3 -->
+<div class="p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-secondary">Jul 26</span>
+</div>
+<div class="font-data-lg text-data-lg text-primary">
+                    8x205, 8x185, 8x165
+                </div>
+</div>
+</div>
+</main>
+
+
+</body></html>

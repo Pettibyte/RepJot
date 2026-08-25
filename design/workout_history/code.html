@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Forge - Workout History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed": "#e2e2e2",
+                        "on-secondary-container": "#616363",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#1b1b1b",
+                        "on-surface-variant": "#4c4546",
+                        "surface-container": "#efeded",
+                        "surface-container-highest": "#e3e2e2",
+                        "on-primary-container": "#848484",
+                        "secondary-container": "#dfe0e0",
+                        "inverse-surface": "#303031",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "outline-variant": "#cfc4c5",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "surface": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#848484",
+                        "surface-bright": "#fbf9f9",
+                        "on-surface": "#1b1c1c",
+                        "primary": "#000000",
+                        "tertiary": "#000000",
+                        "outline": "#7e7576",
+                        "primary-fixed": "#e2e2e2",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#dbdad9",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-tint": "#5e5e5e",
+                        "surface-container-low": "#f5f3f3",
+                        "tertiary-fixed": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#fbf9f9",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "surface-variant": "#e3e2e2",
+                        "inverse-on-surface": "#f2f0f0",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "secondary": "#5d5f5f",
+                        "on-primary-fixed-variant": "#474747",
+                        "primary-container": "#1b1b1b",
+                        "surface-container-high": "#e9e8e7",
+                        "on-background": "#1b1c1c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "stack-gap": "32px",
+                        "unit": "4px",
+                        "xl": "48px",
+                        "md": "16px",
+                        "container-margin": "20px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "data-lg": ["JetBrains Mono"],
+                        "display": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "data-lg": ["36px", { "lineHeight": "1.0", "fontWeight": "700" }],
+                        "display": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-md": ["20px", { "lineHeight": "1.2", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-xl">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface dark:bg-background border-b-2 border-primary dark:border-on-surface z-40">
+<div class="flex items-center justify-between px-container-margin py-md w-full">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary dark:text-on-surface text-display" data-icon="fitness_center">fitness_center</span>
+<h1 class="font-display text-display uppercase tracking-tighter text-primary dark:text-on-surface">REP JOT</h1>
+</div>
+<nav class="hidden md:flex gap-lg">
+<a class="text-secondary dark:text-on-secondary-container hover:bg-secondary-container dark:hover:bg-tertiary-container transition-colors p-sm font-headline-md text-headline-md" href="#">Workouts</a>
+<a class="text-primary dark:text-on-surface font-bold underline underline-offset-8 hover:bg-secondary-container dark:hover:bg-tertiary-container transition-colors p-sm font-headline-md text-headline-md" href="#">History</a>
+</nav>
+</div>
+</header>
+<!-- Main Content -->
+<main class="max-w-3xl mx-auto px-container-margin py-stack-gap">
+<div class="mb-stack-gap md:hidden">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile mb-xs text-primary">History</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Your completed training sessions.</p>
+</div>
+<div class="hidden md:block mb-stack-gap">
+<h2 class="font-headline-lg text-headline-lg mb-xs text-primary">History</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Your completed training sessions.</p>
+</div>
+<!-- History List -->
+<div class="flex flex-col gap-sm">
+<!-- Item 1 -->
+<button class="w-full text-left bg-surface border-2 border-primary p-lg hover:bg-surface-container-highest transition-colors active:scale-95 group focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Aug 9</span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-md">Squat + RDL + Cindy</h3>
+<div class="flex gap-md">
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="timer">timer</span> 45m
+                     </span>
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="weight">weight</span> 8,450 lb
+                     </span>
+</div>
+</button>
+<!-- Item 2 -->
+<button class="w-full text-left bg-surface border-2 border-primary p-lg hover:bg-surface-container-highest transition-colors active:scale-95 group focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Aug 7</span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-md">Push + Pull</h3>
+<div class="flex gap-md">
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="timer">timer</span> 52m
+                     </span>
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="weight">weight</span> 12,200 lb
+                     </span>
+</div>
+</button>
+<!-- Item 3 -->
+<button class="w-full text-left bg-surface border-2 border-primary p-lg hover:bg-surface-container-highest transition-colors active:scale-95 group focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Aug 4</span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-md">Full Body A</h3>
+<div class="flex gap-md">
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="timer">timer</span> 65m
+                     </span>
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="weight">weight</span> 15,600 lb
+                     </span>
+</div>
+</button>
+<!-- Item 4 -->
+<button class="w-full text-left bg-surface border-2 border-primary p-lg hover:bg-surface-container-highest transition-colors active:scale-95 group focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Jul 31</span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-md">Squat + RDL + Cindy</h3>
+<div class="flex gap-md">
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="timer">timer</span> 42m
+                     </span>
+<span class="inline-flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="weight">weight</span> 8,100 lb
+                     </span>
+</div>
+</button>
+<!-- Load More -->
+<button class="w-full mt-md py-lg border-2 border-primary bg-surface hover:bg-surface-container-highest active:scale-95 transition-all text-center focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2">
+<span class="font-label-md text-label-md text-primary uppercase">Load Older Sessions</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface dark:bg-background border-t-2 border-primary dark:border-on-surface">
+<div class="flex justify-around items-stretch h-xl">
+<button class="flex-1 flex flex-col items-center justify-center text-secondary dark:text-on-secondary-container p-sm hover:bg-surface-container-highest dark:hover:bg-tertiary-container active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+<span class="font-label-md text-label-md mt-xs">Workout</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center bg-primary dark:bg-on-surface text-on-primary dark:text-surface p-sm hover:bg-surface-container-highest dark:hover:bg-tertiary-container active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-label-md text-label-md mt-xs">History</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center text-secondary dark:text-on-secondary-container p-sm hover:bg-surface-container-highest dark:hover:bg-tertiary-container active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-xs">Settings</span>
+</button>
+</div>
+</nav>
+</body></html>

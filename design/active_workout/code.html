@@ -1,0 +1,287 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Active Workout - FORGE</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed": "#e2e2e2",
+                        "on-secondary-container": "#616363",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#1b1b1b",
+                        "on-surface-variant": "#4c4546",
+                        "surface-container": "#efeded",
+                        "surface-container-highest": "#e3e2e2",
+                        "on-primary-container": "#848484",
+                        "secondary-container": "#dfe0e0",
+                        "inverse-surface": "#303031",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "outline-variant": "#cfc4c5",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "surface": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#848484",
+                        "surface-bright": "#fbf9f9",
+                        "on-surface": "#1b1c1c",
+                        "primary": "#000000",
+                        "tertiary": "#000000",
+                        "outline": "#7e7576",
+                        "primary-fixed": "#e2e2e2",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#dbdad9",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-tint": "#5e5e5e",
+                        "surface-container-low": "#f5f3f3",
+                        "tertiary-fixed": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#fbf9f9",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "surface-variant": "#e3e2e2",
+                        "inverse-on-surface": "#f2f0f0",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "secondary": "#5d5f5f",
+                        "on-primary-fixed-variant": "#474747",
+                        "primary-container": "#1b1b1b",
+                        "surface-container-high": "#e9e8e7",
+                        "on-background": "#1b1c1c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "stack-gap": "32px",
+                        "unit": "4px",
+                        "xl": "48px",
+                        "md": "16px",
+                        "container-margin": "20px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "data-lg": ["JetBrains Mono"],
+                        "display": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "data-lg": ["36px", { "lineHeight": "1.0", "fontWeight": "700" }],
+                        "display": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-md": ["20px", { "lineHeight": "1.2", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Brutalist Input Reset */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen selection:bg-primary selection:text-on-primary">
+<div class="max-w-2xl mx-auto w-full border-x-2 border-primary min-h-screen bg-surface flex flex-col">
+<!-- Shared Component: TopAppBar -->
+<header class="w-full top-0 sticky bg-surface border-b-2 border-primary flex items-center justify-between px-container-margin py-md z-50">
+<div class="flex items-center gap-sm">
+<button class="material-symbols-outlined text-primary hover:bg-secondary-container transition-colors active:opacity-80 p-sm rounded-full -ml-sm text-data-lg" data-icon="fitness_center" data-weight="fill" style="font-variation-settings: 'FILL' 1;">fitness_center</button>
+<h1 class="font-display text-display uppercase tracking-tighter text-primary">REP JOT</h1>
+</div>
+</header>
+<main class="flex-1 flex flex-col">
+<!-- Workout Header -->
+<section class="px-container-margin py-lg border-b-2 border-primary bg-surface-container-low flex flex-col gap-xs">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-primary">Squat + RDL + Cindy</h2>
+<div class="flex items-center gap-sm text-secondary">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<p class="font-label-md text-label-md">Started 7:31 PM</p>
+</div>
+</section>
+<!-- Warmup Section -->
+<section class="px-container-margin py-stack-gap flex flex-col gap-md border-b-2 border-primary">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest border-l-4 border-primary pl-xs">Warmup</h3>
+<div class="border-2 border-primary p-md flex flex-col gap-md bg-surface-bright">
+<p class="font-body-lg text-primary font-bold">4 Rounds:</p>
+<div class="flex flex-col gap-sm">
+<label class="flex items-start gap-md cursor-pointer group">
+<input class="peer sr-only" type="checkbox">
+<div class="w-[24px] h-[24px] border-2 border-primary shrink-0 flex items-center justify-center bg-surface group-hover:bg-surface-variant transition-colors peer-checked:bg-primary peer-checked:text-on-primary">
+<span class="material-symbols-outlined text-[18px] opacity-0 peer-checked:opacity-100">close</span>
+</div>
+<span class="font-body-md text-primary peer-checked:line-through peer-checked:text-secondary transition-all">10x Samson Stretch</span>
+</label>
+<label class="flex items-start gap-md cursor-pointer group">
+<input class="peer sr-only" type="checkbox">
+<div class="w-[24px] h-[24px] border-2 border-primary shrink-0 flex items-center justify-center bg-surface group-hover:bg-surface-variant transition-colors peer-checked:bg-primary peer-checked:text-on-primary">
+<span class="material-symbols-outlined text-[18px] opacity-0 peer-checked:opacity-100">close</span>
+</div>
+<span class="font-body-md text-primary peer-checked:line-through peer-checked:text-secondary transition-all">10x Air Squats</span>
+</label>
+<label class="flex items-start gap-md cursor-pointer group">
+<input class="peer sr-only" type="checkbox">
+<div class="w-[24px] h-[24px] border-2 border-primary shrink-0 flex items-center justify-center bg-surface group-hover:bg-surface-variant transition-colors peer-checked:bg-primary peer-checked:text-on-primary">
+<span class="material-symbols-outlined text-[18px] opacity-0 peer-checked:opacity-100">close</span>
+</div>
+<span class="font-body-md text-primary peer-checked:line-through peer-checked:text-secondary transition-all">5x Pull-ups</span>
+</label>
+</div>
+</div>
+</section>
+<!-- Strength Section: Back Squat -->
+<section class="px-container-margin py-stack-gap flex flex-col gap-lg border-b-2 border-primary">
+<div class="flex flex-col gap-xs">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest border-l-4 border-primary pl-xs mb-sm">Strength</h3>
+<h4 class="font-headline-lg-mobile md:font-headline-lg text-primary uppercase">Back Squat</h4>
+<p class="font-body-md text-secondary">Last time Aug 9: <span class="font-label-md text-primary bg-secondary-container px-xs py-unit rounded-sm">8x225, 7x205, 8x185</span></p>
+</div>
+<!-- Warmup Sets Table -->
+<div class="flex flex-col gap-sm">
+<h5 class="font-label-md text-label-md text-secondary">WARMUP SETS</h5>
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b-2 border-primary">
+<th class="font-label-md text-label-md py-sm w-16 text-center text-secondary">SET</th>
+<th class="font-label-md text-label-md py-sm text-secondary">REPS</th>
+<th class="font-label-md text-label-md py-sm text-secondary">WEIGHT (LBS)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant hover:bg-surface-variant transition-colors group">
+<td class="py-sm font-data-lg text-data-lg text-primary text-center">1</td>
+<td class="py-sm pr-md">
+<input class="w-full max-w-[80px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors" type="number" value="12">
+</td>
+<td class="py-sm">
+<input class="w-full max-w-[120px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="--" type="number">
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Working Sets Table -->
+<div class="flex flex-col gap-sm mt-md">
+<h5 class="font-label-md text-label-md text-primary font-bold">WORKING SETS</h5>
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b-2 border-primary bg-primary text-on-primary">
+<th class="font-label-md text-label-md py-sm w-16 text-center">SET</th>
+<th class="font-label-md text-label-md py-sm">REPS</th>
+<th class="font-label-md text-label-md py-sm">WEIGHT (LBS)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant hover:bg-surface-variant transition-colors">
+<td class="py-sm font-data-lg text-data-lg text-primary text-center">1</td>
+<td class="py-sm pr-md">
+<input class="w-full max-w-[80px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="8" type="number">
+</td>
+<td class="py-sm">
+<input class="w-full max-w-[120px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="--" type="number">
+</td>
+</tr>
+<tr class="border-b border-outline-variant hover:bg-surface-variant transition-colors">
+<td class="py-sm font-data-lg text-data-lg text-primary text-center">2</td>
+<td class="py-sm pr-md">
+<input class="w-full max-w-[80px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="8" type="number">
+</td>
+<td class="py-sm">
+<input class="w-full max-w-[120px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="--" type="number">
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Strength Section: RDL -->
+<section class="px-container-margin py-stack-gap flex flex-col gap-lg border-b-2 border-primary">
+<div class="flex flex-col gap-xs">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest border-l-4 border-primary pl-xs mb-sm">Strength</h3>
+<h4 class="font-headline-lg-mobile md:font-headline-lg text-primary uppercase">Romanian Deadlift</h4>
+<p class="font-body-md text-secondary">Last time Aug 9: <span class="font-label-md text-primary bg-secondary-container px-xs py-unit rounded-sm">10x135, 10x135</span></p>
+</div>
+<div class="flex flex-col gap-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b-2 border-primary bg-primary text-on-primary">
+<th class="font-label-md text-label-md py-sm w-16 text-center">SET</th>
+<th class="font-label-md text-label-md py-sm">REPS</th>
+<th class="font-label-md text-label-md py-sm">WEIGHT (LBS)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant hover:bg-surface-variant transition-colors">
+<td class="py-sm font-data-lg text-data-lg text-primary text-center">1</td>
+<td class="py-sm pr-md">
+<input class="w-full max-w-[80px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="10" type="number">
+</td>
+<td class="py-sm">
+<input class="w-full max-w-[120px] bg-transparent border-b-2 border-primary font-data-lg text-data-lg text-primary focus:outline-none focus:border-primary focus:bg-primary focus:text-on-primary px-xs py-unit transition-colors placeholder:text-outline-variant" placeholder="--" type="number">
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Conditioning Section: Cindy -->
+<section class="px-container-margin py-stack-gap flex flex-col gap-lg border-b-2 border-primary bg-surface-container-low">
+<div class="flex flex-col gap-xs">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest border-l-4 border-primary pl-xs mb-sm">Conditioning</h3>
+<h4 class="font-headline-lg-mobile md:font-headline-lg text-primary uppercase">Cindy</h4>
+<p class="font-label-md text-label-md text-primary bg-primary-fixed px-sm py-xs inline-block self-start border-2 border-primary">20 MIN AMRAP</p>
+</div>
+<div class="flex gap-md mt-sm">
+<div class="flex flex-col gap-xs flex-1">
+<label class="font-label-md text-label-md text-primary">ROUNDS COMPLETED</label>
+<input class="w-full border-2 border-primary bg-surface font-data-lg text-data-lg text-primary p-md focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2 text-center transition-shadow placeholder:text-outline-variant" placeholder="0" type="number">
+</div>
+<div class="flex flex-col gap-xs flex-1">
+<label class="font-label-md text-label-md text-primary">EXTRA REPS</label>
+<input class="w-full border-2 border-primary bg-surface font-data-lg text-data-lg text-primary p-md focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-2 text-center transition-shadow placeholder:text-outline-variant" placeholder="0" type="number">
+</div>
+</div>
+</section>
+<!-- Action Area -->
+<section class="px-container-margin py-xl pb-stack-gap mt-auto">
+<button class="w-full bg-primary text-on-primary font-headline-md text-headline-md py-4 border-2 border-primary hover:bg-inverse-surface transition-colors min-h-[56px] active:scale-[0.98] uppercase flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+                    Finish Workout
+                </button>
+</section>
+</main>
+</div>
+
+
+</body></html>
