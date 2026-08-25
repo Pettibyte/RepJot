@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import {
     createHelloWorld,
+    deleteHelloWorld,
     findHelloWorldFile,
     readHelloWorld,
     updateHelloWorld,
@@ -90,6 +91,21 @@
       busy = false;
     }
   }
+
+  async function remove(): Promise<void> {
+    if (accessToken === null || fileId === null) return;
+    busy = true;
+    status = 'Deleting from Google Drive…';
+    try {
+      await deleteHelloWorld(accessToken, fileId);
+      fileId = null;
+      status = 'Deleted from Google Drive.';
+    } catch (error: unknown) {
+      status = `Error: ${errorMessage(error)}`;
+    } finally {
+      busy = false;
+    }
+  }
 </script>
 
 <main>
@@ -101,6 +117,7 @@
     <label for="hello-world">Hello-world text</label>
     <input id="hello-world" bind:value={helloWorld} disabled={busy} />
     <button type="button" onclick={save} disabled={busy}>Save to Google Drive</button>
+    <button type="button" onclick={remove} disabled={busy || fileId === null}>Delete from Google Drive</button>
   {/if}
 
   <p>{status}</p>

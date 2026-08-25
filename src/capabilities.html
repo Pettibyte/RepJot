@@ -517,7 +517,9 @@
         add('Networking and security', 'Secure context', window.isSecureContext ? 'Supported' : 'Limited', window.isSecureContext ? 'Page is a secure context' : 'Page is not a secure context; HTTPS or localhost is required for several APIs');
         support('Networking and security', 'URL API', typeof window.URL === 'function');
         support('Networking and security', 'URLSearchParams', typeof window.URLSearchParams === 'function');
+        support('Networking and security', 'History replaceState', !!(window.history && typeof window.history.replaceState === 'function'), 'OAuth response parameters can be removed without reloading', 'history.replaceState is absent');
         support('Networking and security', 'Web Crypto', !!(window.crypto && window.crypto.subtle), 'crypto.subtle is present', 'crypto.subtle is absent (often requires a secure context)');
+        add('Networking and security', 'PKCE S256 challenge', 'Limited', 'Pending automatic SHA-256 and Base64URL execution check');
         var randomValuesWork = false;
         if (window.crypto && typeof window.crypto.getRandomValues === 'function' && typeof window.Uint8Array === 'function') {
           try {
@@ -689,8 +691,53 @@
         });
       }
 
+      function testPkceS256(done) {
+        if (!(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function' && typeof window.TextEncoder === 'function' && typeof window.Uint8Array === 'function' && typeof window.btoa === 'function')) {
+          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', 'SHA-256, TextEncoder, typed arrays, or Base64 encoding is absent');
+          done();
+          return;
+        }
+
+        var completed = false;
+        var timer = window.setTimeout(function () {
+          if (completed) return;
+          completed = true;
+          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', 'SHA-256 did not complete within 10 seconds');
+          done();
+        }, 10000);
+
+        try {
+          var encoded = new TextEncoder().encode('repjot-pkce-capability-probe');
+          window.crypto.subtle.digest('SHA-256', encoded).then(function (digest) {
+            if (completed) return;
+            completed = true;
+            window.clearTimeout(timer);
+            var bytes = new Uint8Array(digest);
+            var binary = '';
+            var index;
+            for (index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
+            var challenge = window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            var valid = bytes.length === 32 && challenge.length === 43 && !/[^A-Za-z0-9_-]/.test(challenge);
+            update('Networking and security', 'PKCE S256 challenge', valid ? 'Supported' : 'Error', valid ? 'SHA-256 digest and unpadded Base64URL encoding succeeded' : 'The generated S256 challenge had an unexpected shape');
+            done();
+          }, function (error) {
+            if (completed) return;
+            completed = true;
+            window.clearTimeout(timer);
+            update('Networking and security', 'PKCE S256 challenge', 'Unsupported', errorText(error));
+            done();
+          });
+        } catch (error) {
+          if (completed) return;
+          completed = true;
+          window.clearTimeout(timer);
+          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', errorText(error));
+          done();
+        }
+      }
+
       function runAsynchronousTests(done) {
-        var remaining = 4;
+        var remaining = 5;
         function next() {
           remaining -= 1;
           if (remaining === 0) done();
@@ -699,6 +746,7 @@
         testExternalScripts(next);
         testSameOriginFetch(next);
         testGoogleOAuthLibrary(next);
+        testPkceS256(next);
       }
 
       function counts() {

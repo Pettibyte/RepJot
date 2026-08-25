@@ -99,6 +99,17 @@ export async function createHelloWorld(
   );
 }
 
+export async function deleteHelloWorld(accessToken: string, fileId: string): Promise<void> {
+  const response: Response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: authorization(accessToken)
+  });
+  if (!response.ok) {
+    const details: string = await response.text();
+    throw new Error(`Deleting the app-data file failed (${response.status}): ${details || response.statusText}`);
+  }
+}
+
 export async function updateHelloWorld(
   accessToken: string,
   fileId: string,
