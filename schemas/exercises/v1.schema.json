@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repjot.com/schemas/exercises/v1.schema.json",
+  "title": "REP JOT Exercise Directory",
+  "description": "Stable exercise and equipment reference data for REP JOT.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "equipment", "exercises"],
+  "properties": {
+    "format": { "const": "repjot/exercises" },
+    "schemaVersion": { "const": 1 },
+    "equipment": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/equipment" }
+    },
+    "exercises": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/exercise" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "identifier": { "type": "string", "minLength": 1 },
+    "icon": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "name"],
+          "properties": {
+            "type": { "const": "material_symbol" },
+            "name": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "path"],
+          "properties": {
+            "type": { "const": "local_svg" },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.-]*:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.svg$"
+            }
+          }
+        }
+      ]
+    },
+    "equipment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "icon": { "$ref": "#/$defs/icon" }
+      }
+    },
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "instructions",
+        "equipmentIds",
+        "force",
+        "mechanic",
+        "category",
+        "movementPattern",
+        "primaryMuscles",
+        "secondaryMuscles",
+        "laterality",
+        "measurements"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "instructions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "icon": { "$ref": "#/$defs/icon" },
+        "equipmentIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "force": {
+          "type": ["string", "null"],
+          "enum": ["push", "pull", "static", null]
+        },
+        "mechanic": {
+          "type": ["string", "null"],
+          "enum": ["compound", "isolation", null]
+        },
+        "category": {
+          "enum": [
+            "strength",
+            "stretching",
+            "plyometrics",
+            "strongman",
+            "powerlifting",
+            "cardio",
+            "olympic weightlifting"
+          ]
+        },
+        "movementPattern": {
+          "enum": [
+            "squat",
+            "hinge",
+            "horizontal_push",
+            "vertical_push",
+            "horizontal_pull",
+            "vertical_pull",
+            "carry",
+            "locomotion",
+            "rotation",
+            "anti_rotation",
+            "flexion",
+            "extension",
+            "other"
+          ]
+        },
+        "primaryMuscles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/muscle" }
+        },
+        "secondaryMuscles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/muscle" }
+        },
+        "laterality": { "enum": ["bilateral", "unilateral"] },
+        "measurements": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/measurementSupport" }
+        },
+        "loadSemantics": {
+          "enum": ["total", "per_implement", "added", "assisted"]
+        },
+        "deprecated": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "measurements": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": { "dimension": { "const": "weight" } },
+                  "required": ["dimension"]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": ["loadSemantics"],
+            "properties": {
+              "loadSemantics": { "enum": ["total", "per_implement"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurements": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": { "dimension": { "const": "addedWeight" } },
+                  "required": ["dimension"]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": ["loadSemantics"],
+            "properties": { "loadSemantics": { "const": "added" } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurements": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": { "dimension": { "const": "assistedWeight" } },
+                  "required": ["dimension"]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": ["loadSemantics"],
+            "properties": { "loadSemantics": { "const": "assisted" } }
+          }
+        }
+      ]
+    },
+    "muscle": {
+      "enum": [
+        "abdominals",
+        "abductors",
+        "adductors",
+        "biceps",
+        "calves",
+        "chest",
+        "forearms",
+        "glutes",
+        "hamstrings",
+        "lats",
+        "lower back",
+        "middle back",
+        "neck",
+        "quadriceps",
+        "shoulders",
+        "traps",
+        "triceps"
+      ]
+    },
+    "measurementSupport": {
+      "oneOf": [
+        { "$ref": "#/$defs/repsMeasurement" },
+        { "$ref": "#/$defs/weightMeasurement" },
+        { "$ref": "#/$defs/addedWeightMeasurement" },
+        { "$ref": "#/$defs/assistedWeightMeasurement" },
+        { "$ref": "#/$defs/distanceMeasurement" },
+        { "$ref": "#/$defs/durationMeasurement" },
+        { "$ref": "#/$defs/caloriesMeasurement" }
+      ]
+    },
+    "repsMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "reps" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "const": "rep" }
+        }
+      }
+    },
+    "weightMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "weight" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["lb", "kg"] }
+        }
+      }
+    },
+    "addedWeightMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "addedWeight" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["lb", "kg"] }
+        }
+      }
+    },
+    "assistedWeightMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "assistedWeight" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["lb", "kg"] }
+        }
+      }
+    },
+    "distanceMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "distance" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["m", "km", "ft", "mi"] }
+        }
+      }
+    },
+    "durationMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "duration" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["second", "minute"] }
+        }
+      }
+    },
+    "caloriesMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "compatibleUnits"],
+      "properties": {
+        "dimension": { "const": "calories" },
+        "compatibleUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "const": "kcal" }
+        }
+      }
+    }
+  }
+}

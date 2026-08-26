@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repjot.com/schemas/preferences/v1.schema.json",
+  "title": "REP JOT Preferences",
+  "description": "Versioned user preferences for REP JOT.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "revision", "updatedAt", "exerciseUnits"],
+  "properties": {
+    "format": { "const": "repjot/preferences" },
+    "schemaVersion": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "exerciseUnits": {
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/exerciseUnitPreferences" }
+    }
+  },
+  "$defs": {
+    "exerciseUnitPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "reps": { "const": "rep" },
+        "weight": { "enum": ["lb", "kg"] },
+        "addedWeight": { "enum": ["lb", "kg"] },
+        "assistedWeight": { "enum": ["lb", "kg"] },
+        "distance": { "enum": ["m", "km", "ft", "mi"] },
+        "duration": { "enum": ["second", "minute"] },
+        "calories": { "const": "kcal" }
+      }
+    }
+  }
+}

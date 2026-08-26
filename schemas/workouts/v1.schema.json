@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repjot.com/schemas/workouts/v1.schema.json",
+  "title": "REP JOT Workouts",
+  "description": "Workout definitions and programmed prescriptions for REP JOT.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "workouts"],
+  "properties": {
+    "format": { "const": "repjot/workouts" },
+    "schemaVersion": { "const": 1 },
+    "workouts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/workout" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "identifier": { "type": "string", "minLength": 1 },
+    "nonNegativeQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "weightQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "enum": ["lb", "kg"] }
+      }
+    },
+    "distanceQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "enum": ["m", "km", "ft", "mi"] }
+      }
+    },
+    "durationQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "enum": ["second", "minute"] }
+      }
+    },
+    "positiveDuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "enum": ["second", "minute"] }
+      }
+    },
+    "caloriesQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "const": "kcal" }
+      }
+    },
+    "workout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "root"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "notes": { "type": "string" },
+        "root": { "$ref": "#/$defs/containerNode" },
+        "deprecated": { "type": "boolean" }
+      }
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/containerNode" },
+        { "$ref": "#/$defs/exerciseNode" }
+      ]
+    },
+    "containerNode": {
+      "oneOf": [
+        { "$ref": "#/$defs/sequenceContainer" },
+        { "$ref": "#/$defs/roundsContainer" },
+        { "$ref": "#/$defs/amrapContainer" },
+        { "$ref": "#/$defs/emomContainer" },
+        { "$ref": "#/$defs/complexContainer" }
+      ]
+    },
+    "sequenceContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": { "const": "sequence" },
+        "strategyConfig": {
+          "type": "object",
+          "additionalProperties": false
+        },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "roundsContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": { "const": "rounds" },
+        "strategyConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rounds"],
+          "properties": {
+            "rounds": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "amrapContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": { "const": "amrap" },
+        "strategyConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration"],
+          "properties": {
+            "duration": { "$ref": "#/$defs/positiveDuration" }
+          }
+        },
+        "resultCapture": { "$ref": "#/$defs/roundsAndRepsCapture" },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "emomContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": { "const": "emom" },
+        "strategyConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cycles", "interval"],
+          "properties": {
+            "cycles": { "type": "integer", "minimum": 1 },
+            "interval": { "$ref": "#/$defs/positiveDuration" }
+          }
+        },
+        "resultCapture": { "$ref": "#/$defs/intervalsCapture" },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "complexContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": { "const": "complex" },
+        "strategyConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cycles"],
+          "properties": {
+            "cycles": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "resultCapture": { "$ref": "#/$defs/cyclesCapture" },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "resultCaptureBase": {
+      "type": "object",
+      "required": ["mode", "scoreType", "childDetail"],
+      "properties": {
+        "mode": { "const": "scored" },
+        "childDetail": { "enum": ["none", "optional", "required"] }
+      }
+    },
+    "roundsAndRepsCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "scoreType", "childDetail"],
+      "properties": {
+        "mode": { "const": "scored" },
+        "scoreType": { "const": "rounds_and_reps" },
+        "childDetail": { "enum": ["none", "optional", "required"] }
+      }
+    },
+    "intervalsCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "scoreType", "childDetail"],
+      "properties": {
+        "mode": { "const": "scored" },
+        "scoreType": { "const": "intervals" },
+        "childDetail": { "enum": ["none", "optional", "required"] }
+      }
+    },
+    "cyclesCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "scoreType", "childDetail"],
+      "properties": {
+        "mode": { "const": "scored" },
+        "scoreType": { "const": "cycles" },
+        "childDetail": { "enum": ["none", "optional", "required"] }
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "organization": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "exerciseNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "exerciseId", "stimulus", "prescription"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "exercise" },
+        "exerciseId": { "$ref": "#/$defs/identifier" },
+        "stimulus": {
+          "enum": ["strength", "hypertrophy", "power", "conditioning", "mobility"]
+        },
+        "setType": { "enum": ["warmup", "working"] },
+        "prescription": { "$ref": "#/$defs/prescription" },
+        "notes": { "type": "string" }
+      }
+    },
+    "repsPrescription": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target", "qualifier"],
+          "properties": {
+            "target": { "type": "integer", "minimum": 0 },
+            "qualifier": { "const": "approximate" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "integer", "minimum": 0 },
+            "max": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "effortTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": { "type": { "const": "failure" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "target"],
+          "properties": {
+            "type": { "const": "rir" },
+            "target": { "type": "number", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "target"],
+          "properties": {
+            "type": { "const": "rpe" },
+            "target": { "type": "number", "minimum": 1, "maximum": 10 }
+          }
+        }
+      ]
+    },
+    "loadStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["fixed", "ascending", "descending", "self_selected"] },
+        "firstIteration": { "const": "maximal_for_prescription" },
+        "adjustment": { "const": "decrease_to_repeat_effort" }
+      }
+    },
+    "prescriptionProperties": {
+      "type": "object",
+      "properties": {
+        "reps": { "$ref": "#/$defs/repsPrescription" },
+        "weight": { "$ref": "#/$defs/weightQuantity" },
+        "addedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "assistedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "distance": { "$ref": "#/$defs/distanceQuantity" },
+        "duration": { "$ref": "#/$defs/durationQuantity" },
+        "calories": { "$ref": "#/$defs/caloriesQuantity" },
+        "effort": { "$ref": "#/$defs/effortTarget" },
+        "loadStrategy": { "$ref": "#/$defs/loadStrategy" }
+      }
+    },
+    "iterationPrescription": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 2,
+      "required": ["iteration"],
+      "properties": {
+        "iteration": { "type": "integer", "minimum": 1 },
+        "reps": { "$ref": "#/$defs/repsPrescription" },
+        "weight": { "$ref": "#/$defs/weightQuantity" },
+        "addedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "assistedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "distance": { "$ref": "#/$defs/distanceQuantity" },
+        "duration": { "$ref": "#/$defs/durationQuantity" },
+        "calories": { "$ref": "#/$defs/caloriesQuantity" },
+        "effort": { "$ref": "#/$defs/effortTarget" },
+        "loadStrategy": { "$ref": "#/$defs/loadStrategy" }
+      }
+    },
+    "prescription": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "reps": { "$ref": "#/$defs/repsPrescription" },
+        "weight": { "$ref": "#/$defs/weightQuantity" },
+        "addedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "assistedWeight": { "$ref": "#/$defs/weightQuantity" },
+        "distance": { "$ref": "#/$defs/distanceQuantity" },
+        "duration": { "$ref": "#/$defs/durationQuantity" },
+        "calories": { "$ref": "#/$defs/caloriesQuantity" },
+        "effort": { "$ref": "#/$defs/effortTarget" },
+        "loadStrategy": { "$ref": "#/$defs/loadStrategy" },
+        "iterations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/iterationPrescription" }
+        }
+      }
+    }
+  }
+}

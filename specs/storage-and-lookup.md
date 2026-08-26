@@ -2,115 +2,150 @@
 
 ## Status
 
-Proposed implementation plan for REP JOT workout-history storage, synchronization,
-caching, and lookup.
+This specification defines storage, synchronization, caching, and lookup for REP JOT.
+It uses the latest file names and ownership decisions.
 
-This specification refines the current three-document JSON model. Exercise and
-programming data remain ordinary JSON documents. The growing results document is split
-into monthly JSON shards. Google Drive remains the source of truth; browser storage and
-in-memory indexes are disposable projections of that data.
+## Data ownership
 
-## Goals
+REP JOT has two canonical storage locations:
 
-- Work in the Kindle Scribe browser without WebAssembly.
-- Keep the canonical data portable, inspectable JSON.
-- Avoid downloading unchanged history on every launch.
-- Make recent exercise and muscle-group queries effectively immediate.
-- Keep normal workout saves limited to the current month's data.
-- Recover completely if the browser cache is cleared or corrupted.
-- Avoid maintaining a second authoritative manifest that can disagree with Drive.
+| Location | Files | Authority |
+| --- | --- | --- |
+| Static site bundle | `exercises.json`, `workouts.json` | Published exercise and workout data |
+| Google Drive `appDataFolder` | `preferences.json`, `results-YYYY-MM.json` | User preferences and workout results |
 
-## Non-goals
+The static bundle never reads or writes `exercises.json` or `workouts.json` in Drive.
+Drive contains no canonical exercise or workout file.
 
-- Implementing a general-purpose relational database or SQL interpreter.
-- Supporting arbitrary joins or ad hoc query syntax.
-- Treating IndexedDB as durable or authoritative storage.
-- Synchronizing an unbounded number of concurrent writers without conflict detection.
+IndexedDB is a disposable local cache. It stores downloaded Drive documents, sync
+metadata, migrated views, and pending local edits. It is not a third canonical data
+store. The application can rebuild synchronized cache data from the static bundle and
+Drive.
 
-## Storage layers
+## Document envelopes
 
-```text
-Google Drive appDataFolder       Authoritative JSON documents
-             |
-             v
-IndexedDB                       Rebuildable file-content and metadata cache
-             |
-             v
-In-memory Map and sorted arrays Rebuildable query-oriented read model
-             |
-             v
-REP JOT UI                      Workout entry, recent history, and analytics
+Every current document starts with a family and schema-version envelope:
+
+```json
+{
+  "format": "repjot/results",
+  "schemaVersion": 1
+}
 ```
 
-The layers have one-way authority. Cached or indexed data may always be discarded and
-rebuilt from Drive.
+The format families are:
+
+```text
+repjot/exercises
+repjot/workouts
+repjot/preferences
+repjot/results
+```
+
+Each family has an independent schema-version sequence. All monthly result shards use
+`repjot/results`, but different shards can temporarily use different supported schema
+versions.
+
+## Static bundle rules
+
+`exercises.json` and `workouts.json` ship with the application. The build validates
+their JSON schemas and cross-file references.
+
+Published exercise, workout, and workout-node IDs have these rules:
+
+- The build must not delete a published ID.
+- The build must not reuse a published ID for a different entity or node.
+- Authors can correct the content associated with a published ID.
+- The build downloads the prior production bundle and compares IDs.
+- It preserves node type, parent, exercise reference, container strategy, scoring contract, and previously supported measurement units.
+- It does not compare complete content hashes, labels, instructions, notes, or prescriptions.
+
+Only `deprecated` controls lifecycle state. A deprecated exercise stays resolvable for
+history. Authors cannot add it to new workouts. A node absent from the prior production
+bundle is new, even when its workout ID already exists. A new session from an existing
+workout omits exercises already deprecated at its start.
+
+A deprecated workout stays resolvable for history. The UI hides it from workout
+selection and does not permit a new session to start from it. The build reports each
+workout and scored or timed container affected by a newly deprecated exercise.
 
 ## Canonical Drive files
 
-Use a flat set of files in the application's private `appDataFolder`:
+Use a flat set of recognized files in `appDataFolder`:
 
 ```text
-exercises.json
-programming.json
 preferences.json
 results-2026-07.json
 results-2026-08.json
 results-2026-09.json
 ```
 
-Actual Drive folders are unnecessary. `files.list` with
-`spaces=appDataFolder` provides the complete application file catalog, so a separate
-Drive-hosted `index.json` is not authoritative and should not be required.
+Actual Drive folders are not necessary. A separate Drive `index.json` is not
+canonical. `files.list` with `spaces=appDataFolder` supplies the file catalog.
 
 ### Monthly result shards
 
-Each `results-YYYY-MM.json` document uses the existing results-document shape:
+A result shard has this top-level shape:
 
 ```json
 {
+  "format": "repjot/results",
   "schemaVersion": 1,
-  "sessions": []
+  "yearMonth": "2026-08",
+  "sessions": [],
+  "sessionTombstones": []
 }
 ```
 
-A session belongs to the shard matching the calendar year and month expressed by its
-`startedAt` value, using the offset present in that timestamp. Editing a historical
-session updates its original shard. Crossing into a new month creates a new shard.
+A session ID is `session-` followed by a collision-resistant UUID. Identity does not
+encode workout time. A session belongs to the shard selected by its `startedAt` year
+and month. The application uses the offset in that timestamp. A session remains in its start-month
+shard if it crosses a month boundary.
 
-Monthly shards are preferred over yearly shards because they:
+Editing a historical session updates its original shard. Starting a session in a new
+month creates that month’s shard.
 
-- bound the data rewritten after a normal workout;
-- make recent-first lazy loading natural;
-- reduce conflict scope between devices;
-- remain large enough to avoid creating excessive Drive files.
+Monthly shards bound write size, reduce conflict scope, and support recent-first
+loading. Normal workout saves update only one shard. Several sessions can remain in
+progress across the loaded shards.
 
-### Result identity
+### Stored result identity
 
-Exercise results should eventually record `exerciseId` directly as well as `nodeId`:
+Each session stores its direct `workoutId`. Completed and abandoned sessions remain
+terminal while the Active Workout editor changes their results. The editor builds a
+temporary plan from the retained workout and recorded result paths, including deprecated
+exercises already present in the session. Editing preserves the terminal status and
+session timestamps unless the user explicitly changes a timestamp.
 
-```json
-{
-  "nodeId": "back-squat-working-set",
-  "exerciseId": "back-squat",
-  "iteration": 1,
-  "values": {
-    "reps": 5,
-    "weight": { "value": 225, "unit": "lb" }
-  }
-}
-```
+Each exercise result also stores:
 
-`nodeId` identifies the programmed occurrence. `exerciseId` identifies the exercise
-that was actually performed. Storing both removes the most common history join and
-preserves historical meaning if a workout definition is later edited.
+- The direct `workoutId`
+- The direct `exerciseId`
+- The full `executionPath`
+- The actual values and units
+- An optional unilateral side
 
-When reading older results without `exerciseId`, derive it from `(workoutId, nodeId)`.
-When writing a new result, verify that the direct `exerciseId` agrees with the current
-programmed node.
+The execution path identifies every repeated ancestor and the terminal workout node.
+Scored containers use container results with their own `workoutId`, `executionPath`,
+status, and score. Optional child detail uses separate exercise results.
+
+Aggregate-only entry stores no child results. Expanding it creates the complete child
+set from the score and workout order. Child edits then recompute the container score.
+If detailed work does not follow valid score progression, the container stores a
+`nonstandard` score and the UI displays `Detailed`.
+
+Semantic validation rejects partial detail, score mismatches, duplicate container
+paths, and duplicate exercise path-side-attempt tuples. `rounds_and_reps` is valid only
+for deterministic sequences of repetition-based leaf exercises.
+
+The direct IDs make common history queries independent of a workout-tree join. The
+loader still validates paths and direct IDs against the retained static entities.
+Supported legacy migrations can derive missing direct IDs from a matching workout and
+node path. They must fail rather than guess when a reference does not resolve.
 
 ## Drive catalog
 
-List file metadata without downloading content:
+List metadata before downloading file content:
 
 ```text
 GET https://www.googleapis.com/drive/v3/files
@@ -120,119 +155,113 @@ GET https://www.googleapis.com/drive/v3/files
   &fields=nextPageToken,files(id,name,modifiedTime,md5Checksum,size,version)
 ```
 
-Follow every `nextPageToken`; never assume the first page is complete. The catalog is
-the equivalent of `ls -r` for REP JOT's flat application-data space.
+Follow every `nextPageToken`. Drive permits duplicate names. Report duplicate
+recognized names as sync conflicts, and never select one silently.
 
-Drive permits duplicate filenames. A complete catalog operation must detect duplicate
-logical names such as two `results-2026-08.json` files and surface a synchronization
-error. It must not silently select the first match. Once a file is discovered or
-created, retain its Drive file ID for subsequent reads and updates.
-
-Only recognized filenames and supported schema versions participate in the data model.
-Unknown files should be left untouched and reported diagnostically.
+Retain each discovered Drive file ID for reads and updates. Process only
+`preferences.json` and valid monthly result names. Leave unknown Drive files unchanged
+and report them in diagnostics.
 
 ## IndexedDB cache
 
-Use IndexedDB rather than `localStorage` for cached documents. IndexedDB passed the
-Kindle capability probe and avoids localStorage's synchronous string-only API and
-typically small quota.
+Use IndexedDB instead of `localStorage`. Namespace all records by Google account.
+Changing accounts must select a separate namespace or clear the previous cache before
+loading data.
 
-A conceptual cached record is:
+A cached document records its logical name, Drive file ID, remote metadata, parsed
+content, schema provenance, and cache time. Pending edits retain the unchanged base
+content and metadata needed for a three-way merge. A sync-state record stores a changes token
+when incremental sync is enabled.
 
-```ts
-interface CachedDriveDocument {
-  accountKey: string;
-  fileId: string;
-  name: string;
-  modifiedTime: string;
-  md5Checksum?: string;
-  version?: string;
-  content: unknown;
-  cachedAt: string;
-}
-```
+Pending local edits use the same account and logical-file namespace. Save edits to
+IndexedDB before Drive synchronization. Unit toggles convert entered values with full
+internal precision before saving the new explicit unit. Debounce normal edits, save on blur, and flush
+pending local edits on `pagehide` when possible.
 
-The cache should contain at least two object stores:
+A failed Drive sync keeps pending edits and shows `Sync failed`. The UI uses `Saving`,
+`Saved`, and `Sync failed` states. Clearing IndexedDB discards the cache, so the next
+launch performs a full reconciliation.
 
-- `documents`, keyed by `(accountKey, name)`, for Drive metadata and parsed content;
-- `syncState`, keyed by `accountKey`, for synchronization cursors and format version.
-
-Cache records must be namespaced by Google account. Resolve a stable account key from
-Drive account metadata when authentication completes. Until account separation is
-implemented, changing accounts must clear the existing cache before loading data.
-
-Do not require persisted in-memory indexes initially. Rebuilding the maps from cached
-JSON is simple and prevents index-format migrations. Persist a derived index only if
-measurement on the Kindle demonstrates a startup problem.
+Do not persist derived lookup indexes unless Kindle measurements show a startup
+problem. Rebuilding indexes prevents unnecessary cache-format migrations.
 
 ## Synchronization
 
-### Initial or full reconciliation
+### Full reconciliation
 
-1. Obtain a Drive changes start-page token if incremental change tracking is enabled.
-2. List every page of metadata in `appDataFolder`.
-3. Validate recognized filenames, schema versions, and filename uniqueness.
-4. Compare remote metadata with the IndexedDB manifest.
-5. Download documents that are absent locally or whose checksum/version changed.
-6. Remove cached documents that no longer exist remotely.
-7. If a start-page token was captured before the listing, consume changes since that
-   token to cover writes that occurred during reconciliation.
-8. Persist the final changes token only after all changes have been applied locally.
-9. Rebuild the affected in-memory indexes.
+1. List every Drive catalog page.
+2. Validate recognized names, envelopes, versions, and filename uniqueness.
+3. Compare remote metadata with the account-scoped IndexedDB records.
+4. Download files that are absent or changed locally.
+5. Remove synchronized cache records for remote files that no longer exist.
+6. Reconcile pending local edits before replacing their cached content.
+7. Rebuild affected in-memory indexes.
 
-Prefer `md5Checksum` for content comparison when Drive supplies it. Fall back to
-`version` or `modifiedTime` when necessary.
+Use `md5Checksum` when Drive supplies it. Otherwise, use Drive `version` or
+`modifiedTime`. These values detect remote file changes. They do not select schema
+migrations.
 
-### Incremental synchronization
+A later implementation can use the Drive Changes API. Persist a new changes token only
+after all pages apply successfully. Fall back to full reconciliation when Drive rejects
+the token or local state is inconsistent.
 
-The first implementation may repeat the lightweight metadata listing on each launch.
-With monthly shards, this remains inexpensive and is much simpler than downloading all
-file bodies.
+### Writes and conflicts
 
-The later optimization is the Drive Changes API:
+Deleting one session removes it from `sessions` and adds a permanent entry to
+`sessionTombstones` in the same shard. A tombstone wins over a stale session with that
+ID. Automatic synchronization does not remove tombstones.
 
-1. Store the account's `newStartPageToken` in IndexedDB.
-2. On the next launch, call `changes.list` with that token and
-   `spaces=appDataFolder`.
-3. Follow `nextPageToken` through every page.
-4. Download new or modified recognized files and remove deleted ones from the cache.
-5. Persist `newStartPageToken` only after the final page has been applied.
-6. Fall back to full reconciliation if the cursor is rejected or local state is
-   inconsistent.
+Before a canonical write, load the latest remote file and retain its Drive metadata.
+Compare the cached base, local edit, and latest remote content. If remote still equals
+the base, upload the local edit. Otherwise, perform a three-way merge.
 
-### Writes
+For monthly results, apply tombstones first and merge sessions by stable ID. Changes to
+different sessions merge automatically. If the same live session changed locally and
+remotely, keep the remote version under its original ID. Save the pending local version
+as a sync copy with a new `session-` prefixed UUID and `conflictOfSessionId` set to the
+original ID. Preserve its status and timestamps.
 
-Normal workout completion modifies only the relevant monthly shard:
+Store the generated copy ID in the pending edit before upload. Every retry reuses it so
+one detected conflict cannot create repeated copies. Tombstones win without creating a
+sync copy.
 
-1. Ensure the cached shard is current before editing it.
-2. Create the shard if it does not exist.
-3. Add or update the session in memory.
-4. Upload the entire shard using its retained Drive file ID.
-5. Store the returned or freshly requested remote metadata and the new content in
-   IndexedDB.
-6. Update the affected in-memory indexes.
+Preferences merge by exercise and dimension. For the same mapping changed on both
+sides, the pending local value wins because this client performs the later
+synchronization. REP JOT does not prompt for preference conflicts.
 
-If remote metadata changed after the shard was loaded, stop and reconcile rather than
-silently overwriting it. Drive does not provide an atomic transaction across these
-files, and metadata preflight alone does not eliminate a concurrent-write race. Follow
-the single-document write-back protocol in `schema-versioning.md`. Multi-device editing
-is not complete until conflicts in the same monthly shard can be detected and
-reconciled.
+Validate the edited document before upload. Recheck remote metadata immediately before
+updating the retained Drive file ID. If the metadata changed, stop and reconcile.
+
+Drive `version`, `md5Checksum`, and `modifiedTime` detect changes, but the documented
+`files.update` operation does not provide REP JOT with a guaranteed compare-and-swap
+transaction. A metadata preflight therefore reduces but does not remove the final race.
+REP JOT never silently discards a detected session version.
+
+History labels sessions with `conflictOfSessionId` as `Sync copy`. These sessions use
+the normal view, edit, and delete actions; REP JOT has no separate reconciliation UI.
+
+After upload, read enough remote state to determine the outcome. Update IndexedDB and
+the in-memory index only after the remote commit is known. If the network result is
+ambiguous, read Drive before retrying.
+
+Drive cannot migrate or update several files atomically. Batch requests are not
+transactions. Each preference file and each monthly shard must remain valid and
+readable independently.
 
 ## In-memory read model
 
-Use native `Map`, `Set`, and arrays, all of which are supported by the target browser.
-The conceptual index is:
+Use native `Map`, `Set`, and sorted arrays:
 
 ```ts
 interface DataIndex {
   exerciseById: Map<string, Exercise>;
   workoutById: Map<string, Workout>;
-  programmedExerciseByNode: Map<string, ProgrammedExerciseLookup>;
+  nodeByWorkoutAndId: Map<string, WorkoutNodeLookup>;
   exerciseIdsByMuscleGroup: Map<MuscleGroup, Set<string>>;
   recentByExerciseId: Map<string, ExerciseOccurrence[]>;
   recentByMuscleGroup: Map<MuscleGroup, ExerciseOccurrence[]>;
   recentSessions: SessionSummary[];
+  activeSessionsByUpdatedAt: SessionSummary[];
 }
 ```
 
@@ -244,99 +273,59 @@ function nodeKey(workoutId: string, nodeId: string): string {
 }
 ```
 
-An exercise occurrence should contain enough joined context for rendering without
-repeating lookups:
+Build static lookup maps from the bundle. Then traverse loaded result shards from
+newest to oldest. Index exercise results by their direct IDs and retain the execution
+path for display and validation.
 
-```ts
-interface ExerciseOccurrence {
-  sessionId: string;
-  sessionStartedAt: string;
-  workoutId: string;
-  nodeId: string;
-  exerciseId: string;
-  iteration?: number;
-  attempt?: number;
-  values: ResultValues;
-  effort?: EffortOutcome;
-}
-```
-
-### Building the index
-
-1. Insert every exercise into `exerciseById` and populate
-   `exerciseIdsByMuscleGroup` from primary and secondary muscle groups.
-2. Insert every workout into `workoutById`.
-3. Walk every programming tree once. Map `(workoutId, nodeId)` to its exercise ID,
-   stimulus, set role, and other useful programmed context.
-4. Traverse loaded sessions newest-first.
-5. Resolve each result's exercise directly or through `programmedExerciseByNode` for
-   legacy records.
-6. Append a joined occurrence to `recentByExerciseId` and each applicable
-   `recentByMuscleGroup` list.
-7. Build a compact session summary containing its exercise-ID and muscle-group sets.
-
-This is a one-time linear hash join after loading, not a join during every render.
-
-Recent lists should initially be bounded, for example to the newest 20 occurrences per
-exercise and muscle group. Full historical analytics can scan hydrated shards or build
-an unbounded index on demand.
-
-### Common queries
-
-Recent history for one exercise is a direct lookup:
-
-```ts
-index.recentByExerciseId.get('back-squat')?.slice(0, 5);
-```
-
-An exercise's muscle groups come directly from `exerciseById`; no historical
-intersection is needed. To find sessions containing both a particular exercise and any
-exercise for a muscle group, scan `recentSessions` newest-first and test its two sets
-until enough matches have been found.
+Index container results separately when summary or analytics views need container
+scores. Keep recent lists bounded for normal screens. Full-history views can load older
+shards and extend the indexes on demand.
 
 ## Loading policy
 
-The day-of-workout UI does not need all history before it becomes usable:
+1. Load and validate bundled `exercises.json` and `workouts.json`.
+2. Load `preferences.json` from IndexedDB or Drive.
+3. Load the current result shard.
+4. Load older cached or remote shards until the active workout has enough history.
+5. Render as soon as the required recent history is ready.
+6. Load more history when the user requests it.
 
-1. Load `exercises.json` and `programming.json`.
-2. Load the current month's result shard from IndexedDB or Drive.
-3. Determine the exercise IDs required by the selected workout.
-4. Walk cached or remote shards backward by filename until enough recent occurrences
-   are available for those exercises.
-5. Render the workout as soon as its required recent history is ready.
-6. Hydrate older shards in the background or when the user opens full history and
-   analytics screens.
+Normal startup does not download or rewrite all history. Unchanged shards come from
+IndexedDB.
 
-An explicit full-history operation may download every missing shard, but normal startup
-must not require it. Unchanged shards should be served from IndexedDB.
+At session start, copy the effective workout tree into the session `executionPlan`.
+Filter exercises already deprecated, and create skipped results with
+`reasonCode: "deprecated"`. The frozen plan includes the remaining nodes, strategies,
+scoring rules, and prescriptions.
 
-## Failure and recovery rules
+An in-progress session always resumes from its frozen plan. Later bundle corrections or
+deprecations do not change it. Remove the plan when the session becomes completed or
+abandoned. Retained static IDs and recorded results support historical display.
 
-- A cleared IndexedDB cache triggers a full Drive reconciliation without data loss.
+## User data deletion
+
+Delete All User Data requires explicit confirmation. It deletes every recognized REP
+JOT file from `appDataFolder`, then clears the account's IndexedDB documents, pending
+edits, sync state, and in-memory indexes. A partial remote deletion is reported and can
+be retried. REP JOT does not report success while recognized remote files remain.
+
+Disconnect Google Account is separate. With a valid access token, REP JOT revokes the
+OAuth grant, signs out of REP JOT, and clears the account cache. If revocation cannot complete, the
+UI links to Google Account connections so the user can remove access there.
+
+## Failure and recovery
+
+- A missing or corrupt cache triggers a Drive reconciliation.
 - Corrupt cached JSON is discarded and downloaded again.
-- Corrupt remote JSON or an unsupported schema version is reported and never
-  overwritten automatically.
-- Duplicate logical filenames are treated as conflicts.
-- Failed network synchronization leaves the last valid cache readable, clearly marked
-  as potentially stale.
-- A failed upload must not update the cached remote metadata.
+- Corrupt remote JSON is reported and never overwritten automatically.
+- A future schema version is not opened for editing or overwritten.
+- Duplicate recognized Drive names are conflicts.
+- A failed sync keeps the last valid cache and all pending local edits.
+- A failed upload does not update cached remote metadata.
 - Unknown Drive files are never deleted automatically.
+- Static bundle validation failure blocks the build or application load.
 
-## Implementation sequence
+## Related specification
 
-1. Add paginated Drive catalog, metadata, download, create, and update primitives.
-2. Introduce monthly result filenames and shard validation.
-3. Add `exerciseId` to new exercise results with legacy derivation on read.
-4. Implement account-scoped IndexedDB document caching.
-5. Implement full metadata reconciliation and changed-file downloads.
-6. Build the in-memory lookup maps and bounded recent-history lists.
-7. Load recent shards lazily for the active workout.
-8. Add Drive Changes API synchronization after the simpler approach is proven.
-9. Add conflict handling suitable for multiple devices.
-
-## References
-
-- [Store application-specific data in Google Drive](https://developers.google.com/workspace/drive/api/guides/appdata)
-- [Drive `files.list`](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list)
-- [Retrieve Drive changes](https://developers.google.com/workspace/drive/api/guides/manage-changes)
-- [Drive `changes.list`](https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list)
+See [Schema Versioning and Data Migration](./schema-versioning.md) for envelopes,
+migration chains, and safe write-back.

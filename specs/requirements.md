@@ -1,146 +1,228 @@
 # REP JOT
 
-REP JOT is a lightweight personal fitness tracker. It emphasizes tracking exact reps and weight for a person's history.
+REP JOT is a lightweight personal fitness tracker. It emphasizes exact workout results and clear exercise history.
 
 ## Core Concepts
 
-- Exercise Directory, includes coarse muscle groups and equipment required.
-- Workout, a sequence of exercises meant to be completed in a session.
-- Results, actual results a person achieves on their workout execution.
-- User Preferences.
+- Exercise Directory: stable exercise facts, muscle groups, measurements, and required equipment.
+- Workout: a retained, ordered tree of containers and exercises.
+- Results: the actual work completed during a workout session.
+- User Preferences: per-user unit choices and other settings.
 
-## Auth
+## Authentication
 
-- User authenticates with Google OAuth.
-- There is no authorization as there is no elevated role, only basic user role.
-- Anything requiring elevated privileges is currently a development-time consideration, so an admin modifies this source repository.
+- The user authenticates with Google OAuth.
+- The application has one basic user role and no elevated user roles.
+- An administrator changes global data through the source repository and static build.
 
 ## Data Storage
 
-- Global, static JSON files deployed with the site. (Exercise Directory, Workout)
-- Per-user, stored in the authenticated user's Google Drive appDataFolder. This keeps results private. (Results, User Preferences)
-- User results are stored in monthly partitions, `yyyy-mm-filename.json`
-- User results are cached locally to avoid excessive downloads on each app launch.
-- Make use of in-memory hashtables to speed lookups (rather than lots of loops); Kindle browsers do not support WASM so no Sqlite WASM, and we explicitly do not want to reimplement a database.
-- Out of scope: eventually users may layer on their own workouts, so the app will load all system workouts and then merge/append user workouts.
-- Open question: do we save on every `blur` event, or only every `x` seconds after change to allow time to accumulate more changes?
-- See more at `storage-and-lookup.md`
+- Global `exercises.json` and `workouts.json` files ship in the static site bundle.
+- User preferences and results use the authenticated user's Google Drive `appDataFolder`.
+- User results use monthly files named `results-YYYY-MM.json`.
+- The application caches user data locally and uses in-memory maps for lookups.
+- The application does not use SQLite or WebAssembly.
+- User-created workouts are out of scope. A future version can merge them with system workouts.
+- See `storage-and-lookup.md`.
+
+### Saving and Synchronization
+
+- The application saves edits to local storage before it synchronizes them with Google Drive.
+- The application debounces normal edits, saves on blur, and flushes pending local edits on `pagehide`.
+- The UI shows `Saving`, `Saved`, and `Sync failed` states.
+- A failed Drive synchronization must not discard local edits.
+- Before upload, the client compares its base copy with the latest Drive metadata and content.
+- The client automatically performs a three-way merge for nonconflicting changes.
+- If the same preference changed on both sides, the pending value from the client that synchronizes last wins.
+- If the same live session changed on both sides, the remote version keeps its ID and the pending local version becomes a labeled sync copy with a new UUID.
+- REP JOT does not provide a separate conflict-reconciliation UI.
 
 ## Schema Versioning
 
-- Each JSON file MUST have a version number (integer).
-- The application MUST have load the previous version, which in turn may chain to its previous version. After ugrading all schemas atomically, it must save the upgraded data files.
-- See `../specs/schema-versioning.md`
+- Each JSON file declares its document family and integer schema version.
+- The application loads supported older versions through an ordered migration chain.
+- The application validates data before and after migration.
+- Google Drive file upgrades are independent because Drive cannot atomically update multiple files.
+- See `schema-versioning.md`.
 
-## Build, Hosting and Web Stack
+## Static Data Identity
 
-- 100% static site.
-- Hosted on GitHub pages at present.
-- Built with Svlete and Vite.
-- Build must validate TypeScript and publish to `dist/`.
-- Build must validate global static JSON files against JSON schema.
-- Supports older browsers with limited capabilities, namely Kindle Scribe and Kindle Paperwhite browsers, for distraction-free workout editing -- see `../docs/CAPABILITIES-*.md`
+- Published exercise, workout, and workout-node IDs are never deleted or reused.
+- Corrections to labels, instructions, and prescriptions can retain the existing ID and apply to historical views.
+- An existing ID cannot be repurposed for a different entity or node role.
+- Published workout nodes cannot move to a different parent because result paths depend on their ancestry.
+- Deprecated exercises remain resolvable but cannot appear in new workouts.
+- A new session from an existing workout omits exercises that are already deprecated.
+- The build reports every workout and scored or timed container affected by a newly deprecated exercise.
+- A session freezes its effective workout plan when it starts. Later static-data changes do not alter that active session.
+- Deprecated workouts remain resolvable for history but do not appear in the chooser and cannot start.
+- The build compares the current bundle with the prior production bundle.
+- The build fails if a published ID is missing or reused in a different namespace.
+- The build preserves node type, parent, exercise reference, container strategy, scoring contract, and previously supported measurement units.
+- The build does not compare complete content hashes, labels, instructions, notes, or prescriptions.
+- Each exercise result stores its `workoutId` and direct `exerciseId`.
+
+## Build, Hosting, and Web Stack
+
+- REP JOT is a 100% static site hosted on GitHub Pages.
+- REP JOT uses Svelte, TypeScript, and Vite.
+- The build validates TypeScript and publishes to `dist/`.
+- The build validates static JSON with JSON Schema and semantic cross-file checks.
+- Bundled code supports the Kindle devices in `../docs/CAPABILITIES-kindle-scribe.md`.
 
 ## Branding and Styling
 
-- The product name is stylized in all caps as "REP JOT" but may appear in other casing conventions in code.
-- REP JOT uses a high-contrast, primarily black/white/middle-grey theme, so that it works well on e-ink displays, including Kindle devices.
-- Styling is a first-class architectural principle in the solution. We use tokens, centralized CSS file(s), and strong reuse (DRY). NEVER scatter random CSS bits across HTML files. ALWAYS look for existing to reuse.
-- We use Material Symbols for UI iconography with a few exceptions (custom SVGs for equipment, muscle groups, modality, laterality).
-- We use styled native HTML controls and DO NOT use any control library.
-- See `../design/DESIGN.md` for more
+- The user-facing product name is always `REP JOT`.
+- The UI uses a high-contrast black, white, and middle-gray theme for e-ink displays.
+- Shared tokens and centralized CSS define the styling. The implementation does not scatter page-specific CSS.
+- Controls use zero-radius corners and no shadows, gradients, or blur.
+- Application actions use Material Symbols.
+- Fitness taxonomy can use bundled SVG icons.
+- The application uses styled native HTML controls and no control library.
+- Every icon-only control has an accessible name.
+- Interactive elements use semantic links, buttons, and form controls.
+- See `../design/DESIGN.md`.
 
-## Exercise features
+## Exercise Features
 
-- Exercise has a name, optional instructions, optional icon, primary and secondary muscle groups (coarse ~dozen muscles), push/pull/compound modality, laterality (single/bi), and a measurement type (reps, time, calories, distance).
-- Open Question: does the icon live at the exercise level, equipment level, modality, muscle group, etc level? Is the icon Material Symbol or custom SVG?
+An exercise has:
 
-## Workout features
+- A stable ID and name.
+- Instructions imported from `free-exercise-db`.
+- An optional Material Symbol or bundled SVG icon.
+- Required equipment.
+- Primary and secondary muscle groups aligned with the `free-exercise-db` vocabulary.
+- Force, mechanics, category, movement pattern, and laterality as separate concepts.
+- One or more controlled measurement dimensions and compatible units.
+- Load semantics that distinguish total load, per-implement load, added load, and assistance.
+- An optional `deprecated` lifecycle flag.
 
-- A Workout must have a kind of recursion/tree structure. A single workout might have three sections: warmup, strength, HIIT. Each section might be a simple linear component (x rounds of each of the y exercises), or more complex (AMRAP, EMOM), or compound sections that have x minutes of EMOM followed by y active recovery folloed by z minutes of EMOM. It must support representing a complex kettlebell movement (e.g. deadlift to row to clean to press) without having to add a new exercise type for each complex. It needs to be flexible but understandable and UI renderable. 
+## Workout Features
 
-## Result features
+- A workout is an ordered tree of containers and exercises.
+- Containers support sequence, fixed rounds, AMRAP, EMOM, and scored complexes.
+- Containers can nest to represent warmup, strength, HIIT, active recovery, and deeper structures.
+- Results identify every repeated ancestor through an execution path.
+- EMOM programming uses cycles and interval duration. It does not use the ambiguous term `rounds`.
+- A complex can record one container score while its component exercises do not record separate results.
+- AMRAP and EMOM containers can record a container score and optional detailed exercise results.
+- `rounds_and_reps` is valid only for deterministic sequences of repetition-based leaf exercises.
+- Aggregate-only entry stores the container score without child results.
+- Expanding an aggregate pre-populates complete child results from the score and workout order.
+- After expansion, child results are authoritative and every edit recomputes the container score.
+- If detailed work does not follow valid round progression, the container uses a `nonstandard` score and the UI displays `Detailed`.
+- A kettlebell complex does not require a synthetic exercise for every movement combination.
 
-- Results must capture actuals. If the workout was to do 3 sets X 8 reps, but I only do 6 reps on the last set, I need to capture that.
+## Result Features
 
-## User Settings
+- Results capture actual values, including all differences from prescribed values.
+- Blank input means no result. Zero repetitions means an actual unsuccessful attempt.
+- Exercise results store `workoutId`, direct `exerciseId`, and the workout-node reference.
+- Skipped and incomplete results use a controlled reason-code enum. Free text belongs in notes.
+- Unilateral results identify `left`, `right`, `both`, or `alternating` sides.
+- `left` and `right` store repetitions for that side. `both` stores simultaneous repetitions. `alternating` stores total repetitions across sides and identifies the starting side.
+- The UI shows alternating results as total and per-side values, such as `10 total / 5 each` or `9 total / 5 left / 4 right`.
+- Results store explicit units.
+- Sessions have `in_progress`, `completed`, or `abandoned` status.
+- Several sessions can be in progress at the same time.
+- Back navigation from an active workout saves it as `in_progress`.
+- The user can explicitly abandon or delete an unfinished workout.
+- Abandoned workouts remain in History until the user deletes them.
+- Session deletion writes a permanent tombstone so that stale devices cannot restore it.
+- If work is missing, Finish Workout offers `Return to workout` and `Finish as incomplete`.
+- Completed and abandoned sessions can be edited with the Active Workout editor.
+- Editing preserves the session status and workout timestamps while it saves result corrections.
+- Every session has `updatedAt`, which changes after each saved correction.
+- New session IDs use a collision-resistant UUID and do not encode workout time.
+- A sync copy preserves the session status and timestamps, records the original session ID, and appears in History with a `Sync copy` label.
+- The user can inspect, edit, or delete either copy with the normal session screens.
 
-- To start, user settings only exposes links to download all data files from appDataFolder.
-- Open question: allow user to indicate their equipment and its units (e.g. kgs barbells, lbs dumbbells).
+## User Preferences
 
-## Other Open Questions
-
-- User must be able to toggle pounds/kilograms per exercise. For example, my home gym has kilogram plates for the barbell but pound dumbbells. I must be able to track squats in KG side by side curls in LBS in the same workout. Solve with either: a user preference to state equipment in their gym with per-equipment units, or a tappable `lbs` indicator that becomes `kgs` on tap (and vice versa). If tappable we should remember it for the exercise or equipment.
+- User preferences use a versioned `preferences.json` document.
+- Preferences store the preferred unit for each exercise.
+- The Settings screen lists the exercise-to-unit mappings.
+- Tapping an exercise unit pill switches between compatible units, converts entered values, and updates the preference.
+- Conversion uses full precision internally and a sensible editable display value.
+- Each saved result retains its explicit value and unit until the user edits that result.
+- Preference synchronization merges different exercise and dimension mappings automatically.
+- For a conflicting mapping, the pending value from the client that synchronizes last wins without prompting.
+- Settings provides downloads for all raw files in `appDataFolder`.
 
 ## Data Seeding
 
-- Source exercise data from `https://github.com/yuhonas/free-exercise-db`. Check out the repository locally. In this REP JOT repo, have a transformation script and an allowlist of exercises we want curated into REP JOT. The script will create curated exercise directory in our schema.
-- Open question: free-exercise-db includes primary and secondary muscles, strongly-typed as an enum. Should we copy it or do we have a good reason to deviate?
+- Source exercise data comes from the local `yuhonas/free-exercise-db` repository.
+- A transformation script and allowlist produce the curated REP JOT exercise directory.
+- REP JOT retains the source muscle vocabulary.
+- The transformation defines curated values absent from the source, including laterality, movement pattern, and measurements.
+- Source `body only` maps to no equipment. A source `null` value requires equipment curation before publication.
 
-## Prod Readiness
+## Production Readiness
 
-- Beautiful landing page with screenshots and key feature callouts
-- Add a privacy policy
-- Open question: anything else that Google OAuth and Drive scope requires? US law? Does local storage require EU cookies disclosure?
+- The public home page describes REP JOT and links to its privacy policy.
+- The application uses separate Google OAuth projects for testing and production.
+- Production OAuth uses owned, verified domains and secure HTTPS origins.
+- REP JOT requests only the non-sensitive `drive.appdata` scope.
+- The privacy policy explains how REP JOT accesses, stores, uses, exports, and deletes Google user data.
+- REP JOT uses local browser storage only for authentication, user-requested features, and the local data cache.
+- The privacy policy discloses required local storage. Nonessential storage requires consent before use.
+- REP JOT provides a secure process for data-access and deletion requests.
+- REP JOT maintains security and breach-response procedures for consumer health data.
+- Launch readiness includes a legal review of consumer-health privacy and breach-notification duties.
+- A later release can add screenshots and feature callouts.
 
 ## UI
 
-The UI intentionally only support workout-time data entry. All other concerns (programming workouts, equipment directory, exercise database, etc) are development-time considerations and deployed as part of the static bundle.
+The application UI supports workout selection, execution, history, preferences, and data export. Workout and exercise authoring remain development-time tasks.
 
-Mockup screenshots & HTML are in `../design/**`. 
+Mockup screenshots and HTML in `../design/**` are guidance only. `../design/DESIGN.md` and this document are authoritative.
 
-### Marketing Home Page
+### Authenticated Navigation
 
-The home page `/` is the unauthenticated experience. It contains a button to begin Google sign in and the app title, REP JOT. That's it. We will add a beautiful home page later, once we have screenshots and a working app, to serve as marketing.
+- Tab-root screens use the REP JOT header and the Workout, History, and Settings tabs.
+- Detail and task screens use a compact Back header without the tab bar.
+- Active Workout uses the compact Back header to reduce accidental navigation.
 
-### Authenticated Shell
+### Choose Workout
 
-The shell contains the REP JOT header with `fitness-center` Material icon as the app icon. When on screens other than authenticated landing, the header needs a Back botton and nav stack. 
-
-The bottom tab contains buttons for Workout with `play_arrow` icon, History `receipt_long`, and Settings `settings`. 
-
-### Choose Workout (Authenticated Landing)
-
-After authenticating, the user lands on the Choose Workout screen. It shows a paginated list of Workouts, by title, with the last date complted as the subtitle. 
-
-It also shows a Recent section that shows the five most recent workouts, sorted by date, most recent first.
-
-If user starts a workout and clicks back, Recent section shall show it as an in progress workout. Instead of last date it shall show started time (if today; date if not) and have a contrasting background. 
-
-### History
-
-Shows a complete list of workouts, similar to Recent, but paginated with complete history, and containing more details.
-
-### Workout Summary
-
-Clicking a recent workout presents a summary of the complete workout. 
+- The authenticated landing screen shows active workouts with title and last completion date.
+- A `Load older` control loads more workouts when necessary.
+- Recent shows up to five completed or abandoned sessions, newest first.
+- All in-progress sessions appear above Recent, sorted by `updatedAt`, newest first.
+- An in-progress entry shows its start time today or its date on an earlier day.
+- Tapping an in-progress entry resumes it.
 
 ### Workout Overview
 
-From authenticated landing page, tapping a workout from the Choose Workout screen gives a detailed view of the workout. At the bottom, a Start Workout button allows the user to begin. This creates the data entry and records the start time in the user's Results data. 
+- Workout Overview renders the programmed tree and prescriptions.
+- Start Workout creates an `in_progress` session and records its start time.
 
 ### Active Workout
 
-Needs to render the tree of the workout. Top level sections are clearly deliniated with horizontal lines. 
+- Active Workout renders the programmed tree with clear styling for its first three levels.
+- Deeper content shows a compact named path, such as `Strength / Complex / Round 2`.
+- Each exercise has a tappable Last Time badge linked to Exercise History.
+- Last Time uses the latest completed session, shows actual values and units, and ignores the active session.
+- The UI shows `No history` when an exercise has no completed result.
+- A unit pill displays the exercise unit and updates its preference when tapped.
+- AMRAP provides a large `+` control to add one completed round quickly.
+- The UI also supports partial rounds and optional exercise details.
+- The UI provides appropriate controls for repetitions, weight, duration, distance, calories, EMOM, effort, and extra attempts.
+- Finish Workout appears at the end of the workout.
 
-Open question: Different workout types (time, distance, AMRAP, EMOM, reps/sets) have different data entry requirements and thus UI treatments. Be thorough in design.
+### History and Summary
 
-Open question: we expect most workouts will have 1 to 3 levels of hierarchy, so we should design for those each to be distinctive. Further recursion needs a way to show we've gone deeper. Perhaps we use legal numbering (aka multilevel list) on headers. Need help here. 
-
-Each exercise that appears in the Active Workout needs a "Last Time" badge that summarizes what and when the user achieved this specific exercise. This is critical for tracking progress and ensuring that results increase over time. 
-
-Tapping the Last Time badge takes you to Exercise History screen. 
-
-Bottom of the Active Workout has a FINISH WORKOUT button. 
-
-Open Question: how do we handle "abandoned" workouts? Currently they stay in progress in the Recent list and History forever. 
-
-### Exercise History
-
-This shows you a paginated list of entire history, sorted by most recent first, for that single exercise. 
+- Workout History uses `Load older` and shows completed, in-progress, and abandoned states.
+- Workout History does not show an aggregate workout-volume metric.
+- Workout Summary shows all recorded work, units, attempts, status, and container scores.
+- Exercise History uses `Load older` and sorts results newest first.
+- History dates include the year when the event is not in the current year.
 
 ### Settings
 
-Data Export section: provide links to the raw JSON files that the user may download.
-
-Open question: other settings, such as units, or units per equipment, or equipment in gym. 
+- Settings contains Data Export and Exercise Units sections.
+- Settings provides a confirmed, irreversible `Delete All User Data` action.
+- Delete All User Data removes recognized files from `appDataFolder` and clears the account's local cache and pending edits.
+- Settings provides a separate `Disconnect Google Account` action.
+- Disconnect revokes the Google OAuth grant, signs out of REP JOT, and clears the local account cache.
+- If in-app revocation cannot complete, REP JOT links to Google Account connections.

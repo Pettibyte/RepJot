@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "push-dist",
+      "title": "Push dist to gh-pages",
+      "group": "Deployment",
+      "description": "Push new builds in dist/ to static hosting at GitHub Pages with gh-pages branch.",
+      "command": "git subtree push --prefix dist origin gh-pages"
+    }
+  ]
+}

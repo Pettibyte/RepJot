@@ -1,174 +1,200 @@
-# Fitness Tracker JSON Schema Specification
+# REP JOT JSON Schema Specification
 
 ## Purpose
 
-This document defines the JSON data model for a single-user fitness tracker.
+This document defines the persistent JSON data model for REP JOT.
 
-The application stores all persistent data in three JSON files, separated by expected edit frequency:
+The application uses these files:
 
-1. `exercises.json` — rarely edited reference facts about exercises and equipment.
-2. `programming.json` — occasionally edited workout definitions and programmed prescriptions.
-3. `results.json` — frequently edited records of workouts actually performed.
+1. `exercises.json` stores exercise and equipment reference data.
+2. `workouts.json` stores workout definitions and prescriptions.
+3. `preferences.json` stores versioned user preferences.
+4. `results-YYYY-MM.json` stores workout sessions for one calendar month.
 
-There is no database in this revision. All three files must be independently loadable as JSON in a browser.
+There is no database in this revision. Each file must load independently as JSON in a browser.
 
-Identifiers are stable strings. References between files use those identifiers rather than embedding duplicate copies of referenced entities.
+All files contain `format` and `schemaVersion`. References use stable IDs instead of copies of referenced entities.
 
 ---
 
-# 1. `exercises.json`
+# 1. Shared Rules
+
+## Document Envelopes
+
+Each file declares its family and a positive integer schema version:
+
+```json
+{
+  "format": "repjot/exercises",
+  "schemaVersion": 1
+}
+```
+
+The formats are `repjot/exercises`, `repjot/workouts`, `repjot/preferences`, and `repjot/results`. An incompatible structure change increments the family version.
+
+## Stable IDs and Deprecation
+
+Published equipment, exercise, workout, and workout-node IDs must never be deleted or reused. Corrections to labels, instructions, and prescriptions can retain the same ID and apply to historical views.
+
+An ID must not represent a different entity or node role later. A published workout node must keep its parent because historical execution paths include its ancestry.
+
+An optional `deprecated: true` flag marks an exercise or workout as unavailable for new use. Deprecated items remain resolvable for historical results.
+
+A deprecated exercise cannot appear in a new workout. A new session from an existing workout omits exercises deprecated at its start. An in-progress session keeps its frozen plan. A deprecated workout is hidden from the chooser and cannot start.
+
+The build compares the current bundle with the prior production bundle. It fails when a published ID disappears or is reused in another namespace.
+
+The comparison also preserves each node's type, parent, exercise reference, container strategy, and result-capture contract. Previously published measurement dimensions and compatible units cannot be removed. New dimensions and units can be added.
+
+The build does not compare complete content hashes, labels, instructions, notes, or prescriptions. A workout and node found in the prior production bundle are existing. A node added to an existing workout is new and cannot reference a deprecated exercise.
+
+## Icon
+
+An entity can have one discriminated `icon`. REP JOT supports these forms:
+
+```json
+{ "type": "material_symbol", "name": "fitness_center" }
+```
+
+```json
+{ "type": "local_svg", "path": "icons/exercises/back-squat.svg" }
+```
+
+A `material_symbol` contains a valid Material Symbols name. A `local_svg` contains a bundle-relative path to a trusted local SVG file.
+
+Remote icon URLs and inline SVG source are not permitted.
+
+---
+
+# 2. `exercises.json`
 
 ## Purpose
 
-`exercises.json` contains relatively stable facts about:
-
-- exercises
-- equipment
-- movement patterns
-- muscle groups
-- laterality
-- modality
-
-This file describes what an exercise **is**, not how it is programmed in a particular workout and not what the user actually performed.
+`exercises.json` describes what an exercise is. It does not define a workout prescription or record performed work.
 
 ## Top-Level Structure
 
 ```json
 {
+  "format": "repjot/exercises",
   "schemaVersion": 1,
   "equipment": [],
   "exercises": []
 }
 ```
 
----
-
 ## Equipment
 
-Equipment is stored as a fact table.
-
-An exercise may require zero or more equipment entries.
-
-Zero required equipment means the exercise can be performed using bodyweight alone. There is no special `"bodyweight"` equipment entity.
-
-### Equipment Schema
+Equipment is a reference entity. An empty `equipmentIds` array means that an exercise needs no equipment. Unknown source equipment must be curated before publication.
 
 ```json
 {
   "id": "barbell",
   "name": "Barbell",
-  "description": "Standard loaded barbell."
+  "icon": { "type": "material_symbol", "name": "fitness_center" }
 }
 ```
 
-### Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable unique identifier. |
-| `name` | string | yes | Human-readable equipment name. |
-| `description` | string | no | Optional explanatory text. |
+| `id` | string | yes | Stable equipment ID. |
+| `name` | string | yes | Display name. |
+| `icon` | icon | no | Material Symbol or local SVG. |
 
-### Example Equipment Directory
+## Exercise
 
-```json
-[
-  {
-    "id": "barbell",
-    "name": "Barbell"
-  },
-  {
-    "id": "squat-rack",
-    "name": "Squat Rack"
-  },
-  {
-    "id": "kettlebell",
-    "name": "Kettlebell"
-  },
-  {
-    "id": "dumbbell",
-    "name": "Dumbbell"
-  },
-  {
-    "id": "bench",
-    "name": "Bench"
-  },
-  {
-    "id": "pull-up-bar",
-    "name": "Pull-up Bar"
-  },
-  {
-    "id": "rowing-machine",
-    "name": "Rowing Machine"
-  }
-]
-```
-
----
-
-# Exercise
-
-An exercise is a reusable entry in the exercise directory.
-
-The exercise record contains coarse semantic information sufficient to describe the movement and support future exercise substitution without attempting to model detailed kinesiology.
-
-## Exercise Schema
+An exercise contains classification, instructions, and supported measurements.
 
 ```json
 {
   "id": "back-squat",
   "name": "Back Squat",
-  "description": "Barbell back squat performed from a rack.",
-  "equipmentIds": [
-    "barbell",
-    "squat-rack"
+  "instructions": [
+    "Position the bar across the upper back.",
+    "Descend until the hip crease is below the top of the knee.",
+    "Stand and fully extend the hips and knees."
   ],
+  "icon": { "type": "local_svg", "path": "icons/exercises/back-squat.svg" },
+  "equipmentIds": ["barbell", "squat-rack"],
+  "force": "push",
+  "mechanic": "compound",
+  "category": "strength",
   "movementPattern": "squat",
-  "primaryMuscleGroups": [
-    "quads",
-    "glutes"
-  ],
-  "secondaryMuscleGroups": [
-    "hamstrings",
-    "core"
-  ],
+  "primaryMuscles": ["quadriceps", "glutes"],
+  "secondaryMuscles": ["hamstrings", "lower back"],
   "laterality": "bilateral",
-  "modality": "compound",
   "measurements": [
-    {
-      "name": "reps",
-      "unit": "rep"
-    },
-    {
-      "name": "weight",
-      "unit": "lb"
-    }
-  ]
+    { "dimension": "reps", "compatibleUnits": ["rep"] },
+    { "dimension": "weight", "compatibleUnits": ["lb", "kg"] }
+  ],
+  "loadSemantics": "total"
 }
 ```
 
-## Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable unique identifier. |
-| `name` | string | yes | Human-readable exercise name. |
-| `description` | string | no | Optional description. |
-| `equipmentIds` | string[] | yes | Equipment required to perform the exercise. Empty array means bodyweight/no equipment. |
-| `movementPattern` | enum | yes | Primary movement pattern. |
-| `primaryMuscleGroups` | enum[] | yes | Coarse groups receiving the primary training load. |
-| `secondaryMuscleGroups` | enum[] | yes | Coarse groups receiving meaningful secondary load. May be empty. |
-| `laterality` | enum | yes | Whether the movement is normally bilateral or unilateral. |
-| `modality` | enum | yes | Broad exercise modality. |
-| `measurements` | object[] | yes | Measurements meaningful when prescribing or recording the exercise. |
+| `id` | string | yes | Stable exercise ID. |
+| `name` | string | yes | Display name. |
+| `instructions` | string[] | yes | Ordered execution instructions. The array can be empty. |
+| `icon` | icon | no | Material Symbol or local SVG. |
+| `equipmentIds` | string[] | yes | References to equipment. An empty array means no equipment. |
+| `force` | enum or null | yes | General force direction. |
+| `mechanic` | enum or null | yes | Compound or isolation classification. |
+| `category` | enum | yes | General free-exercise-db category. |
+| `movementPattern` | enum | yes | REP JOT movement pattern. |
+| `primaryMuscles` | enum[] | yes | Primary muscles. |
+| `secondaryMuscles` | enum[] | yes | Secondary muscles. The array can be empty. |
+| `laterality` | enum | yes | Normal bilateral or unilateral execution. |
+| `measurements` | measurement support[] | yes | Dimensions that prescriptions and results can use. |
+| `loadSemantics` | enum | conditional | Meaning of recorded load. Required when a load dimension exists. |
+| `deprecated` | boolean | no | Prevents use in new workouts while preserving existing references. |
 
----
+An exercise has no free-form description field. Use `instructions` only for ordered execution instructions.
 
-## Movement Patterns
+## Classification Enums
 
-Movement pattern is intentionally constrained to a small vocabulary.
+The classification fields are separate. They must not be combined into one modality field.
 
-Allowed values:
+### Force
+
+The values generally follow free-exercise-db:
+
+```text
+push
+pull
+static
+```
+
+Use `null` when force does not apply or reliable source data is unavailable.
+
+### Mechanic
+
+The values generally follow free-exercise-db:
+
+```text
+compound
+isolation
+```
+
+Use `null` when mechanic does not apply or reliable source data is unavailable.
+
+### Category
+
+The values follow free-exercise-db:
+
+```text
+strength
+stretching
+plyometrics
+strongman
+powerlifting
+cardio
+olympic weightlifting
+```
+
+### Movement Pattern
+
+Movement pattern is a separate REP JOT classification:
 
 ```text
 squat
@@ -179,314 +205,143 @@ horizontal_pull
 vertical_pull
 carry
 locomotion
-core
+rotation
+anti_rotation
+flexion
+extension
 other
 ```
 
 Each exercise has one primary movement pattern.
 
-Examples:
+### Muscle
 
-| Exercise | Movement Pattern |
-|---|---|
-| Back Squat | `squat` |
-| Goblet Squat | `squat` |
-| Romanian Deadlift | `hinge` |
-| Bench Press | `horizontal_push` |
-| Push-up | `horizontal_push` |
-| Overhead Press | `vertical_push` |
-| Barbell Row | `horizontal_pull` |
-| Pull-up | `vertical_pull` |
-| Farmer Carry | `carry` |
-| Run | `locomotion` |
-| Plank | `core` |
-
----
-
-## Muscle Groups
-
-Muscle groups are intentionally coarse.
-
-Allowed values:
+The muscle fields use free-exercise-db's 17-value muscle enum:
 
 ```text
-quads
-hamstrings
-glutes
+abdominals
+abductors
+adductors
+biceps
 calves
 chest
-back
-shoulders
-biceps
-triceps
 forearms
-core
-full_body
+glutes
+hamstrings
+lats
+lower back
+middle back
+neck
+quadriceps
+shoulders
+traps
+triceps
 ```
 
-An exercise may have multiple primary and secondary muscle groups.
-
-The schema intentionally does not represent individual muscles, muscle heads, anatomical regions, or activation percentages.
-
-Example:
-
-```json
-{
-  "primaryMuscleGroups": [
-    "chest"
-  ],
-  "secondaryMuscleGroups": [
-    "triceps",
-    "shoulders"
-  ]
-}
-```
-
----
-
-## Laterality
-
-Allowed values:
+### Laterality
 
 ```text
 bilateral
 unilateral
 ```
 
-Examples:
+Laterality describes normal execution. It does not describe every possible variation.
 
-| Exercise | Laterality |
-|---|---|
-| Back Squat | `bilateral` |
-| Goblet Squat | `bilateral` |
-| Bulgarian Split Squat | `unilateral` |
-| Walking Lunge | `unilateral` |
-| Bench Press | `bilateral` |
-| Single-arm Dumbbell Row | `unilateral` |
+## Measurements and Units
 
-Laterality describes the normal execution of the exercise, not necessarily every possible variation.
+A measurement support entry declares one controlled dimension and its compatible units:
 
----
+```json
+{
+  "dimension": "weight",
+  "compatibleUnits": ["lb", "kg"]
+}
+```
 
-## Modality
+The allowed dimensions and units are:
 
-Allowed values:
+| Dimension | Compatible units | Value rule |
+|---|---|---|
+| `reps` | `rep` | Non-negative integer. |
+| `weight` | `lb`, `kg` | Non-negative number. |
+| `addedWeight` | `lb`, `kg` | Non-negative number. |
+| `assistedWeight` | `lb`, `kg` | Non-negative number. |
+| `distance` | `m`, `km`, `ft`, `mi` | Non-negative number. |
+| `duration` | `second`, `minute` | Non-negative number. |
+| `calories` | `kcal` | Non-negative number. |
+
+An exercise lists only applicable dimensions. Each listed unit must be compatible with its dimension.
+
+A prescription or result must use a listed dimension and compatible unit. `reps` remains a plain integer in prescriptions and results.
+
+Load semantics are:
 
 ```text
-compound
-isolation
-cardio
-mobility
+total
+per_implement
+added
+assisted
 ```
 
-Examples:
+For example, a 50 lb Dumbbell Bench Press with `per_implement` means one 50 lb dumbbell in each hand. Barbell load normally uses `total`. The `addedWeight` and `assistedWeight` dimensions use `added` and `assisted` respectively.
 
-| Exercise | Modality |
-|---|---|
-| Back Squat | `compound` |
-| Bench Press | `compound` |
-| Biceps Curl | `isolation` |
-| Triceps Extension | `isolation` |
-| Run | `cardio` |
-| Row | `cardio` |
-| Hip Flexor Stretch | `mobility` |
+The exercise directory does not select the user's preferred unit. `preferences.json` owns that selection.
 
----
-
-## Measurements
-
-Measurements describe the dimensions that may be prescribed or recorded for an exercise.
-
-Typical measurement names include:
-
-```text
-reps
-weight
-addedWeight
-distance
-duration
-calories
-```
-
-Example strength exercise:
+## Exercise Directory Example
 
 ```json
 {
-  "measurements": [
-    {
-      "name": "reps",
-      "unit": "rep"
-    },
-    {
-      "name": "weight",
-      "unit": "lb"
-    }
-  ]
-}
-```
-
-Example run:
-
-```json
-{
-  "measurements": [
-    {
-      "name": "distance",
-      "unit": "m"
-    },
-    {
-      "name": "duration",
-      "unit": "second"
-    }
-  ]
-}
-```
-
-Example weighted pull-up:
-
-```json
-{
-  "measurements": [
-    {
-      "name": "reps",
-      "unit": "rep"
-    },
-    {
-      "name": "addedWeight",
-      "unit": "lb"
-    }
-  ]
-}
-```
-
----
-
-## Complete `exercises.json` Example
-
-```json
-{
+  "format": "repjot/exercises",
   "schemaVersion": 1,
   "equipment": [
-    {
-      "id": "barbell",
-      "name": "Barbell"
-    },
-    {
-      "id": "squat-rack",
-      "name": "Squat Rack"
-    },
-    {
-      "id": "kettlebell",
-      "name": "Kettlebell"
-    },
-    {
-      "id": "pull-up-bar",
-      "name": "Pull-up Bar"
-    }
+    { "id": "barbell", "name": "Barbell" },
+    { "id": "squat-rack", "name": "Squat Rack" },
+    { "id": "pull-up-bar", "name": "Pull-up Bar" }
   ],
   "exercises": [
     {
-      "id": "air-squat",
-      "name": "Air Squat",
-      "equipmentIds": [],
-      "movementPattern": "squat",
-      "primaryMuscleGroups": [
-        "quads",
-        "glutes"
-      ],
-      "secondaryMuscleGroups": [
-        "hamstrings",
-        "core"
-      ],
-      "laterality": "bilateral",
-      "modality": "compound",
-      "measurements": [
-        {
-          "name": "reps",
-          "unit": "rep"
-        }
-      ]
-    },
-    {
       "id": "back-squat",
       "name": "Back Squat",
-      "equipmentIds": [
-        "barbell",
-        "squat-rack"
+      "instructions": [
+        "Position the bar across the upper back.",
+        "Squat to the prescribed depth.",
+        "Stand and fully extend the hips and knees."
       ],
+      "equipmentIds": ["barbell", "squat-rack"],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
       "movementPattern": "squat",
-      "primaryMuscleGroups": [
-        "quads",
-        "glutes"
-      ],
-      "secondaryMuscleGroups": [
-        "hamstrings",
-        "core"
-      ],
+      "primaryMuscles": ["quadriceps", "glutes"],
+      "secondaryMuscles": ["hamstrings", "lower back"],
       "laterality": "bilateral",
-      "modality": "compound",
       "measurements": [
-        {
-          "name": "reps",
-          "unit": "rep"
-        },
-        {
-          "name": "weight",
-          "unit": "lb"
-        }
-      ]
-    },
-    {
-      "id": "kettlebell-swing",
-      "name": "Kettlebell Swing",
-      "equipmentIds": [
-        "kettlebell"
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["lb", "kg"] }
       ],
-      "movementPattern": "hinge",
-      "primaryMuscleGroups": [
-        "glutes",
-        "hamstrings"
-      ],
-      "secondaryMuscleGroups": [
-        "back",
-        "core",
-        "forearms"
-      ],
-      "laterality": "bilateral",
-      "modality": "compound",
-      "measurements": [
-        {
-          "name": "reps",
-          "unit": "rep"
-        },
-        {
-          "name": "weight",
-          "unit": "lb"
-        }
-      ]
+      "loadSemantics": "total"
     },
     {
       "id": "pull-up",
       "name": "Pull-up",
-      "equipmentIds": [
-        "pull-up-bar"
+      "instructions": [
+        "Hang from the bar with extended arms.",
+        "Pull until the chin passes the bar.",
+        "Lower with control to extended arms."
       ],
+      "equipmentIds": ["pull-up-bar"],
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
       "movementPattern": "vertical_pull",
-      "primaryMuscleGroups": [
-        "back"
-      ],
-      "secondaryMuscleGroups": [
-        "biceps",
-        "forearms"
-      ],
+      "primaryMuscles": ["lats"],
+      "secondaryMuscles": ["biceps", "forearms", "middle back"],
       "laterality": "bilateral",
-      "modality": "compound",
       "measurements": [
-        {
-          "name": "reps",
-          "unit": "rep"
-        }
-      ]
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "addedWeight", "compatibleUnits": ["lb", "kg"] }
+      ],
+      "loadSemantics": "added"
     }
   ]
 }
@@ -494,37 +349,25 @@ Example weighted pull-up:
 
 ---
 
-# 2. `programming.json`
+# 3. `workouts.json`
 
 ## Purpose
 
-`programming.json` contains workouts as they are intended to be performed.
+`workouts.json` contains workout definitions. A workout is an ordered tree of container and exercise nodes.
 
-A workout is represented as an ordered tree.
-
-Container nodes define execution behavior such as:
-
-- sequence
-- fixed rounds
-- AMRAP
-- EMOM
-
-Exercise nodes reference the exercise directory and contain the prescription for that specific occurrence of the exercise.
-
-Programming data is distinct from both exercise facts and actual execution results.
+Containers define execution and result scoring. Exercise nodes reference exercises and define prescriptions.
 
 ## Top-Level Structure
 
 ```json
 {
+  "format": "repjot/workouts",
   "schemaVersion": 1,
   "workouts": []
 }
 ```
 
----
-
-# Workout
+## Workout
 
 ```json
 {
@@ -534,70 +377,52 @@ Programming data is distinct from both exercise facts and actual execution resul
 }
 ```
 
-## Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable workout identifier. |
-| `name` | string | yes | Human-readable workout name. |
-| `description` | string | no | Optional description. |
-| `root` | node | yes | Root of the programmed workout tree. |
+| `id` | string | yes | Stable workout ID. |
+| `name` | string | yes | Display name. |
+| `notes` | string | no | Author notes about the workout. |
+| `root` | container node | yes | Root of the workout tree. |
+| `deprecated` | boolean | no | Hides the workout from the chooser and prevents new sessions. |
 
----
+Each node ID is unique within its workout. Published node IDs must remain present and must not be reused.
 
-# Nodes
+## Container Node
 
-There are two node types:
-
-```text
-container
-exercise
-```
-
-Every node has a stable `id`.
-
-The ID is important because actual results refer back to the programmed node that produced them.
-
----
-
-# Container Node
-
-A container controls how its ordered children are executed.
-
-## Schema
+A container controls its ordered children.
 
 ```json
 {
-  "id": "warmup",
+  "id": "conditioning",
   "type": "container",
-  "name": "Warmup",
-  "strategy": "rounds",
+  "name": "Conditioning",
+  "strategy": "amrap",
   "strategyConfig": {
-    "rounds": 5
+    "duration": { "value": 20, "unit": "minute" }
+  },
+  "resultCapture": {
+    "mode": "scored",
+    "scoreType": "rounds_and_reps",
+    "childDetail": "optional"
   },
   "children": []
 }
 ```
 
-## Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable node identifier within the workout. |
-| `type` | `"container"` | yes | Node type. |
-| `name` | string | no | Human-readable section name. |
-| `strategy` | enum | yes | Execution semantics for the children. |
-| `strategyConfig` | object | yes | Parameters specific to the strategy. |
+| `id` | string | yes | Stable node ID within the workout. |
+| `type` | `"container"` | yes | Node discriminator. |
+| `name` | string | no | Display name. |
+| `strategy` | enum | yes | Execution strategy. |
+| `strategyConfig` | object | yes | Strategy-specific values. |
+| `resultCapture` | object | no | Container score and child-detail rules. |
+| `benchmark` | object | no | Named benchmark metadata. |
 | `children` | node[] | yes | Ordered child nodes. |
-| `benchmark` | object | no | Machine-readable identity for a named benchmark implemented by this container. Contains `name` and optional `organization`. The children remain the authoritative workout definition. |
-
----
-
-## Container Strategies
 
 ### Sequence
 
-Execute each child once in order.
+A sequence executes each child once in order:
 
 ```json
 {
@@ -608,57 +433,105 @@ Execute each child once in order.
 
 ### Rounds
 
-Execute all children in order a fixed number of times.
+A rounds container executes all children in order for a fixed count:
 
 ```json
 {
   "strategy": "rounds",
-  "strategyConfig": {
-    "rounds": 5
-  }
+  "strategyConfig": { "rounds": 5 }
 }
 ```
 
+`rounds` remains the term for an ordinary fixed-round container.
+
 ### AMRAP
 
-Repeat all children in order until the specified duration expires.
+An AMRAP repeats its children until its duration expires:
 
 ```json
 {
   "strategy": "amrap",
   "strategyConfig": {
-    "duration": {
-      "value": 20,
-      "unit": "minute"
-    }
+    "duration": { "value": 20, "unit": "minute" }
+  },
+  "resultCapture": {
+    "mode": "scored",
+    "scoreType": "rounds_and_reps",
+    "childDetail": "optional"
   }
 }
 ```
 
+A completed cycle contains all children. Extra repetitions belong to the next incomplete cycle. `rounds_and_reps` is valid only when the container resolves to a deterministic ordered sequence of repetition-based leaf exercises.
+
 ### EMOM
 
-Execute children on fixed timed intervals.
-
-Children are selected sequentially and cycle as necessary.
+An EMOM assigns one child to each timed interval. The children repeat in order for each cycle.
 
 ```json
 {
   "strategy": "emom",
   "strategyConfig": {
-    "rounds": 6,
-    "interval": {
-      "value": 1,
-      "unit": "minute"
-    }
+    "cycles": 6,
+    "interval": { "value": 1, "unit": "minute" }
+  },
+  "resultCapture": {
+    "mode": "scored",
+    "scoreType": "intervals",
+    "childDetail": "optional"
   }
 }
 ```
 
-A two-child EMOM with six rounds therefore produces twelve timed intervals.
+`cycles` replaces the ambiguous EMOM field `rounds`. One cycle traverses every child once.
 
-## Benchmark Metadata
+Each interval starts at the configured interval boundary. A two-child EMOM with six cycles contains 12 intervals.
 
-A named workout is metadata on the container whose strategy and children implement it:
+### Complex
+
+A complex performs its children consecutively as one unit. Its configuration defines the prescribed cycle count.
+
+```json
+{
+  "strategy": "complex",
+  "strategyConfig": { "cycles": 5 },
+  "resultCapture": {
+    "mode": "scored",
+    "scoreType": "cycles",
+    "childDetail": "none"
+  }
+}
+```
+
+Complex score capture belongs to the workout container. It must not appear in an exercise definition. `childDetail: "none"` makes the complex score authoritative and does not create results for its component exercises.
+
+### Result Capture
+
+`resultCapture.mode` is `scored`. Supported score types are:
+
+```text
+cycles
+rounds_and_reps
+intervals
+```
+
+`childDetail` controls exercise-result capture:
+
+```text
+none
+optional
+required
+```
+
+A scored AMRAP, EMOM, or complex stores one container score. It can also store child exercise results when `childDetail` permits them.
+
+With no child results, the score is authoritative. When the user expands optional detail, the application creates the complete child-result set from the score and workout order. Child results then become authoritative, and each edit recomputes the stored container score.
+
+A result must not contain partial child detail. `childDetail: "required"` always requires the complete child-result set. `childDetail: "none"` forbids it.
+
+### Benchmark Metadata
+
+A named benchmark is metadata on its implementing container:
 
 ```json
 {
@@ -669,17 +542,11 @@ A named workout is metadata on the container whose strategy and children impleme
 }
 ```
 
-`name` is required and `organization` is optional. Applications may search or group by this metadata, but must execute the container's strategy and children rather than infer work from the benchmark name.
+`name` is required. `organization` is optional. Applications must execute the container tree instead of inferring work from the benchmark name.
 
----
+## Exercise Node
 
-# Exercise Node
-
-An exercise node references an exercise in `exercises.json`.
-
-It contains only information specific to this occurrence in the workout.
-
-## Schema
+An exercise node defines one occurrence of an exercise in a workout.
 
 ```json
 {
@@ -690,35 +557,22 @@ It contains only information specific to this occurrence in the workout.
   "setType": "working",
   "prescription": {
     "reps": 5,
-    "weight": {
-      "value": 225,
-      "unit": "lb"
-    }
+    "weight": { "value": 225, "unit": "lb" }
   }
 }
 ```
 
-## Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable node identifier within the workout. |
-| `type` | `"exercise"` | yes | Node type. |
+| `id` | string | yes | Stable node ID within the workout. |
+| `type` | `"exercise"` | yes | Node discriminator. |
 | `exerciseId` | string | yes | Reference to `exercises.json`. |
-| `stimulus` | enum | yes | Intended training stimulus for this programmed occurrence. |
-| `setType` | enum | no | Role of the set: `warmup` or `working`. This is distinct from the training stimulus. |
-| `prescription` | object | yes | Target work to perform. |
-| `notes` | string | no | Optional unstructured programming notes. Notes must not be used in place of the structured prescription fields below. |
+| `stimulus` | enum | yes | Intended stimulus for this occurrence. |
+| `setType` | enum | no | `warmup` or `working`. |
+| `prescription` | object | yes | Target work. |
+| `notes` | string | no | Unstructured workout notes. |
 
----
-
-# Stimulus
-
-Stimulus belongs to the programmed exercise, not the exercise directory.
-
-The same exercise may be programmed with different stimuli.
-
-Allowed values:
+Supported stimuli are:
 
 ```text
 strength
@@ -728,83 +582,20 @@ conditioning
 mobility
 ```
 
-For example, both of these refer to the same Back Squat exercise:
+An exercise node does not configure complex or scored result capture. A parent workout container owns that configuration.
 
-```json
-{
-  "exerciseId": "back-squat",
-  "stimulus": "strength",
-  "prescription": {
-    "reps": 3,
-    "weight": {
-      "value": 315,
-      "unit": "lb"
-    }
-  }
-}
-```
+## Prescription
 
-```json
-{
-  "exerciseId": "back-squat",
-  "stimulus": "hypertrophy",
-  "prescription": {
-    "reps": 12,
-    "weight": {
-      "value": 185,
-      "unit": "lb"
-    }
-  }
-}
-```
-
----
-
-# Prescription
-
-A prescription contains values meaningful to the referenced exercise.
-
-Example:
+A prescription uses dimensions supported by the referenced exercise:
 
 ```json
 {
   "reps": 5,
-  "weight": {
-    "value": 225,
-    "unit": "lb"
-  }
+  "weight": { "value": 225, "unit": "lb" }
 }
 ```
 
-Another example:
-
-```json
-{
-  "distance": {
-    "value": 400,
-    "unit": "m"
-  }
-}
-```
-
-The exercise directory's `measurements` field defines which dimensions normally apply.
-
----
-
-## Repetition Targets
-
-A numeric `reps` value is exact. Approximate or ranged targets use an object:
-
-```json
-{
-  "reps": {
-    "target": 8,
-    "qualifier": "approximate"
-  }
-}
-```
-
-Supported forms are:
+A numeric `reps` value is exact. Approximate and ranged targets use these forms:
 
 ```json
 [
@@ -814,27 +605,11 @@ Supported forms are:
 ]
 ```
 
-`qualifier`, when present, is `approximate`. A range is inclusive. Actual repetitions in `results.json` are always recorded as an integer, not as a target object.
+A range is inclusive. An actual repetition result is always a non-negative integer.
 
-## Effort Targets
+### Effort Targets
 
-`effort` describes the intended endpoint of a set. It is not a measurement and does not belong in the exercise directory.
-
-```json
-{
-  "effort": {
-    "type": "failure"
-  }
-}
-```
-
-Supported effort types are:
-
-- `failure` — continue until another repetition cannot be completed with the prescribed technique;
-- `rir` — stop at a target repetitions-in-reserve value, using `target`;
-- `rpe` — stop at a target rate of perceived exertion, using `target`.
-
-Examples:
+`effort` defines the intended endpoint of a set:
 
 ```json
 [
@@ -844,11 +619,11 @@ Examples:
 ]
 ```
 
-Failure here means that failure is the endpoint of a completed set. It is different from recording zero completed repetitions for an unsuccessful attempt.
+The supported types are `failure`, `rir`, and `rpe`. Effort is not an exercise measurement dimension.
 
-## Load Strategies
+### Load Strategies
 
-`loadStrategy` describes how load is selected across iterations of the immediately enclosing repeated container. It is used when exact weights are intentionally not known in advance.
+`loadStrategy` defines load selection across iterations of the nearest repeated container:
 
 ```json
 {
@@ -860,73 +635,34 @@ Failure here means that failure is the endpoint of a completed set. It is differ
 }
 ```
 
-Supported strategy types are `fixed`, `ascending`, `descending`, and `self_selected`. A `descending` strategy with the heaviest work first is commonly called a reverse pyramid.
+Supported strategy types are `fixed`, `ascending`, `descending`, and `self_selected`.
 
-- `firstIteration: "maximal_for_prescription"` means the greatest safe load consistent with the other prescription fields (for example, approximately eight reps to failure), not an absolute one-repetition maximum.
-- `adjustment: "decrease_to_repeat_effort"` means reduce load on later iterations as needed to reproduce the prescribed repetition and effort target.
+### Iteration-Specific Prescriptions
 
-A concrete `weight` may be combined with a strategy when the initial or all iteration loads are known. Otherwise, actual weights are captured in `results.json`.
-
-# Iteration-Specific Prescriptions
-
-An exercise inside a repeated container may prescribe different work on different iterations.
-
-For example:
-
-```text
-Round 1: 5 reps @ 225 lb
-Round 2: 3 reps @ 245 lb
-Round 3: 1 rep @ 265 lb
-```
-
-Represent this using `iterations`:
+An exercise in a repeated container can define different work by iteration:
 
 ```json
 {
   "iterations": [
-    {
-      "iteration": 1,
-      "reps": 5,
-      "weight": {
-        "value": 225,
-        "unit": "lb"
-      }
-    },
-    {
-      "iteration": 2,
-      "reps": 3,
-      "weight": {
-        "value": 245,
-        "unit": "lb"
-      }
-    },
-    {
-      "iteration": 3,
-      "reps": 1,
-      "weight": {
-        "value": 265,
-        "unit": "lb"
-      }
-    }
+    { "iteration": 1, "reps": 5, "weight": { "value": 225, "unit": "lb" } },
+    { "iteration": 2, "reps": 3, "weight": { "value": 245, "unit": "lb" } },
+    { "iteration": 3, "reps": 1, "weight": { "value": 265, "unit": "lb" } }
   ]
 }
 ```
 
-`iteration` is one-based.
+`iteration` is one-based and applies to the nearest repeated container.
 
-The iteration applies to the immediately enclosing repeating container.
-
----
-
-# Complete `programming.json` Example
+## Workout Example
 
 ```json
 {
+  "format": "repjot/workouts",
   "schemaVersion": 1,
   "workouts": [
     {
-      "id": "squat-day-a",
-      "name": "Squat Day A",
+      "id": "strength-and-cindy",
+      "name": "Strength and Cindy",
       "root": {
         "id": "root",
         "type": "container",
@@ -934,90 +670,43 @@ The iteration applies to the immediately enclosing repeating container.
         "strategyConfig": {},
         "children": [
           {
-            "id": "warmup",
+            "id": "squat-sets",
             "type": "container",
-            "name": "Warmup",
             "strategy": "rounds",
-            "strategyConfig": {
-              "rounds": 5
-            },
+            "strategyConfig": { "rounds": 3 },
             "children": [
               {
-                "id": "warmup-air-squat",
+                "id": "back-squat-set",
                 "type": "exercise",
-                "exerciseId": "air-squat",
-                "stimulus": "mobility",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "setType": "working",
                 "prescription": {
-                  "reps": 10
-                }
-              },
-              {
-                "id": "warmup-kb-swing",
-                "type": "exercise",
-                "exerciseId": "kettlebell-swing",
-                "stimulus": "conditioning",
-                "prescription": {
-                  "reps": 10,
-                  "weight": {
-                    "value": 35,
-                    "unit": "lb"
-                  }
+                  "iterations": [
+                    { "iteration": 1, "reps": 5, "weight": { "value": 225, "unit": "lb" } },
+                    { "iteration": 2, "reps": 3, "weight": { "value": 245, "unit": "lb" } },
+                    { "iteration": 3, "reps": 1, "weight": { "value": 265, "unit": "lb" } }
+                  ]
                 }
               }
             ]
           },
           {
-            "id": "heavy-work",
+            "id": "cindy",
             "type": "container",
-            "name": "Heavy Sets",
-            "strategy": "rounds",
-            "strategyConfig": {
-              "rounds": 3
+            "name": "Cindy",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "rounds_and_reps",
+              "childDetail": "optional"
             },
+            "benchmark": { "name": "Cindy", "organization": "CrossFit" },
             "children": [
-              {
-                "id": "heavy-back-squat",
-                "type": "exercise",
-                "exerciseId": "back-squat",
-                "stimulus": "strength",
-                "prescription": {
-                  "iterations": [
-                    {
-                      "iteration": 1,
-                      "reps": 5,
-                      "weight": {
-                        "value": 225,
-                        "unit": "lb"
-                      }
-                    },
-                    {
-                      "iteration": 2,
-                      "reps": 3,
-                      "weight": {
-                        "value": 245,
-                        "unit": "lb"
-                      }
-                    },
-                    {
-                      "iteration": 3,
-                      "reps": 1,
-                      "weight": {
-                        "value": 265,
-                        "unit": "lb"
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "heavy-pullups",
-                "type": "exercise",
-                "exerciseId": "pull-up",
-                "stimulus": "strength",
-                "prescription": {
-                  "reps": 5
-                }
-              }
+              { "id": "cindy-pull-ups", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 5 } },
+              { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "push-up", "stimulus": "conditioning", "prescription": { "reps": 10 } },
+              { "id": "cindy-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 15 } }
             ]
           }
         ]
@@ -1029,655 +718,502 @@ The iteration applies to the immediately enclosing repeating container.
 
 ---
 
-# Full Example: Warmup, Reverse-Pyramid Strength, and Cindy
-
-The following examples include every referenced exercise and expand Cindy into its actual movements. `benchmark` preserves “Cindy” as queryable metadata; it does not replace the executable AMRAP tree.
-
-### Relevant `exercises.json`
-
-```json
-{
-  "schemaVersion": 1,
-  "equipment": [
-    { "id": "barbell", "name": "Barbell" },
-    { "id": "squat-rack", "name": "Squat Rack" },
-    { "id": "pull-up-bar", "name": "Pull-up Bar" }
-  ],
-  "exercises": [
-    {
-      "id": "dead-hang", "name": "Dead Hang",
-      "equipmentIds": ["pull-up-bar"], "movementPattern": "vertical_pull",
-      "primaryMuscleGroups": ["forearms"], "secondaryMuscleGroups": ["back", "shoulders"],
-      "laterality": "bilateral", "modality": "mobility",
-      "measurements": [{ "name": "duration", "unit": "second" }]
-    },
-    {
-      "id": "tabletop", "name": "Tabletop",
-      "equipmentIds": [], "movementPattern": "core",
-      "primaryMuscleGroups": ["core"], "secondaryMuscleGroups": ["glutes", "shoulders"],
-      "laterality": "bilateral", "modality": "mobility",
-      "measurements": [{ "name": "duration", "unit": "second" }]
-    },
-    {
-      "id": "deep-squat-stretch", "name": "Deep Squat Stretch",
-      "equipmentIds": [], "movementPattern": "squat",
-      "primaryMuscleGroups": ["quads", "glutes"], "secondaryMuscleGroups": ["hamstrings"],
-      "laterality": "bilateral", "modality": "mobility",
-      "measurements": [{ "name": "duration", "unit": "second" }]
-    },
-    {
-      "id": "90-90-hip-stretch", "name": "90-90 Hip Stretch",
-      "equipmentIds": [], "movementPattern": "other",
-      "primaryMuscleGroups": ["glutes"], "secondaryMuscleGroups": [],
-      "laterality": "bilateral", "modality": "mobility",
-      "measurements": [{ "name": "duration", "unit": "second" }]
-    },
-    {
-      "id": "back-squat", "name": "Back Squat",
-      "equipmentIds": ["barbell", "squat-rack"], "movementPattern": "squat",
-      "primaryMuscleGroups": ["quads", "glutes"], "secondaryMuscleGroups": ["hamstrings", "core"],
-      "laterality": "bilateral", "modality": "compound",
-      "measurements": [{ "name": "reps", "unit": "rep" }, { "name": "weight", "unit": "lb" }]
-    },
-    {
-      "id": "romanian-deadlift", "name": "Romanian Deadlift",
-      "equipmentIds": ["barbell"], "movementPattern": "hinge",
-      "primaryMuscleGroups": ["hamstrings", "glutes"], "secondaryMuscleGroups": ["back", "core", "forearms"],
-      "laterality": "bilateral", "modality": "compound",
-      "measurements": [{ "name": "reps", "unit": "rep" }, { "name": "weight", "unit": "lb" }]
-    },
-    {
-      "id": "pull-up", "name": "Pull-up",
-      "equipmentIds": ["pull-up-bar"], "movementPattern": "vertical_pull",
-      "primaryMuscleGroups": ["back"], "secondaryMuscleGroups": ["biceps", "forearms"],
-      "laterality": "bilateral", "modality": "compound",
-      "measurements": [{ "name": "reps", "unit": "rep" }]
-    },
-    {
-      "id": "push-up", "name": "Push-up",
-      "equipmentIds": [], "movementPattern": "horizontal_push",
-      "primaryMuscleGroups": ["chest"], "secondaryMuscleGroups": ["triceps", "shoulders", "core"],
-      "laterality": "bilateral", "modality": "compound",
-      "measurements": [{ "name": "reps", "unit": "rep" }]
-    },
-    {
-      "id": "air-squat", "name": "Air Squat",
-      "equipmentIds": [], "movementPattern": "squat",
-      "primaryMuscleGroups": ["quads", "glutes"], "secondaryMuscleGroups": ["hamstrings", "core"],
-      "laterality": "bilateral", "modality": "compound",
-      "measurements": [{ "name": "reps", "unit": "rep" }]
-    }
-  ]
-}
-```
-
-### `programming.json`
-
-```json
-{
-  "schemaVersion": 1,
-  "workouts": [{
-    "id": "reverse-pyramid-cindy-day",
-    "name": "Reverse Pyramid Strength and Cindy",
-    "root": {
-      "id": "root", "type": "container", "strategy": "sequence", "strategyConfig": {},
-      "children": [
-        {
-          "id": "warmup", "type": "container", "name": "Warmup",
-          "strategy": "rounds", "strategyConfig": { "rounds": 4 },
-          "children": [
-            { "id": "warmup-dead-hang", "type": "exercise", "exerciseId": "dead-hang", "stimulus": "mobility", "prescription": { "duration": { "value": 30, "unit": "second" } } },
-            { "id": "warmup-tabletop", "type": "exercise", "exerciseId": "tabletop", "stimulus": "mobility", "prescription": { "duration": { "value": 30, "unit": "second" } } },
-            { "id": "warmup-deep-squat", "type": "exercise", "exerciseId": "deep-squat-stretch", "stimulus": "mobility", "prescription": { "duration": { "value": 30, "unit": "second" } } },
-            { "id": "warmup-90-90", "type": "exercise", "exerciseId": "90-90-hip-stretch", "stimulus": "mobility", "prescription": { "duration": { "value": 30, "unit": "second" } } }
-          ]
-        },
-        {
-          "id": "back-squat-block", "type": "container", "name": "Back Squat",
-          "strategy": "sequence", "strategyConfig": {},
-          "children": [
-            {
-              "id": "back-squat-warmups", "type": "container", "strategy": "rounds", "strategyConfig": { "rounds": 2 },
-              "children": [{ "id": "back-squat-warmup-set", "type": "exercise", "exerciseId": "back-squat", "stimulus": "strength", "setType": "warmup", "prescription": { "reps": 12 } }]
-            },
-            {
-              "id": "back-squat-working-sets", "type": "container", "strategy": "rounds", "strategyConfig": { "rounds": 3 },
-              "children": [{
-                "id": "back-squat-working-set", "type": "exercise", "exerciseId": "back-squat", "stimulus": "strength", "setType": "working",
-                "prescription": {
-                  "reps": { "target": 8, "qualifier": "approximate" },
-                  "effort": { "type": "failure" },
-                  "loadStrategy": { "type": "descending", "firstIteration": "maximal_for_prescription", "adjustment": "decrease_to_repeat_effort" }
-                }
-              }]
-            }
-          ]
-        },
-        {
-          "id": "rdl-block", "type": "container", "name": "Romanian Deadlift",
-          "strategy": "sequence", "strategyConfig": {},
-          "children": [
-            {
-              "id": "rdl-warmups", "type": "container", "strategy": "rounds", "strategyConfig": { "rounds": 2 },
-              "children": [{ "id": "rdl-warmup-set", "type": "exercise", "exerciseId": "romanian-deadlift", "stimulus": "strength", "setType": "warmup", "prescription": { "reps": 12 } }]
-            },
-            {
-              "id": "rdl-working-sets", "type": "container", "strategy": "rounds", "strategyConfig": { "rounds": 3 },
-              "children": [{
-                "id": "rdl-working-set", "type": "exercise", "exerciseId": "romanian-deadlift", "stimulus": "strength", "setType": "working",
-                "prescription": {
-                  "reps": { "target": 8, "qualifier": "approximate" },
-                  "effort": { "type": "failure" },
-                  "loadStrategy": { "type": "descending", "firstIteration": "maximal_for_prescription", "adjustment": "decrease_to_repeat_effort" }
-                }
-              }]
-            }
-          ]
-        },
-        {
-          "id": "cindy", "type": "container", "name": "Conditioning",
-          "benchmark": { "name": "Cindy", "organization": "CrossFit" },
-          "strategy": "amrap", "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
-          "children": [
-            { "id": "cindy-pull-ups", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 5 } },
-            { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "push-up", "stimulus": "conditioning", "prescription": { "reps": 10 } },
-            { "id": "cindy-air-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 15 } }
-          ]
-        }
-      ]
-    }
-  }]
-}
-```
-
-This models each lift as its own sequence so all squat sets finish before RDL sets begin. The `rounds` containers give each result an unambiguous iteration number.
-
----
-
-# 3. `results.json`
+# 4. `preferences.json`
 
 ## Purpose
 
-`results.json` records what the user actually performed.
+`preferences.json` stores user choices separately from reference and workout data.
 
-Results never modify the programmed prescription.
+The file is versioned for schema migration and write-conflict handling:
 
-A session references:
+```json
+{
+  "format": "repjot/preferences",
+  "schemaVersion": 1,
+  "revision": 12,
+  "updatedAt": "2026-08-15T08:25:00-07:00",
+  "exerciseUnits": {
+    "back-squat": {
+      "weight": "lb"
+    },
+    "pull-up": {
+      "addedWeight": "kg"
+    }
+  }
+}
+```
 
-- the programmed workout
-- the programmed exercise node
-- the iteration that was being performed
-- the actual values achieved
+| Field | Type | Required | Description |
+|---|---|---:|---|
+| `format` | `"repjot/preferences"` | yes | Document family. |
+| `schemaVersion` | integer | yes | Structure version. |
+| `revision` | integer | yes | Monotonic file revision. Increment after each successful preference save. |
+| `updatedAt` | ISO 8601 timestamp | yes | Time of the latest saved revision. |
+| `exerciseUnits` | object | yes | Preferred unit by exercise ID and measurement dimension. |
 
-This allows programmed and actual performance to diverge.
+## Exercise-Level Unit Preferences
+
+A unit preference belongs to one exercise and one dimension. The selected unit must appear in that exercise's `compatibleUnits`.
+
+The weight-entry pill displays the selected `lb` or `kg` value for that exercise. Activating the pill switches between supported units.
+
+The application saves the new selection to `preferences.json`. It then uses that selection for new prescriptions and results for the exercise.
+
+Synchronization merges mappings by exercise ID and dimension. If the same mapping changed locally and remotely, the pending value from the client performing the later synchronization wins. REP JOT does not prompt for preference conflicts.
+
+Changing the preference does not rewrite saved historical prescriptions or results. If the user toggles a unit while editing an entered value, REP JOT converts that value with full internal precision and shows a sensible editable value in the new unit. The saved result retains the converted value and explicit unit.
+
+If an exercise has no saved preference, the application selects a supported default. The application saves the first explicit user selection.
+
+---
+
+# 5. `results-YYYY-MM.json`
+
+## Purpose
+
+Each monthly results file records actual workout sessions. For example, `results-2026-08.json` contains sessions that start in August 2026.
+
+The session `startedAt` month selects the file. A session that crosses a month boundary remains in its start-month file.
 
 ## Top-Level Structure
 
 ```json
 {
+  "format": "repjot/results",
   "schemaVersion": 1,
-  "sessions": []
+  "yearMonth": "2026-08",
+  "sessions": [],
+  "sessionTombstones": []
 }
 ```
 
----
+`yearMonth` must match the `YYYY-MM` part of the file name.
 
-# Workout Session
+## Session Tombstone
+
+Deleting a session removes it from `sessions` and adds a permanent tombstone to its original monthly shard:
 
 ```json
 {
-  "id": "2026-08-15-squat-day-a",
-  "workoutId": "squat-day-a",
+  "sessionId": "session-550e8400-e29b-41d4-a716-446655440000",
+  "deletedAt": "2026-08-20T10:00:00-07:00"
+}
+```
+
+A tombstone wins over a session with the same ID during synchronization. REP JOT does not automatically remove tombstones because an unobserved stale device could restore the session. Delete All User Data physically deletes the complete shard.
+
+## Workout Session
+
+```json
+{
+  "id": "session-550e8400-e29b-41d4-a716-446655440000",
+  "workoutId": "strength-and-cindy",
+  "status": "completed",
   "startedAt": "2026-08-15T07:30:00-07:00",
-  "finishedAt": "2026-08-15T08:25:00-07:00",
+  "endedAt": "2026-08-15T08:25:00-07:00",
+  "updatedAt": "2026-08-15T08:25:00-07:00",
   "results": []
 }
 ```
 
-## Fields
-
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable session identifier. |
-| `workoutId` | string | yes | Reference to a workout in `programming.json`. |
-| `startedAt` | ISO 8601 timestamp | yes | Session start. |
-| `finishedAt` | ISO 8601 timestamp | no | Session completion. |
-| `results` | result[] | yes | Actual exercise performances. |
-| `notes` | string | no | Session-level notes. |
+| `id` | string | yes | Globally stable `session-` prefixed UUID. |
+| `workoutId` | string | yes | Direct reference to the retained workout. |
+| `status` | enum | yes | `in_progress`, `completed`, or `abandoned`. |
+| `startedAt` | ISO 8601 timestamp | yes | Session start time. |
+| `endedAt` | ISO 8601 timestamp | conditional | Required for `completed` and `abandoned`. Forbidden for `in_progress`. |
+| `updatedAt` | ISO 8601 timestamp | yes | Latest saved session change. |
+| `conflictOfSessionId` | string | no | Original session ID when this session is a synchronization copy. |
+| `executionPlan` | object | conditional | Required for `in_progress`. Frozen effective workout tree. |
+| `results` | result[] | yes | Exercise and scored-container results. |
+| `notes` | string | no | Session notes. |
 
----
+`completed` means that the user intentionally completed the session. It does not mean that every prescribed item has a result.
 
-# Exercise Result
+`abandoned` means that the user intentionally ended an unfinished session. `endedAt` records when either terminal status occurred. Several sessions can have `in_progress` status.
 
-Each result represents one attempt at one programmed exercise node.
+New session IDs use a collision-resistant UUID and do not encode `startedAt`.
 
-## Schema
+Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor builds a temporary plan from the retained workout and recorded result paths, including deprecated exercises already present in the session. Editing preserves `status`, `startedAt`, and `endedAt` unless the user explicitly edits a timestamp. This reuses the editor without mislabeling historical sessions as active.
+
+## Session Sync Copy
+
+If the same live session changed locally and remotely, the remote session keeps the original ID. REP JOT saves the pending local version under a new UUID and sets `conflictOfSessionId` to the original ID. It preserves the local version's status and timestamps. History labels the new session `Sync copy`. The user can inspect, edit, or delete either session with the normal session screens; REP JOT does not provide a separate reconciliation UI.
+
+The client stores the generated copy ID in its pending edit before upload. Retries reuse that ID and cannot create additional copies for the same detected conflict. Tombstones still win over stale live sessions and do not create sync copies.
+
+## Frozen Execution Plan
+
+At session start, `executionPlan` copies the effective workout root, including node IDs, exercise references, strategies, scoring rules, and prescriptions. Exercises deprecated before the start are absent. REP JOT creates a skipped result with `reasonCode: "deprecated"` for each omitted exercise.
+
+An in-progress session executes this snapshot after reload or deployment. Later corrections and deprecations do not change it. When a session becomes `completed` or `abandoned`, REP JOT removes `executionPlan`; historical display uses retained static entities and recorded results.
+
+## Execution Path
+
+Each result contains a nested `executionPath`. The path starts at the workout root and ends at the result's programmed node.
+
+```json
+[
+  { "nodeId": "root" },
+  { "nodeId": "squat-sets", "iteration": 3 },
+  { "nodeId": "back-squat-set" }
+]
+```
+
+Each repeated container path segment has a one-based `iteration`. For EMOM containers, `iteration` is the one-based cycle.
+
+Nested repeated containers each contribute their own path segment and iteration. This removes the ambiguity of one flat `iteration` field.
+
+## Exercise Result
+
+An exercise result stores both its programmed path and direct exercise reference:
 
 ```json
 {
-  "nodeId": "heavy-back-squat",
-  "iteration": 1,
+  "type": "exercise",
+  "workoutId": "strength-and-cindy",
+  "executionPath": [
+    { "nodeId": "root" },
+    { "nodeId": "squat-sets", "iteration": 3 },
+    { "nodeId": "back-squat-set" }
+  ],
+  "exerciseId": "back-squat",
   "attempt": 1,
+  "status": "completed",
   "values": {
-    "reps": 5,
-    "weight": {
-      "value": 225,
-      "unit": "lb"
-    }
+    "reps": 1,
+    "weight": { "value": 255, "unit": "lb" }
   }
 }
 ```
-
-## Fields
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `nodeId` | string | yes | Reference to the exercise node in the programmed workout. |
-| `iteration` | integer | no | One-based iteration of the immediately enclosing repeated container. |
-| `attempt` | integer | no | One-based attempt number when multiple attempts occur for the same programmed work. Defaults conceptually to `1`. |
-| `values` | object | yes | Measured values actually performed. Repetitions are recorded as an integer. |
-| `effort` | object | no | Actual effort outcome. Uses `type` (`failure`, `rir`, or `rpe`), the observed `value` for RIR/RPE, or `achieved` for a failure target. |
-| `startedAt` | ISO 8601 timestamp | no | Optional start time for this result. |
-| `finishedAt` | ISO 8601 timestamp | no | Optional completion time. |
-| `notes` | string | no | Result-specific notes. |
+| `type` | `"exercise"` | yes | Result discriminator. |
+| `workoutId` | string | yes | Direct workout reference. It must match the containing session. |
+| `executionPath` | path segment[] | yes | Full path to the programmed exercise node. |
+| `exerciseId` | string | yes | Direct reference to the retained exercise. |
+| `attempt` | integer | no | One-based attempt number. The default is `1`. |
+| `side` | enum | no | `left`, `right`, `both`, or `alternating`. |
+| `startingSide` | enum | conditional | `left` or `right`. Required only when `side` is `alternating`. |
+| `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
+| `values` | object | conditional | Actual values. Required when measured data exists. |
+| `effort` | object | no | Observed `failure`, `rir`, or `rpe` outcome. |
+| `startedAt` | ISO 8601 timestamp | no | Result start time. |
+| `endedAt` | ISO 8601 timestamp | no | Result end time. |
+| `reasonCode` | enum | no | Controlled reason for an incomplete or skipped item. |
+| `notes` | string | no | Optional free-text detail. |
 
----
+The direct `exerciseId` preserves exercise identity without traversing the workout tree. It must match the exercise node at the end of `executionPath`.
 
-For example, a set prescribed to failure that ended at eight repetitions is recorded independently of the target:
+A zero-repetition attempt is measured data. It is not a skipped result. `side` is normally absent for bilateral work and required when unilateral actuals are recorded.
+
+`left` and `right` store repetitions for one side. `both` stores simultaneous repetitions. `alternating` stores total repetitions across sides and requires the actual `startingSide`. The UI shows the derived split, such as `10 total / 5 each` or `9 total / 5 left / 4 right`.
+
+Supported reason codes are:
+
+```text
+deprecated
+user_skipped
+not_completed
+equipment_unavailable
+physical_limitation
+time_constraint
+unsuccessful_attempt
+other
+```
+
+## Scored Container Result
+
+A scored container result uses the score type configured on the workout container:
 
 ```json
 {
-  "nodeId": "back-squat-working-set",
-  "iteration": 1,
-  "values": {
-    "reps": 8,
-    "weight": { "value": 225, "unit": "lb" }
-  },
-  "effort": {
-    "type": "failure",
-    "achieved": true
+  "type": "container",
+  "workoutId": "strength-and-cindy",
+  "executionPath": [
+    { "nodeId": "root" },
+    { "nodeId": "cindy" }
+  ],
+  "status": "completed",
+  "score": {
+    "type": "rounds_and_reps",
+    "completedRounds": 12,
+    "additionalReps": 7
   }
 }
 ```
 
-# Divergence From Programming
-
-Suppose the programmed squat is:
-
-```text
-Iteration 1: 225 × 5
-Iteration 2: 245 × 3
-Iteration 3: 265 × 1
-```
-
-The user actually performs:
-
-```text
-Iteration 1: 225 × 5
-Iteration 2: 245 × 3
-Iteration 3, attempt 1: 265 × 0
-Iteration 3, attempt 2: 255 × 1
-```
-
-The result is represented as:
+Supported score shapes are:
 
 ```json
 [
   {
-    "nodeId": "heavy-back-squat",
-    "iteration": 1,
-    "attempt": 1,
-    "values": {
-      "reps": 5,
-      "weight": {
-        "value": 225,
-        "unit": "lb"
-      }
-    }
+    "type": "cycles",
+    "completedCycles": 5
   },
   {
-    "nodeId": "heavy-back-squat",
-    "iteration": 2,
-    "attempt": 1,
-    "values": {
-      "reps": 3,
-      "weight": {
-        "value": 245,
-        "unit": "lb"
-      }
-    }
+    "type": "rounds_and_reps",
+    "completedRounds": 12,
+    "additionalReps": 7
   },
   {
-    "nodeId": "heavy-back-squat",
-    "iteration": 3,
-    "attempt": 1,
-    "values": {
-      "reps": 0,
-      "weight": {
-        "value": 265,
-        "unit": "lb"
-      }
-    }
+    "type": "intervals",
+    "completedIntervals": 11,
+    "totalIntervals": 12
   },
   {
-    "nodeId": "heavy-back-squat",
-    "iteration": 3,
-    "attempt": 2,
-    "values": {
-      "reps": 1,
-      "weight": {
-        "value": 255,
-        "unit": "lb"
-      }
-    }
+    "type": "nonstandard"
   }
 ]
 ```
 
----
+| Field | Type | Required | Description |
+|---|---|---:|---|
+| `type` | `"container"` | yes | Result discriminator. |
+| `workoutId` | string | yes | Direct workout reference. It must match the containing session. |
+| `executionPath` | path segment[] | yes | Full path to the scored workout container. |
+| `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
+| `score` | score | conditional | Score defined by the container's `resultCapture.scoreType`. |
+| `startedAt` | ISO 8601 timestamp | no | Container start time. |
+| `endedAt` | ISO 8601 timestamp | no | Container end time. |
+| `reasonCode` | enum | no | Controlled reason for an incomplete or skipped container. |
+| `notes` | string | no | Optional free-text detail. |
 
-# Complete `results.json` Example
+A completed scored container has a `score`. An incomplete container can have the observed partial score. A skipped container has no score.
+
+Child detail uses separate exercise results beneath the scored container. It is either absent or complete. When valid ordered work can produce the configured score, semantic validation derives and matches it.
+
+If complete detail does not follow valid round or interval progression, the score is `{ "type": "nonstandard" }`. The child results remain authoritative, and the UI displays `Detailed` instead of a misleading aggregate.
+
+## Save and Omission Rules
+
+The application saves an `in_progress` session when the user enters data or changes a data-relevant session field. Later saves update the same session ID.
+
+The application saves terminal status and `endedAt` when the user completes or abandons the session.
+
+REP JOT does not create placeholder results for untouched work. Absence means that no data-relevant result was recorded.
+
+The application stores `incomplete` only when partial values, timing, a reason code, or notes are relevant. It stores `skipped` only when the skip itself is relevant.
+
+A skipped result normally has no `values`. An incomplete result can contain partial `values`.
+
+These rules prevent large result files that contain only default or inferred state.
+
+## Complete Monthly Example
 
 ```json
 {
+  "format": "repjot/results",
   "schemaVersion": 1,
+  "yearMonth": "2026-08",
   "sessions": [
     {
-      "id": "2026-08-15-squat-day-a",
-      "workoutId": "squat-day-a",
+      "id": "session-550e8400-e29b-41d4-a716-446655440000",
+      "workoutId": "strength-and-cindy",
+      "status": "completed",
       "startedAt": "2026-08-15T07:30:00-07:00",
-      "finishedAt": "2026-08-15T08:25:00-07:00",
+      "endedAt": "2026-08-15T08:25:00-07:00",
+      "updatedAt": "2026-08-15T08:25:00-07:00",
       "results": [
         {
-          "nodeId": "warmup-air-squat",
-          "iteration": 1,
-          "values": {
-            "reps": 10
-          }
-        },
-        {
-          "nodeId": "warmup-kb-swing",
-          "iteration": 1,
-          "values": {
-            "reps": 10,
-            "weight": {
-              "value": 35,
-              "unit": "lb"
-            }
-          }
-        },
-        {
-          "nodeId": "heavy-back-squat",
-          "iteration": 1,
+          "type": "exercise",
+          "workoutId": "strength-and-cindy",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "squat-sets", "iteration": 1 },
+            { "nodeId": "back-squat-set" }
+          ],
+          "exerciseId": "back-squat",
+          "status": "completed",
           "values": {
             "reps": 5,
-            "weight": {
-              "value": 225,
-              "unit": "lb"
-            }
+            "weight": { "value": 225, "unit": "lb" }
           }
         },
         {
-          "nodeId": "heavy-back-squat",
-          "iteration": 2,
-          "values": {
-            "reps": 3,
-            "weight": {
-              "value": 245,
-              "unit": "lb"
-            }
-          }
-        },
-        {
-          "nodeId": "heavy-back-squat",
-          "iteration": 3,
+          "type": "exercise",
+          "workoutId": "strength-and-cindy",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "squat-sets", "iteration": 3 },
+            { "nodeId": "back-squat-set" }
+          ],
+          "exerciseId": "back-squat",
           "attempt": 1,
+          "status": "incomplete",
           "values": {
             "reps": 0,
-            "weight": {
-              "value": 265,
-              "unit": "lb"
-            }
+            "weight": { "value": 265, "unit": "lb" }
+          },
+          "reasonCode": "unsuccessful_attempt"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "strength-and-cindy",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "squat-sets", "iteration": 3 },
+            { "nodeId": "back-squat-set" }
+          ],
+          "exerciseId": "back-squat",
+          "attempt": 2,
+          "status": "completed",
+          "values": {
+            "reps": 1,
+            "weight": { "value": 255, "unit": "lb" }
           }
         },
         {
-          "nodeId": "heavy-back-squat",
-          "iteration": 3,
-          "attempt": 2,
-          "values": {
-            "reps": 1,
-            "weight": {
-              "value": 255,
-              "unit": "lb"
-            }
+          "type": "container",
+          "workoutId": "strength-and-cindy",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "cindy" }
+          ],
+          "status": "completed",
+          "score": {
+            "type": "rounds_and_reps",
+            "completedRounds": 12,
+            "additionalReps": 7
           }
         }
       ]
     }
-  ]
+  ],
+  "sessionTombstones": []
 }
 ```
 
+This example uses aggregate-only Cindy entry, so it has no child results. If the user expands Cindy, REP JOT creates the complete child-result set and derives this score from it.
+
 ---
 
-# Reference Relationships
-
-The three files form the following reference graph:
+# 6. Reference Relationships
 
 ```text
 exercises.json
-    equipment
-        ↑
-        │ equipmentIds
-        │
+    equipment ← exercise.equipmentIds
     exercises
-        ↑
-        │ exerciseId
-        │
-programming.json
+         ↑
+         │ workout exerciseNode.exerciseId
+         │ result.exerciseId
+         │ preferences.exerciseUnits keys
+         │
+workouts.json
     workouts
-        └── nodes
-             └── exercise nodes
-                    ↑
-                    │ nodeId
-                    │
-results.json
-    sessions
-        └── results
+         ↑
+         │ session.workoutId
+         │ result.workoutId
+         │ result.executionPath nodeIds
+         │
+results-YYYY-MM.json
+    sessions and results
 ```
 
-References always point from more frequently edited data toward less frequently edited data.
+`workouts.json` does not duplicate exercise classification or instructions.
 
-`results.json` does not duplicate exercise metadata or prescriptions.
+A result stores `exerciseId` deliberately. This direct reference preserves historical identity and supports exercise-level queries.
 
-`programming.json` does not duplicate exercise metadata.
+The session and each result store `workoutId`. A result's value must match its session, and its `executionPath` resolves within that workout.
 
 ---
 
-# Data Ownership
+# 7. Data Ownership Summary
 
 ## `exercises.json`
 
-Owns stable exercise facts:
+Owns retained exercise and equipment facts:
 
 ```text
-exercise name
-required equipment
+name
+instructions
+icon
+equipment
+force
+mechanic
+category
 movement pattern
-primary muscle groups
-secondary muscle groups
-bilateral/unilateral
-modality
-supported measurements
+muscles
+laterality
+supported measurement dimensions and units
 ```
 
-It does not own:
-
-```text
-sets
-reps for a workout
-weight for a workout
-training stimulus
-actual performance
-```
-
-## `programming.json`
+## `workouts.json`
 
 Owns intended work:
 
 ```text
-workout structure
-ordering
-rounds
-timing strategies
+workout structure and order
+container strategies
+rounds and EMOM cycles
+interval timing
+complex definitions
+container result-capture rules
 exercise selection
-stimulus
-prescribed reps
-prescribed weight
-prescribed distance
-prescribed duration
-iteration-specific prescriptions
-approximate and ranged repetition targets
-effort targets (failure, RIR, and RPE)
-load-selection strategies across sets
-set roles (warmup or working)
-named benchmark metadata
+stimulus and set type
+prescriptions
+effort and load targets
+benchmark metadata
 ```
 
-It does not own:
+## `preferences.json`
+
+Owns mutable user choices:
 
 ```text
-exercise anatomy/classification
-actual performance
+file revision
+exercise-level unit selection
 ```
 
-## `results.json`
+## `results-YYYY-MM.json`
 
 Owns actual execution:
 
 ```text
-session date/time
-exercise attempts
-actual reps
-actual weight
-actual distance
-actual duration
-actual effort outcomes
-unsuccessful attempts
-additional attempts
-session notes
+session status and times
+session deletion tombstones
+workout execution paths
+direct exercise references
+attempts and measured values
+container scores
+optional child detail
+actual effort
+relevant incomplete or skipped state
+reason codes and notes
 ```
 
-It does not redefine either the exercise or the programmed prescription.
+No result changes an exercise or programmed prescription.
 
 ---
 
-# Versioning
+# 8. Validation Invariants
 
-Each file contains:
+Implementations must enforce these cross-file rules:
 
-```json
-{
-  "schemaVersion": 1
-}
-```
-
-`schemaVersion` identifies the structure of the JSON file, not the version of an individual workout or exercise.
-
-Future incompatible schema changes increment this value.
-
----
-
-# Identifier Requirements
-
-All IDs are strings.
-
-IDs must:
-
-- be unique within the entity namespace they identify;
-- remain stable after creation;
-- not depend on array position;
-- be usable as references across files.
-
-Human-readable slug-style identifiers are appropriate for stable facts:
-
-```text
-back-squat
-barbell
-pull-up-bar
-```
-
-Workout and session identifiers may similarly use application-generated stable strings.
-
-Node IDs need only be unique within their workout, because a result identifies the workout through `workoutId` and the exercise occurrence through `nodeId`.
-
----
-
-# Schema Summary
-
-```text
-exercises.json
-├── schemaVersion
-├── equipment[]
-│   ├── id
-│   ├── name
-│   └── description?
-│
-└── exercises[]
-    ├── id
-    ├── name
-    ├── description?
-    ├── equipmentIds[]
-    ├── movementPattern
-    ├── primaryMuscleGroups[]
-    ├── secondaryMuscleGroups[]
-    ├── laterality
-    ├── modality
-    └── measurements[]
-
-
-programming.json
-├── schemaVersion
-└── workouts[]
-    ├── id
-    ├── name
-    ├── description?
-    └── root
-        └── node
-            ├── container
-            │   ├── id
-            │   ├── name?
-            │   ├── strategy
-            │   ├── strategyConfig
-            │   ├── benchmark?
-            │   └── children[]
-            │
-            └── exercise
-                ├── id
-                ├── exerciseId
-                ├── stimulus
-                ├── setType?
-                ├── prescription
-                │   ├── effort?
-                │   └── loadStrategy?
-                └── notes?
-
-
-results.json
-├── schemaVersion
-└── sessions[]
-    ├── id
-    ├── workoutId
-    ├── startedAt
-    ├── finishedAt?
-    ├── notes?
-    └── results[]
-        ├── nodeId
-        ├── iteration?
-        ├── attempt?
-        ├── values
-        ├── effort?
-        ├── startedAt?
-        ├── finishedAt?
-        └── notes?
-```
+1. An `equipmentId` resolves to retained equipment.
+2. A workout `exerciseId` resolves to a retained, non-deprecated exercise when the workout is new.
+3. A session `workoutId` resolves to the retained workout used for that session.
+4. Each result `workoutId` matches its session and resolves to that same workout.
+5. Each result path resolves from that workout's root to its terminal node.
+6. An exercise result's direct `exerciseId` matches its terminal workout node.
+7. A measurement dimension appears in the referenced exercise's `measurements`.
+8. A quantity unit is compatible with its dimension and load semantics.
+9. A preferred unit is compatible with its exercise and dimension.
+10. A container score matches the workout container's `scoreType`, or it is `nonstandard` with complete authoritative child detail.
+11. Child detail obeys the workout container's `childDetail` rule and is absent or complete.
+12. Complete child detail derives exactly the stored container score.
+13. A session has at most one container result per execution path.
+14. Exercise results are unique by workout, execution path, side, and attempt.
+15. An alternating exercise result has `startingSide`; other results do not.
+16. Every session has `updatedAt` and a `session-` prefixed UUID.
+17. An `in_progress` session has `executionPlan` and no `endedAt`.
+18. A `completed` or `abandoned` session has `endedAt` and no `executionPlan`.
+19. A monthly file name, `yearMonth`, and each session start month agree.
+20. A tombstone and live session do not share an ID in one merged document.
+21. Tombstones win over stale sessions with the same ID during synchronization.
+22. A sync copy references a different session ID in the same shard.
+23. Published equipment, exercise, workout, and node IDs remain present and are not reused.
+24. Deprecated entities remain available for historical references.
+25. `rounds_and_reps` containers resolve only to deterministic repetition-based leaf sequences.
