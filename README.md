@@ -2,8 +2,9 @@
 
 Lightweight fitness journal tool. Works on not-so-modern browsers such as Kindle Scribe so you can log workouts on a distraction-free device.
 
-The current prototype is a minimal Svelte/TypeScript app that stores a hello-world
-document in the signed-in user's private Google Drive `appDataFolder`.
+The current Svelte and TypeScript prototype supports authorization continuity tests on Kindle. It also stores a hello-world document in Google Drive `appDataFolder`.
+
+The prototype supports remembered and session-only tokens, exact expiry, account switching, sign-out, and Google grant revocation. See [`docs/PHASE-0-AUTHORIZATION-PROOF.md`](docs/PHASE-0-AUTHORIZATION-PROOF.md) for the physical-Kindle test procedure.
 
 ## Run locally
 
@@ -11,10 +12,9 @@ document in the signed-in user's private Google Drive `appDataFolder`.
 2. Copy `.env.example` to `.env.local` and configure the Google OAuth client ID.
 3. Start the app with `bun run dev` and open `http://localhost:5173`.
 
-Run `bun run check` for strict TypeScript/Svelte checks and `bun run build` to produce
-the static bundle in `dist/`. Run `bun run check:compat` to build and verify that the
-application bundle contains no syntax newer than ES2019, matching the Kindle Scribe's
-Silk 80 JavaScript parser. The production entry also includes a `String.replaceAll`
+Run `bun run check` for strict TypeScript and Svelte checks. Run `bun run test` for the authorization continuity tests.
+
+Run `bun run build` to produce the static bundle in `dist/`. Run `bun run check:compat` to apply the Kindle bundle gates. The gates require ES2019 syntax and prohibit `window.open`. The production entry also includes a `String.replaceAll`
 polyfill required by Svelte. Drive multipart uploads use Web Crypto when available and
 fall back to a locally generated UUID when `crypto.randomUUID` is unavailable. The
 production bundle is loaded by dynamically inserting a classic script because the
@@ -133,4 +133,4 @@ REP JOT currently uses Google's legacy full-page implicit flow as a compatibilit
 for the Kindle browser. Google recommends an authorization-code flow with a backend for
 production applications.
 
-Note: current prototype uses deprecated Google auth flow https://developers.google.com/identity/oauth2/web/guides/use-token-model
+The prototype uses the legacy Google implicit flow because the tested Kindle requires a full-page redirect. Google recommends an authorization-code flow with PKCE for modern browsers.

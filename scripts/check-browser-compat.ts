@@ -25,5 +25,11 @@ if (loaderDefinition === -1 || loaderCall < loaderDefinition || loaderCall < app
 if (index.includes('type="module"')) {
   throw new Error('dist/index.html still contains a module script.');
 }
+if (/\bwindow\s*\.\s*open\s*\(/.test(bundle)) {
+  throw new Error('dist/app.js can open a popup or secondary window.');
+}
+if (!bundle.includes('https://www.googleapis.com/auth/drive.appdata')) {
+  throw new Error('dist/app.js does not contain the required Drive app-data scope.');
+}
 
-console.log('dist/app.js parses as an ES2019 dynamically loaded classic script.');
+console.log('dist/app.js parses as ES2019, requests app-data access, and does not open a window.');

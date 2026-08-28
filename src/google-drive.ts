@@ -17,6 +17,28 @@ interface FileListResponse {
   files?: DriveFile[];
 }
 
+interface AboutResponse {
+  user?: {
+    permissionId?: string;
+    displayName?: string;
+  };
+}
+
+export interface DriveAccount {
+  accountKey: string;
+  displayName?: string;
+}
+
+export class DriveHttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'DriveHttpError';
+    this.status = status;
+  }
+}
+
 function authorization(accessToken: string): HeadersInit {
   return { Authorization: `Bearer ${accessToken}` };
 }
@@ -25,7 +47,10 @@ async function driveFetch<T>(url: string, init: RequestInit, context: string): P
   const response: Response = await fetch(url, init);
   if (!response.ok) {
     const details: string = await response.text();
-    throw new Error(`${context} failed (${response.status}): ${details || response.statusText}`);
+    throw new DriveHttpError(
+      `${context} failed (${response.status}): ${details || response.statusText}`,
+      response.status
+    );
   }
   return (await response.json()) as T;
 }
@@ -35,6 +60,23 @@ function isHelloWorldDocument(value: unknown): value is HelloWorldDocument {
     return false;
   }
   return 'helloWorld' in value && typeof value.helloWorld === 'string';
+}
+
+export async function getDriveAccount(accessToken: string): Promise<DriveAccount> {
+  const parameters = new URLSearchParams({ fields: 'user(permissionId,displayName)' });
+  const result = await driveFetch<AboutResponse>(
+    `${DRIVE_API}/about?${parameters.toString()}`,
+    { headers: authorization(accessToken) },
+    'Binding the Google Drive account'
+  );
+  const accountKey = result.user?.permissionId;
+  if (accountKey === undefined || accountKey.length === 0) {
+    throw new Error('Google Drive did not return an account key.');
+  }
+  return {
+    accountKey,
+    ...(result.user?.displayName === undefined ? {} : { displayName: result.user.displayName })
+  };
 }
 
 export async function findHelloWorldFile(accessToken: string): Promise<DriveFile | null> {
@@ -106,7 +148,10 @@ export async function deleteHelloWorld(accessToken: string, fileId: string): Pro
   });
   if (!response.ok) {
     const details: string = await response.text();
-    throw new Error(`Deleting the app-data file failed (${response.status}): ${details || response.statusText}`);
+    throw new DriveHttpError(
+      `Deleting the app-data file failed (${response.status}): ${details || response.statusText}`,
+      response.status
+    );
   }
 }
 
@@ -128,6 +173,9 @@ export async function updateHelloWorld(
   );
   if (!response.ok) {
     const details: string = await response.text();
-    throw new Error(`Saving the app-data file failed (${response.status}): ${details || response.statusText}`);
+    throw new DriveHttpError(
+      `Saving the app-data file failed (${response.status}): ${details || response.statusText}`,
+      response.status
+    );
   }
 }

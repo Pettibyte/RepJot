@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "bun test",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts"
   },
   "devDependencies": {
