@@ -9,7 +9,7 @@ The application uses these files:
 1. `exercises.json` stores exercise and equipment reference data.
 2. `workouts.json` stores workout definitions and prescriptions.
 3. `preferences.json` stores versioned user preferences.
-4. `results-YYYY-MM.json` stores workout sessions for one calendar month.
+4. `results-YYYY-MM.json` stores workout sessions for one UTC calendar month.
 
 There is no database in this revision. Each file must load independently as JSON in a browser.
 
@@ -32,6 +32,20 @@ Each file declares its family and a positive integer schema version:
 
 The formats are `repjot/exercises`, `repjot/workouts`, `repjot/preferences`, and `repjot/results`. An incompatible structure change increments the family version.
 
+## UTC Timestamps
+
+Every persisted application timestamp uses a field name ending in `Utc`. Each value is
+an RFC 3339 date-time string that ends in `Z`. Numeric UTC offsets are not canonical.
+The JSON Schemas declare both `format: "date-time"` and the `Z` suffix.
+REP JOT configures its Draft 2020-12 validator to assert formats rather than treat them as annotations.
+
+The application converts browser-local input to UTC before persistence. It converts UTC
+timestamps to local dates and times only for display. Locale and local offset never
+select a result shard.
+
+Drive-owned metadata such as `modifiedTime` is external data. It retains the field name
+and timestamp representation defined by the Drive API.
+
 ## Stable IDs and Deprecation
 
 Published equipment, exercise, workout, and workout-node IDs must never be deleted or reused. Corrections to labels, instructions, and prescriptions can retain the same ID and apply to historical views.
@@ -40,7 +54,7 @@ An ID must not represent a different entity or node role later. A published work
 
 An optional `deprecated: true` flag marks an exercise or workout as unavailable for new use. Deprecated items remain resolvable for historical results.
 
-A deprecated exercise cannot appear in a new workout. A new session from an existing workout omits exercises deprecated at its start. An in-progress session keeps its frozen plan. A deprecated workout is hidden from the chooser and cannot start.
+A deprecated exercise cannot appear in a new workout. A new session from an existing workout omits exercises deprecated at its start. Each scored ancestor affected by an omission becomes detail-only in the effective plan. It requires remaining child detail and uses `nonstandard` instead of an aggregate score. If no executable child remains, the container is skipped with `reasonCode: "deprecated"`. An in-progress session keeps its frozen plan. A deprecated workout is hidden from the chooser and cannot start.
 
 The build compares the current bundle with the prior production bundle. It fails when a published ID disappears or is reused in another namespace.
 
@@ -125,7 +139,7 @@ An exercise contains classification, instructions, and supported measurements.
   "laterality": "bilateral",
   "measurements": [
     { "dimension": "reps", "compatibleUnits": ["rep"] },
-    { "dimension": "weight", "compatibleUnits": ["lb", "kg"] }
+    { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
   ],
   "loadSemantics": "total"
 }
@@ -254,7 +268,7 @@ A measurement support entry declares one controlled dimension and its compatible
 ```json
 {
   "dimension": "weight",
-  "compatibleUnits": ["lb", "kg"]
+  "compatibleUnits": ["kg", "lb"]
 }
 ```
 
@@ -317,7 +331,7 @@ The exercise directory does not select the user's preferred unit. `preferences.j
       "laterality": "bilateral",
       "measurements": [
         { "dimension": "reps", "compatibleUnits": ["rep"] },
-        { "dimension": "weight", "compatibleUnits": ["lb", "kg"] }
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
       ],
       "loadSemantics": "total"
     },
@@ -339,7 +353,7 @@ The exercise directory does not select the user's preferred unit. `preferences.j
       "laterality": "bilateral",
       "measurements": [
         { "dimension": "reps", "compatibleUnits": ["rep"] },
-        { "dimension": "addedWeight", "compatibleUnits": ["lb", "kg"] }
+        { "dimension": "addedWeight", "compatibleUnits": ["kg", "lb"] }
       ],
       "loadSemantics": "added"
     }
@@ -653,6 +667,62 @@ An exercise in a repeated container can define different work by iteration:
 
 `iteration` is one-based and applies to the nearest repeated container.
 
+Top-level fields are the base prescription for every iteration. An entry in
+`iterations` overrides only the fields that it contains. Fields omitted from the entry
+inherit their top-level values.
+
+For this three-round prescription, the effective values are:
+
+1. Iteration 1: 5 reps at 80 kg.
+2. Iteration 2: 3 reps at 100 kg. The entry overrides `reps` and inherits `weight`.
+3. Iteration 3: 8 reps at 100 kg because it has no override entry.
+
+```json
+{
+  "reps": 8,
+  "weight": { "value": 100, "unit": "kg" },
+  "iterations": [
+    {
+      "iteration": 1,
+      "reps": 5,
+      "weight": { "value": 80, "unit": "kg" }
+    },
+    {
+      "iteration": 2,
+      "reps": 3
+    }
+  ]
+}
+```
+
+An iteration can also add a field that has no top-level value. If a field exists in
+neither place, that iteration has no prescription for the field. `null` cannot remove an
+inherited field.
+
+Each iteration number can appear only once. This complete example is invalid because it
+defines two conflicting overrides for iteration 2:
+
+```json
+{
+  "reps": 8,
+  "weight": { "value": 100, "unit": "kg" },
+  "iterations": [
+    {
+      "iteration": 2,
+      "weight": { "value": 90, "unit": "kg" }
+    },
+    {
+      "iteration": 2,
+      "weight": { "value": 80, "unit": "kg" }
+    }
+  ]
+}
+```
+
+REP JOT rejects duplicate iteration numbers instead of using array order as precedence.
+An iteration number is one-based. For a finite repeated container, it cannot exceed that
+container's configured iteration count.
+
 ## Workout Example
 
 ```json
@@ -731,7 +801,7 @@ The file is versioned for schema migration and write-conflict handling:
   "format": "repjot/preferences",
   "schemaVersion": 1,
   "revision": 12,
-  "updatedAt": "2026-08-15T08:25:00-07:00",
+  "updatedAtUtc": "2026-08-15T15:25:00Z",
   "exerciseUnits": {
     "back-squat": {
       "weight": "lb"
@@ -748,7 +818,7 @@ The file is versioned for schema migration and write-conflict handling:
 | `format` | `"repjot/preferences"` | yes | Document family. |
 | `schemaVersion` | integer | yes | Structure version. |
 | `revision` | integer | yes | Monotonic file revision. Increment after each successful preference save. |
-| `updatedAt` | ISO 8601 timestamp | yes | Time of the latest saved revision. |
+| `updatedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC time of the latest saved revision. |
 | `exerciseUnits` | object | yes | Preferred unit by exercise ID and measurement dimension. |
 
 ## Exercise-Level Unit Preferences
@@ -761,9 +831,15 @@ The application saves the new selection to `preferences.json`. It then uses that
 
 Synchronization merges mappings by exercise ID and dimension. If the same mapping changed locally and remotely, the pending value from the client performing the later synchronization wins. REP JOT does not prompt for preference conflicts.
 
-Changing the preference does not rewrite saved historical prescriptions or results. If the user toggles a unit while editing an entered value, REP JOT converts that value with full internal precision and shows a sensible editable value in the new unit. The saved result retains the converted value and explicit unit.
+Changing the preference does not rewrite saved historical prescriptions or results. If the user toggles a unit while editing an entered value, REP JOT converts that value with full internal precision. The editable display rounds the converted value to the nearest `0.1` in the selected unit. An exact half rounds upward because all measurement values are non-negative.
 
-If an exercise has no saved preference, the application selects a supported default. The application saves the first explicit user selection.
+For example, 100 kg converts internally to approximately 220.462 lb and displays as 220.5 lb. Five km displays as 3.1 mi. Ninety seconds displays as 1.5 minutes. The rule is the same for weight, distance, and duration.
+
+Display rounding does not immediately replace the full-precision converted value. If the user leaves the displayed number unchanged, the saved quantity keeps the full-precision value and its explicit unit. If the user edits the displayed number, REP JOT saves the number that the user enters. This prevents repeated unit toggles from accumulating avoidable conversion drift.
+
+This rule can display a small positive conversion as `0.0`, such as one second shown in minutes. The saved value remains positive unless the user explicitly edits it to zero. Static exercise data should list unit combinations appropriate for the exercise so this case remains uncommon.
+
+If an exercise has no saved preference, the first `compatibleUnits` entry is the default. Static data lists metric units before imperial units. The application saves the first explicit user selection.
 
 ---
 
@@ -771,9 +847,13 @@ If an exercise has no saved preference, the application selects a supported defa
 
 ## Purpose
 
-Each monthly results file records actual workout sessions. For example, `results-2026-08.json` contains sessions that start in August 2026.
+Each monthly results file records actual workout sessions. For example, `results-2026-08.json` contains sessions whose persisted UTC start is in August 2026.
 
-The session `startedAt` month selects the file. A session that crosses a month boundary remains in its start-month file.
+The UTC month in `startedAtUtc` selects the file. The application converts a local start to UTC before it selects the shard. A session that crosses a UTC month boundary remains in its UTC start-month file.
+
+For example, a local start at `2026-08-31T23:30:00-07:00` persists as
+`2026-09-01T06:30:00Z`. That session belongs in `results-2026-09.json` with
+`yearMonthUtc: "2026-09"`. The local value is display input only and is not canonical.
 
 ## Top-Level Structure
 
@@ -781,13 +861,13 @@ The session `startedAt` month selects the file. A session that crosses a month b
 {
   "format": "repjot/results",
   "schemaVersion": 1,
-  "yearMonth": "2026-08",
+  "yearMonthUtc": "2026-08",
   "sessions": [],
   "sessionTombstones": []
 }
 ```
 
-`yearMonth` must match the `YYYY-MM` part of the file name.
+`yearMonthUtc` must match the `YYYY-MM` part of the file name and the UTC year and month of each session's `startedAtUtc`.
 
 ## Session Tombstone
 
@@ -796,7 +876,7 @@ Deleting a session removes it from `sessions` and adds a permanent tombstone to 
 ```json
 {
   "sessionId": "session-550e8400-e29b-41d4-a716-446655440000",
-  "deletedAt": "2026-08-20T10:00:00-07:00"
+  "deletedAtUtc": "2026-08-20T17:00:00Z"
 }
 ```
 
@@ -809,9 +889,9 @@ A tombstone wins over a session with the same ID during synchronization. REP JOT
   "id": "session-550e8400-e29b-41d4-a716-446655440000",
   "workoutId": "strength-and-cindy",
   "status": "completed",
-  "startedAt": "2026-08-15T07:30:00-07:00",
-  "endedAt": "2026-08-15T08:25:00-07:00",
-  "updatedAt": "2026-08-15T08:25:00-07:00",
+  "startedAtUtc": "2026-08-15T14:30:00Z",
+  "endedAtUtc": "2026-08-15T15:25:00Z",
+  "updatedAtUtc": "2026-08-15T15:25:00Z",
   "results": []
 }
 ```
@@ -821,9 +901,9 @@ A tombstone wins over a session with the same ID during synchronization. REP JOT
 | `id` | string | yes | Globally stable `session-` prefixed UUID. |
 | `workoutId` | string | yes | Direct reference to the retained workout. |
 | `status` | enum | yes | `in_progress`, `completed`, or `abandoned`. |
-| `startedAt` | ISO 8601 timestamp | yes | Session start time. |
-| `endedAt` | ISO 8601 timestamp | conditional | Required for `completed` and `abandoned`. Forbidden for `in_progress`. |
-| `updatedAt` | ISO 8601 timestamp | yes | Latest saved session change. |
+| `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC session start time and shard source. |
+| `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | conditional | Required for `completed` and `abandoned`. Forbidden for `in_progress`. |
+| `updatedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC time of the latest saved session change. |
 | `conflictOfSessionId` | string | no | Original session ID when this session is a synchronization copy. |
 | `executionPlan` | object | conditional | Required for `in_progress`. Frozen effective workout tree. |
 | `results` | result[] | yes | Exercise and scored-container results. |
@@ -831,11 +911,11 @@ A tombstone wins over a session with the same ID during synchronization. REP JOT
 
 `completed` means that the user intentionally completed the session. It does not mean that every prescribed item has a result.
 
-`abandoned` means that the user intentionally ended an unfinished session. `endedAt` records when either terminal status occurred. Several sessions can have `in_progress` status.
+`abandoned` means that the user intentionally ended an unfinished session. `endedAtUtc` records when either terminal status occurred. Several sessions can have `in_progress` status.
 
-New session IDs use a collision-resistant UUID and do not encode `startedAt`.
+New session IDs use a collision-resistant UUID and do not encode `startedAtUtc`.
 
-Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor builds a temporary plan from the retained workout and recorded result paths, including deprecated exercises already present in the session. Editing preserves `status`, `startedAt`, and `endedAt` unless the user explicitly edits a timestamp. This reuses the editor without mislabeling historical sessions as active.
+Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor starts from the current retained workout tree and overlays recorded results by execution path. New current-tree nodes appear with blank results. A deprecated exercise appears when the session already records its path; an unrecorded deprecated leaf stays hidden. Terminal sessions do not store `executionPlan`. Editing preserves `status`, `startedAtUtc`, and `endedAtUtc`. Release one does not permit timestamp edits. This reuses the editor without mislabeling historical sessions as active.
 
 ## Session Sync Copy
 
@@ -847,7 +927,18 @@ The client stores the generated copy ID in its pending edit before upload. Retri
 
 At session start, `executionPlan` copies the effective workout root, including node IDs, exercise references, strategies, scoring rules, and prescriptions. Exercises deprecated before the start are absent. REP JOT creates a skipped result with `reasonCode: "deprecated"` for each omitted exercise.
 
-An in-progress session executes this snapshot after reload or deployment. Later corrections and deprecations do not change it. When a session becomes `completed` or `abandoned`, REP JOT removes `executionPlan`; historical display uses retained static entities and recorded results.
+For each scored container affected by an omission, the effective plan changes
+`childDetail` to `required`. The UI removes aggregate score entry and shows the remaining
+child inputs. Complete detail stores `{ "type": "nonstandard" }`. Structurally complete
+detail with incomplete results can leave the container score absent. If no executable
+child remains, the container is skipped with `reasonCode: "deprecated"` and has no score.
+
+For this rule, complete detail means all remaining leaves in each observed cycle or
+block that the user creates. It does not mean every cycle that time could permit. The UI
+does not create future AMRAP cycles. Once the user creates an observed cycle, its
+remaining leaves use completed, incomplete, or skipped results as applicable.
+
+An in-progress session executes this snapshot after reload or deployment. Later corrections and deprecations do not change it. When a session becomes `completed` or `abandoned`, REP JOT removes `executionPlan`; historical editing uses the current retained workout tree and overlays recorded results by execution path.
 
 ## Execution Path
 
@@ -900,8 +991,8 @@ An exercise result stores both its programmed path and direct exercise reference
 | `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
 | `values` | object | conditional | Actual values. Required when measured data exists. |
 | `effort` | object | no | Observed `failure`, `rir`, or `rpe` outcome. |
-| `startedAt` | ISO 8601 timestamp | no | Result start time. |
-| `endedAt` | ISO 8601 timestamp | no | Result end time. |
+| `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC result start time. |
+| `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC result end time. |
 | `reasonCode` | enum | no | Controlled reason for an incomplete or skipped item. |
 | `notes` | string | no | Optional free-text detail. |
 
@@ -976,8 +1067,8 @@ Supported score shapes are:
 | `executionPath` | path segment[] | yes | Full path to the scored workout container. |
 | `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
 | `score` | score | conditional | Score defined by the container's `resultCapture.scoreType`. |
-| `startedAt` | ISO 8601 timestamp | no | Container start time. |
-| `endedAt` | ISO 8601 timestamp | no | Container end time. |
+| `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC container start time. |
+| `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC container end time. |
 | `reasonCode` | enum | no | Controlled reason for an incomplete or skipped container. |
 | `notes` | string | no | Optional free-text detail. |
 
@@ -991,7 +1082,7 @@ If complete detail does not follow valid round or interval progression, the scor
 
 The application saves an `in_progress` session when the user enters data or changes a data-relevant session field. Later saves update the same session ID.
 
-The application saves terminal status and `endedAt` when the user completes or abandons the session.
+The application saves terminal status and `endedAtUtc` when the user completes or abandons the session.
 
 REP JOT does not create placeholder results for untouched work. Absence means that no data-relevant result was recorded.
 
@@ -1007,15 +1098,15 @@ These rules prevent large result files that contain only default or inferred sta
 {
   "format": "repjot/results",
   "schemaVersion": 1,
-  "yearMonth": "2026-08",
+  "yearMonthUtc": "2026-08",
   "sessions": [
     {
       "id": "session-550e8400-e29b-41d4-a716-446655440000",
       "workoutId": "strength-and-cindy",
       "status": "completed",
-      "startedAt": "2026-08-15T07:30:00-07:00",
-      "endedAt": "2026-08-15T08:25:00-07:00",
-      "updatedAt": "2026-08-15T08:25:00-07:00",
+      "startedAtUtc": "2026-08-15T14:30:00Z",
+      "endedAtUtc": "2026-08-15T15:25:00Z",
+      "updatedAtUtc": "2026-08-15T15:25:00Z",
       "results": [
         {
           "type": "exercise",
@@ -1163,7 +1254,7 @@ benchmark metadata
 Owns mutable user choices:
 
 ```text
-file revision
+file revision and `updatedAtUtc`
 exercise-level unit selection
 ```
 
@@ -1172,8 +1263,8 @@ exercise-level unit selection
 Owns actual execution:
 
 ```text
-session status and times
-session deletion tombstones
+session status and UTC times
+session deletion tombstones with `deletedAtUtc`
 workout execution paths
 direct exercise references
 attempts and measured values
@@ -1207,13 +1298,16 @@ Implementations must enforce these cross-file rules:
 13. A session has at most one container result per execution path.
 14. Exercise results are unique by workout, execution path, side, and attempt.
 15. An alternating exercise result has `startingSide`; other results do not.
-16. Every session has `updatedAt` and a `session-` prefixed UUID.
-17. An `in_progress` session has `executionPlan` and no `endedAt`.
-18. A `completed` or `abandoned` session has `endedAt` and no `executionPlan`.
-19. A monthly file name, `yearMonth`, and each session start month agree.
+16. Every session has `updatedAtUtc` and a `session-` prefixed UUID.
+17. An `in_progress` session has `executionPlan` and no `endedAtUtc`.
+18. A `completed` or `abandoned` session has `endedAtUtc` and no `executionPlan`.
+19. A monthly file name, `yearMonthUtc`, and each session `startedAtUtc` UTC month agree.
 20. A tombstone and live session do not share an ID in one merged document.
 21. Tombstones win over stale sessions with the same ID during synchronization.
 22. A sync copy references a different session ID in the same shard.
 23. Published equipment, exercise, workout, and node IDs remain present and are not reused.
 24. Deprecated entities remain available for historical references.
 25. `rounds_and_reps` containers resolve only to deterministic repetition-based leaf sequences.
+26. Every persisted `*Utc` timestamp is a valid RFC 3339 date-time that ends in `Z`.
+27. Iteration overrides inherit omitted top-level fields, and each iteration number appears at most once in a prescription.
+28. A scored container affected by a deprecated omission is detail-only and uses `nonstandard` only with complete remaining detail.

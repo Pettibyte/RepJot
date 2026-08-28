@@ -20,6 +20,9 @@ REP JOT is a lightweight personal fitness tracker. It emphasizes exact workout r
 - Global `exercises.json` and `workouts.json` files ship in the static site bundle.
 - User preferences and results use the authenticated user's Google Drive `appDataFolder`.
 - User results use monthly files named `results-YYYY-MM.json`.
+- The `YYYY-MM` shard is the UTC month from `startedAtUtc`.
+- Every persisted application timestamp uses a `*Utc` field and an RFC 3339 value ending in `Z`.
+- Local dates, times, and time zones are derived for display only. They never select storage or shard identity.
 - The application caches user data locally and uses in-memory maps for lookups.
 - The application does not use SQLite or WebAssembly.
 - User-created workouts are out of scope. A future version can merge them with system workouts.
@@ -54,6 +57,9 @@ REP JOT is a lightweight personal fitness tracker. It emphasizes exact workout r
 - Deprecated exercises remain resolvable but cannot appear in new workouts.
 - A new session from an existing workout omits exercises that are already deprecated.
 - The build reports every workout and scored or timed container affected by a newly deprecated exercise.
+- If a new session omits a deprecated exercise from a scored container, that effective container becomes detail-only.
+- The affected container stores `nonstandard` only with complete remaining detail. It provides no aggregate score entry.
+- If no executable child remains, the affected container is skipped with `reasonCode: "deprecated"`.
 - A session freezes its effective workout plan when it starts. Later static-data changes do not alter that active session.
 - Deprecated workouts remain resolvable for history but do not appear in the chooser and cannot start.
 - The build compares the current bundle with the prior production bundle.
@@ -100,6 +106,10 @@ An exercise has:
 ## Workout Features
 
 - A workout is an ordered tree of containers and exercises.
+- Top-level prescription fields apply to every iteration.
+- An `iterations` entry overrides only the fields that it contains for its one-based iteration.
+- Each iteration number appears at most once in one prescription.
+- An override for a finite repeated container stays within that container's configured iteration count.
 - Containers support sequence, fixed rounds, AMRAP, EMOM, and scored complexes.
 - Containers can nest to represent warmup, strength, HIIT, active recovery, and deeper structures.
 - Results identify every repeated ancestor through an execution path.
@@ -131,8 +141,11 @@ An exercise has:
 - Session deletion writes a permanent tombstone so that stale devices cannot restore it.
 - If work is missing, Finish Workout offers `Return to workout` and `Finish as incomplete`.
 - Completed and abandoned sessions can be edited with the Active Workout editor.
-- Editing preserves the session status and workout timestamps while it saves result corrections.
-- Every session has `updatedAt`, which changes after each saved correction.
+- Historical editing uses the current retained workout tree and overlays recorded results by execution path.
+- Historical editing does not persist an `executionPlan` for terminal sessions.
+- Editing preserves the session status and UTC workout timestamps while it saves result corrections.
+- Release one does not permit edits to persisted timestamps.
+- Every session has `updatedAtUtc`, which changes after each saved correction.
 - New session IDs use a collision-resistant UUID and do not encode workout time.
 - A sync copy preserves the session status and timestamps, records the original session ID, and appears in History with a `Sync copy` label.
 - The user can inspect, edit, or delete either copy with the normal session screens.
@@ -143,11 +156,14 @@ An exercise has:
 - Preferences store the preferred unit for each exercise.
 - The Settings screen lists the exercise-to-unit mappings.
 - Tapping an exercise unit pill switches between compatible units, converts entered values, and updates the preference.
-- Conversion uses full precision internally and a sensible editable display value.
+- Conversion uses full precision internally and rounds the editable display to the nearest `0.1` in the selected unit.
+- Display rounding does not change the full-precision saved value unless the user edits the displayed number.
 - Each saved result retains its explicit value and unit until the user edits that result.
 - Preference synchronization merges different exercise and dimension mappings automatically.
 - For a conflicting mapping, the pending value from the client that synchronizes last wins without prompting.
 - Settings provides downloads for all raw files in `appDataFolder`.
+- Settings provides a separate download of the recent local diagnostic log for support.
+- Diagnostic events never synchronize to Drive and never contain tokens, notes, measurements, or canonical document content.
 
 ## Data Seeding
 
@@ -188,7 +204,7 @@ Mockup screenshots and HTML in `../design/**` are guidance only. `../design/DESI
 - The authenticated landing screen shows active workouts with title and last completion date.
 - A `Load older` control loads more workouts when necessary.
 - Recent shows up to five completed or abandoned sessions, newest first.
-- All in-progress sessions appear above Recent, sorted by `updatedAt`, newest first.
+- All in-progress sessions appear above Recent, sorted by `updatedAtUtc`, newest first.
 - An in-progress entry shows its start time today or its date on an earlier day.
 - Tapping an in-progress entry resumes it.
 

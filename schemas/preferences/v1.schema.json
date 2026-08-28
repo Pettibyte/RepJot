@@ -2,15 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://repjot.com/schemas/preferences/v1.schema.json",
   "title": "REP JOT Preferences",
-  "description": "Versioned user preferences for REP JOT.",
+  "description": "Versioned user preferences for REP JOT with an explicit UTC update timestamp.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "schemaVersion", "revision", "updatedAt", "exerciseUnits"],
+  "required": ["format", "schemaVersion", "revision", "updatedAtUtc", "exerciseUnits"],
   "properties": {
     "format": { "const": "repjot/preferences" },
     "schemaVersion": { "const": 1 },
     "revision": { "type": "integer", "minimum": 0 },
-    "updatedAt": { "type": "string", "format": "date-time" },
+    "updatedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
     "exerciseUnits": {
       "type": "object",
       "propertyNames": { "type": "string", "minLength": 1 },
@@ -18,6 +18,11 @@
     }
   },
   "$defs": {
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
     "exerciseUnitPreferences": {
       "type": "object",
       "additionalProperties": false,

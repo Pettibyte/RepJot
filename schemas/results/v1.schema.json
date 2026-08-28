@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://repjot.com/schemas/results/v1.schema.json",
   "title": "REP JOT Monthly Workout Results",
-  "description": "One month of workout sessions, results, and deletion tombstones for REP JOT.",
+  "description": "One UTC month of workout sessions, results, and deletion tombstones for REP JOT.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "schemaVersion", "yearMonth", "sessions", "sessionTombstones"],
+  "required": ["format", "schemaVersion", "yearMonthUtc", "sessions", "sessionTombstones"],
   "properties": {
     "format": { "const": "repjot/results" },
     "schemaVersion": { "const": 1 },
-    "yearMonth": {
+    "yearMonthUtc": {
       "type": "string",
       "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
     },
@@ -28,27 +28,31 @@
       "type": "string",
       "pattern": "^session-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
     },
-    "timestamp": { "type": "string", "format": "date-time" },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
     "sessionTombstone": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sessionId", "deletedAt"],
+      "required": ["sessionId", "deletedAtUtc"],
       "properties": {
         "sessionId": { "$ref": "#/$defs/sessionId" },
-        "deletedAt": { "$ref": "#/$defs/timestamp" }
+        "deletedAtUtc": { "$ref": "#/$defs/utcTimestamp" }
       }
     },
     "session": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "workoutId", "status", "startedAt", "updatedAt", "results"],
+      "required": ["id", "workoutId", "status", "startedAtUtc", "updatedAtUtc", "results"],
       "properties": {
         "id": { "$ref": "#/$defs/sessionId" },
         "workoutId": { "$ref": "#/$defs/identifier" },
         "status": { "enum": ["in_progress", "completed", "abandoned"] },
-        "startedAt": { "$ref": "#/$defs/timestamp" },
-        "endedAt": { "$ref": "#/$defs/timestamp" },
-        "updatedAt": { "$ref": "#/$defs/timestamp" },
+        "startedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "endedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "updatedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
         "conflictOfSessionId": { "$ref": "#/$defs/sessionId" },
         "executionPlan": { "$ref": "https://repjot.com/schemas/workouts/v1.schema.json#/$defs/containerNode" },
         "results": {
@@ -65,11 +69,11 @@
           },
           "then": {
             "required": ["executionPlan"],
-            "properties": { "executionPlan": true, "endedAt": false }
+            "properties": { "executionPlan": true, "endedAtUtc": false }
           },
           "else": {
-            "required": ["endedAt"],
-            "properties": { "endedAt": true, "executionPlan": false }
+            "required": ["endedAtUtc"],
+            "properties": { "endedAtUtc": true, "executionPlan": false }
           }
         }
       ]
@@ -205,8 +209,8 @@
         "status": { "$ref": "#/$defs/resultStatus" },
         "values": { "$ref": "#/$defs/resultValues" },
         "effort": { "$ref": "#/$defs/effortOutcome" },
-        "startedAt": { "$ref": "#/$defs/timestamp" },
-        "endedAt": { "$ref": "#/$defs/timestamp" },
+        "startedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "endedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
         "reasonCode": { "$ref": "#/$defs/reasonCode" },
         "notes": { "type": "string" }
       },
@@ -280,8 +284,8 @@
         "executionPath": { "$ref": "#/$defs/executionPath" },
         "status": { "$ref": "#/$defs/resultStatus" },
         "score": { "$ref": "#/$defs/score" },
-        "startedAt": { "$ref": "#/$defs/timestamp" },
-        "endedAt": { "$ref": "#/$defs/timestamp" },
+        "startedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "endedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
         "reasonCode": { "$ref": "#/$defs/reasonCode" },
         "notes": { "type": "string" }
       },

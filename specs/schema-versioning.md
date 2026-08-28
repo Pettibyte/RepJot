@@ -28,7 +28,7 @@ Every current JSON document declares its family and schema version:
 {
   "format": "repjot/results",
   "schemaVersion": 2,
-  "yearMonth": "2026-08",
+  "yearMonthUtc": "2026-08",
   "sessions": [],
   "sessionTombstones": []
 }
@@ -37,6 +37,11 @@ Every current JSON document declares its family and schema version:
 `schemaVersion` is a positive integer. It defines the persisted shape and semantics of
 one format family. It does not identify an application release, a Drive revision, a
 cache layout, or a content edit.
+
+Every persisted application timestamp uses a `*Utc` field. Its RFC 3339 value ends in
+`Z`. A migration must convert a supported legacy offset timestamp to the equivalent UTC
+instant before it writes the next schema version. Local date and time values are never
+migration context and are never persisted as canonical timestamps.
 
 A family-specific loader can accept a known legacy document without `format` only
 through an explicit and tested importer. A missing `schemaVersion` also requires an
@@ -158,6 +163,12 @@ These lifecycle rules are semantic validation rules. Changing lifecycle state do
 permit ID deletion or reuse.
 
 ## Versioned schemas
+
+The UTC timestamp naming and prescription override rules are part of the first
+production v1 contract. The prototype stores no canonical preference, result, or workout
+document, so these corrections do not migrate released data. Freeze the v1 schemas when
+the first production release publishes them. Every later persisted contract change
+increments its family version.
 
 Keep a machine-readable schema for every supported version:
 

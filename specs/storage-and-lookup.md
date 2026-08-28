@@ -46,6 +46,10 @@ Each family has an independent schema-version sequence. All monthly result shard
 `repjot/results`, but different shards can temporarily use different supported schema
 versions.
 
+All persisted application timestamps use field names ending in `Utc`. Their RFC 3339
+values must end in `Z`. The application derives local dates and times for display only.
+Drive-owned metadata fields retain the names and timestamp forms defined by Drive.
+
 ## Static bundle rules
 
 `exercises.json` and `workouts.json` ship with the application. The build validates
@@ -91,19 +95,22 @@ A result shard has this top-level shape:
 {
   "format": "repjot/results",
   "schemaVersion": 1,
-  "yearMonth": "2026-08",
+  "yearMonthUtc": "2026-08",
   "sessions": [],
   "sessionTombstones": []
 }
 ```
 
 A session ID is `session-` followed by a collision-resistant UUID. Identity does not
-encode workout time. A session belongs to the shard selected by its `startedAt` year
-and month. The application uses the offset in that timestamp. A session remains in its start-month
-shard if it crosses a month boundary.
+encode workout time. `startedAtUtc` is an RFC 3339 UTC timestamp that ends in `Z`.
+Its UTC year and month select the shard. For example, a local start at
+`2026-08-31T23:30:00-07:00` persists as `2026-09-01T06:30:00Z` in
+`results-2026-09.json`.
 
-Editing a historical session updates its original shard. Starting a session in a new
-month creates that month’s shard.
+A session remains in its UTC start-month shard if it crosses a month boundary.
+Editing a historical session updates its original shard. Release one does not permit
+timestamp edits. Starting a session in a new UTC month creates that month’s shard.
+Local date and time conversion occurs only when the UI displays a timestamp.
 
 Monthly shards bound write size, reduce conflict scope, and support recent-first
 loading. Normal workout saves update only one shard. Several sessions can remain in
@@ -113,9 +120,11 @@ progress across the loaded shards.
 
 Each session stores its direct `workoutId`. Completed and abandoned sessions remain
 terminal while the Active Workout editor changes their results. The editor builds a
-temporary plan from the retained workout and recorded result paths, including deprecated
-exercises already present in the session. Editing preserves the terminal status and
-session timestamps unless the user explicitly changes a timestamp.
+temporary plan from the current retained workout tree and overlays recorded results by
+execution path. New current-tree nodes appear with blank results. A deprecated exercise
+appears only when the session already records its path. Terminal sessions do not store
+`executionPlan`. Editing preserves the terminal status and all session timestamps.
+Release one does not provide timestamp editing.
 
 Each exercise result also stores:
 
@@ -175,8 +184,10 @@ when incremental sync is enabled.
 
 Pending local edits use the same account and logical-file namespace. Save edits to
 IndexedDB before Drive synchronization. Unit toggles convert entered values with full
-internal precision before saving the new explicit unit. Debounce normal edits, save on blur, and flush
-pending local edits on `pagehide` when possible.
+internal precision before saving the new explicit unit. The editable display rounds to
+the nearest `0.1`. Keep the full converted value when the user does not edit that display;
+otherwise, save the number that the user enters. Debounce normal edits, save on blur, and
+flush pending local edits on `pagehide` when possible.
 
 A failed Drive sync keeps pending edits and shows `Sync failed`. The UI uses `Saving`,
 `Saved`, and `Sync failed` states. Clearing IndexedDB discards the cache, so the next
@@ -184,6 +195,26 @@ launch performs a full reconciliation.
 
 Do not persist derived lookup indexes unless Kindle measurements show a startup
 problem. Rebuilding indexes prevents unnecessary cache-format migrations.
+
+### Local diagnostics
+
+IndexedDB stores a bounded, account-scoped diagnostic event ring. Diagnostic events are
+support data, not canonical fitness data. REP JOT never uploads them to Drive or another
+service.
+
+Each event records `recordedAtUtc`, severity, a stable event code, operation and
+correlation IDs, application build, and redacted context. Merge events record counts and
+decisions. Duplicate cleanup events record file aliases, metadata changes, the selected
+primary alias, preserved conflict counts, upload confirmation, and deletion outcomes.
+
+Events never contain OAuth tokens, account names, raw Drive file IDs, canonical file
+content, workout or exercise names, notes, measurements, or session IDs. A random local
+salt creates stable diagnostic aliases for account, file, document, and session IDs.
+
+Keep events for seven days, with maximums of 500 events and 256 KiB per account. Remove
+the oldest event when one limit is exceeded. Settings provides **Download diagnostic log**
+as one JSON file and **Clear diagnostic log**. Export is always user-initiated and no
+automatic telemetry exists.
 
 ## Synchronization
 
@@ -261,7 +292,7 @@ interface DataIndex {
   recentByExerciseId: Map<string, ExerciseOccurrence[]>;
   recentByMuscleGroup: Map<MuscleGroup, ExerciseOccurrence[]>;
   recentSessions: SessionSummary[];
-  activeSessionsByUpdatedAt: SessionSummary[];
+  activeSessionsByUpdatedAtUtc: SessionSummary[];
 }
 ```
 
@@ -297,6 +328,14 @@ At session start, copy the effective workout tree into the session `executionPla
 Filter exercises already deprecated, and create skipped results with
 `reasonCode: "deprecated"`. The frozen plan includes the remaining nodes, strategies,
 scoring rules, and prescriptions.
+
+A scored container affected by an omission becomes detail-only in the effective plan.
+Set its `childDetail` to `required`, remove aggregate entry from the UI, and store a
+`nonstandard` score only when complete remaining detail exists. Complete detail covers
+all remaining leaves in each observed cycle or block, not future possible cycles.
+Structurally complete detail with incomplete results can leave the score absent. If no
+executable child remains, store a skipped container with `reasonCode: "deprecated"` and
+no score.
 
 An in-progress session always resumes from its frozen plan. Later bundle corrections or
 deprecations do not change it. Remove the plan when the session becomes completed or

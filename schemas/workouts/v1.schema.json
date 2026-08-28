@@ -342,20 +342,6 @@
         "adjustment": { "const": "decrease_to_repeat_effort" }
       }
     },
-    "prescriptionProperties": {
-      "type": "object",
-      "properties": {
-        "reps": { "$ref": "#/$defs/repsPrescription" },
-        "weight": { "$ref": "#/$defs/weightQuantity" },
-        "addedWeight": { "$ref": "#/$defs/weightQuantity" },
-        "assistedWeight": { "$ref": "#/$defs/weightQuantity" },
-        "distance": { "$ref": "#/$defs/distanceQuantity" },
-        "duration": { "$ref": "#/$defs/durationQuantity" },
-        "calories": { "$ref": "#/$defs/caloriesQuantity" },
-        "effort": { "$ref": "#/$defs/effortTarget" },
-        "loadStrategy": { "$ref": "#/$defs/loadStrategy" }
-      }
-    },
     "iterationPrescription": {
       "type": "object",
       "additionalProperties": false,
@@ -375,6 +361,7 @@
       }
     },
     "prescription": {
+      "description": "Top-level fields apply to every iteration. A matching iterations entry overrides only its included fields.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
@@ -389,6 +376,7 @@
         "effort": { "$ref": "#/$defs/effortTarget" },
         "loadStrategy": { "$ref": "#/$defs/loadStrategy" },
         "iterations": {
+          "description": "One-based overrides. Semantic validation requires each iteration value to be unique and within a finite parent container's bounds.",
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/iterationPrescription" }
