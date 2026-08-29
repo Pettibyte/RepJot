@@ -236,6 +236,24 @@ describe('Google authorization continuity', () => {
     expect(browser.localStorage.getItem(PENDING_KEY)).toBeNull();
   });
 
+  test('a duplicate Silk callback reuses the previously validated token', () => {
+    const browser = installBrowser();
+    beginDriveAuthorization('client.apps.googleusercontent.com', {
+      remember: false,
+      returnRoute: '#/settings'
+    });
+    const hash = responseHash(authorizationState(browser.assignedUrl));
+    browser.location.hash = hash;
+    const first = consumeDriveAuthorizationResponse();
+
+    browser.location.hash = hash;
+    const duplicate = consumeDriveAuthorizationResponse();
+
+    expect(duplicate?.accessToken).toBe(first?.accessToken);
+    expect(browser.replacedUrl).toBe('/#/settings');
+    expect(authorizationDiagnosticText()).toContain('authorization_duplicate_response_reused');
+  });
+
   test('an unremembered response uses session storage', () => {
     const browser = installBrowser('#/history');
     beginDriveAuthorization('client.apps.googleusercontent.com', {

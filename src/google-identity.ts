@@ -8,15 +8,22 @@ export const GOOGLE_ACCOUNT_CONNECTIONS_URL = 'https://myaccount.google.com/conn
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
 const OAUTH_PENDING_KEY = 'repjot.oauth.pending.v1';
+const OAUTH_RESPONSE_RECEIPT_KEY = 'repjot.oauth.response-receipt.v1';
 const SESSION_TOKEN_KEY = 'repjot.oauth.token.v1';
 const LOCAL_TOKEN_KEY = 'repjot.oauth.token.v1';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const PENDING_AUTHORIZATION_LIFETIME_MS = 30 * 60 * 1000;
+const RESPONSE_RECEIPT_LIFETIME_MS = 60 * 1000;
 const REVOCATION_CHECK_INTERVAL_MS = 500;
 
 interface PendingAuthorization {
   state: string;
   remember: boolean;
+  returnRoute: string;
+  expiresAtUtc: string;
+}
+
+interface AuthorizationResponseReceipt {
   returnRoute: string;
   expiresAtUtc: string;
 }
@@ -93,6 +100,17 @@ function isPendingAuthorization(value: unknown): value is PendingAuthorization {
   );
 }
 
+function isAuthorizationResponseReceipt(value: unknown): value is AuthorizationResponseReceipt {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<AuthorizationResponseReceipt>;
+  return (
+    typeof candidate.returnRoute === 'string' &&
+    safeReturnRoute(candidate.returnRoute) === candidate.returnRoute &&
+    typeof candidate.expiresAtUtc === 'string' &&
+    Number.isFinite(Date.parse(candidate.expiresAtUtc))
+  );
+}
+
 function isDriveAuthorization(value: unknown): value is DriveAuthorization {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<DriveAuthorization>;
@@ -122,7 +140,29 @@ function clearPendingAuthorization(): void {
   window.localStorage.removeItem(OAUTH_PENDING_KEY);
 }
 
+function clearAuthorizationResponseReceipt(): void {
+  window.localStorage.removeItem(OAUTH_RESPONSE_RECEIPT_KEY);
+}
+
+function saveAuthorizationResponseReceipt(returnRoute: string, nowMs: number): void {
+  const receipt: AuthorizationResponseReceipt = {
+    returnRoute: safeReturnRoute(returnRoute),
+    expiresAtUtc: new Date(nowMs + RESPONSE_RECEIPT_LIFETIME_MS).toISOString()
+  };
+  window.localStorage.setItem(OAUTH_RESPONSE_RECEIPT_KEY, JSON.stringify(receipt));
+}
+
+function currentAuthorizationResponseReceipt(nowMs: number): AuthorizationResponseReceipt | null {
+  const value = parseJson(window.localStorage.getItem(OAUTH_RESPONSE_RECEIPT_KEY));
+  if (!isAuthorizationResponseReceipt(value) || Date.parse(value.expiresAtUtc) <= nowMs) {
+    clearAuthorizationResponseReceipt();
+    return null;
+  }
+  return value;
+}
+
 function clearExpiredPendingAuthorization(nowMs: number): void {
+  currentAuthorizationResponseReceipt(nowMs);
   const stores = [window.sessionStorage, window.localStorage];
   stores.forEach((storage: Storage) => {
     const value = parseJson(storage.getItem(OAUTH_PENDING_KEY));
@@ -130,6 +170,20 @@ function clearExpiredPendingAuthorization(nowMs: number): void {
       storage.removeItem(OAUTH_PENDING_KEY);
     }
   });
+}
+
+function authorizationMatchingToken(accessToken: string | null, nowMs: number): DriveAuthorization | null {
+  if (accessToken === null || accessToken.length === 0) return null;
+  const candidates = [
+    parseJson(window.sessionStorage.getItem(SESSION_TOKEN_KEY)),
+    parseJson(window.localStorage.getItem(LOCAL_TOKEN_KEY))
+  ];
+  const match = candidates.find((candidate: unknown) => (
+    isDriveAuthorization(candidate) &&
+    Date.parse(candidate.expiresAtUtc) > nowMs &&
+    candidate.accessToken === accessToken
+  ));
+  return isDriveAuthorization(match) ? match : null;
 }
 
 function clearStoredTokens(): void {
@@ -159,6 +213,7 @@ export function beginDriveAuthorization(clientId: string, options: BeginAuthoriz
   });
   clearStoredTokens();
   clearPendingAuthorization();
+  clearAuthorizationResponseReceipt();
   const pending: PendingAuthorization = {
     state: createState(),
     remember: options.remember,
@@ -209,6 +264,13 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
     candidate.state === returnedState
   )) ?? null;
   const oauthError = parameters.get('error');
+  const duplicateAuthorization = pending === null && oauthError === null
+    ? authorizationMatchingToken(parameters.get('access_token'), nowMs)
+    : null;
+  const responseReceipt = duplicateAuthorization === null
+    ? null
+    : currentAuthorizationResponseReceipt(nowMs);
+  const duplicateResponse = duplicateAuthorization !== null && responseReceipt !== null;
   recordAuthDiagnostic('authorization_response', {
     hasToken: parameters.has('access_token'),
     errorKind: oauthError === null ? 'none' : oauthError === 'access_denied' ? 'access_denied' : 'other',
@@ -216,9 +278,13 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
     sessionPending: sessionPending !== null,
     localPending: localPending !== null,
     pendingCopiesEqual: sessionPending !== null && localPending !== null && sessionPending.state === localPending.state,
-    stateMatched: pending !== null
+    stateMatched: pending !== null,
+    duplicateResponse
   });
-  const returnRoute = sessionPending?.returnRoute ?? localPending?.returnRoute ?? '#/';
+  const returnRoute = sessionPending?.returnRoute ??
+    localPending?.returnRoute ??
+    responseReceipt?.returnRoute ??
+    '#/';
   clearPendingAuthorization();
   replaceFragment(returnRoute);
 
@@ -230,6 +296,10 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
   }
 
   if (pending === null) {
+    if (duplicateResponse && duplicateAuthorization !== null) {
+      recordAuthDiagnostic('authorization_duplicate_response_reused');
+      return duplicateAuthorization;
+    }
     throw new Error('Google authorization returned an invalid state. Try again.');
   }
 
@@ -269,6 +339,7 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
     remember: pending.remember
   };
   saveAuthorization(authorization);
+  saveAuthorizationResponseReceipt(returnRoute, nowMs);
   return authorization;
 }
 
@@ -312,6 +383,7 @@ export function bindDriveAuthorization(
 
 export function clearDriveAuthorization(): void {
   clearPendingAuthorization();
+  clearAuthorizationResponseReceipt();
   clearStoredTokens();
 }
 

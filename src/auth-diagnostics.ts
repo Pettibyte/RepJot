@@ -9,6 +9,7 @@ const ALLOWED_CONTEXT_KEYS = new Set([
   'authorizationStillCurrent',
   'busy',
   'configured',
+  'duplicateResponse',
   'errorKind',
   'expired',
   'expiresInSeconds',

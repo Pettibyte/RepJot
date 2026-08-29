@@ -179,6 +179,20 @@ The downloaded file uses Markdown formatting and the `text/plain` content type. 
 
 Capture separate files for **Switch Google account** and sign-out followed by sign-in.
 
+## Duplicate callback finding
+
+The three captured logs show the same Silk sequence:
+
+1. The first callback matches the OAuth state and saves the validated token.
+2. The first application instance starts account binding or private-data loading.
+3. Silk executes the callback document again with the original fragment.
+4. The second execution finds no pending state because the first execution removed it.
+5. A manual reload restores the valid token that the first execution saved.
+
+The updated bootstrap treats this callback as an idempotent duplicate for 60 seconds. It accepts only the exact token that the first callback validated and stored. The short-lived receipt contains only the return route and expiry.
+
+Retest account switching and sign-out followed by sign-in without a manual reload.
+
 ## Exit decision
 
 Phase 0 passes only when all test cases pass on the physical Kindle.
