@@ -380,18 +380,22 @@ A new account namespace has no active-session index. Its first successful reconc
 ### Redirect authorization lifecycle
 
 1. The anonymous landing page shows `Remember me on this device` and `Continue with Google`.
-2. The action creates a secure random OAuth `state` and stores that state plus the remember choice in `sessionStorage`.
+2. The action creates a secure random OAuth `state`. It stores the short-lived request record in both `sessionStorage` and `localStorage`.
 3. The adapter replaces the current page with Google's authorization endpoint. It requests `response_type=token` and only `drive.appdata`.
 4. Google returns to the exact registered REP JOT redirect URI. No popup, tab, or secondary window is involved.
-5. Bootstrap reads the URL fragment, validates `state`, validates the returned scope, and calculates `expiresAtUtc` from `expires_in`.
-6. Bootstrap removes the fragment with `history.replaceState` before it loads private data or writes diagnostics.
-7. An unchecked remember choice stores the token record in `sessionStorage`. A checked choice stores it in `localStorage`.
-8. The Drive adapter calls `about.get(fields=user(permissionId,displayName))` and binds the token to that account namespace.
-9. Startup can restore an unexpired token, but it repeats Drive account binding before it opens cached private data.
-10. Expiry or a `401` erases the token and enters `reauthorization_required` without deleting pending edits.
-11. Reauthorization repeats the same full-page redirect and returns to the prior hash route.
+5. Bootstrap reads the URL fragment. It requires matching, unexpired `state` before it accepts a token.
+6. A denial contains no token. Bootstrap can report that denial when Silk omits `state` from the error response.
+7. Bootstrap validates the returned scope and calculates `expiresAtUtc` from `expires_in`.
+8. Bootstrap removes the fragment with `history.replaceState` before it loads private data or writes diagnostics.
+9. An unchecked remember choice stores the token record in `sessionStorage`. A checked choice stores it in `localStorage`.
+10. The Drive adapter calls `about.get(fields=user(permissionId,displayName))` and binds the token to that account namespace.
+11. Startup can restore an unexpired token, but it repeats Drive account binding before it opens cached private data.
+12. Expiry or a `401` erases the token and enters `reauthorization_required` without deleting pending edits.
+13. Reauthorization repeats the same full-page redirect and returns to the prior hash route.
 
-The token record contains only the access token, `expiresAtUtc`, granted scope, and bound account key. The temporary OAuth state record holds the return route and remember choice, then bootstrap deletes it. The application never stores a refresh token because the implicit flow does not return one.
+The token record contains only the access token, `expiresAtUtc`, granted scope, and bound account key. The temporary OAuth state record contains no token. It holds the return route and remember choice for 30 minutes. Bootstrap deletes both copies after a response. The application never stores a refresh token because the implicit flow does not return one.
+
+The Phase 0 prototype keeps at most 120 authorization events in `localStorage`. These events contain only allowlisted booleans, status codes, timing values, and lifecycle categories. They contain no token, OAuth state value, account name, or Google identifier. The user can download Markdown-formatted diagnostics as a `.txt` file with the `text/plain` content type. The production IndexedDB diagnostic ring replaces this temporary log in Phase 3.
 
 `Remember me on this device` can prevent repeat authorization only during the access token lifetime, typically about one hour. It cannot create durable sign-in across days. After expiry, REP JOT needs another full-page authorization redirect. A retained Google session and grant can reduce prompts, but that behavior requires a separate Kindle prototype before automation.
 
@@ -403,7 +407,7 @@ The GIS token model is backlog only. Its popup-only dialog behavior is incompati
 
 **Sign out from REP JOT** clears the token from memory and both browser storage locations. It does not revoke the grant, clear the account cache, or sign the person out of Google globally.
 
-**Disconnect Google Account** is a separate Settings action. It first calls Google's documented token-revocation endpoint through its JSONP mode. The adapter adds one transient same-page script and removes it after the callback. It does not open another window. This integration needs a physical-Kindle prototype because the endpoint does not support CORS. On confirmed revocation, REP JOT signs out and clears the selected local account namespace.
+**Disconnect Google Account** is a separate Settings action. It posts the token to Google's documented revocation endpoint with a transient hidden form and iframe. This method opens no popup, tab, or visible secondary window. The adapter then calls Drive until Google rejects the token with `401`, which confirms revocation. It removes the form and iframe after confirmation or timeout. On confirmed revocation, REP JOT signs out and clears the selected local account namespace.
 
 If in-app revocation cannot report success, REP JOT keeps the local account data until the user confirms the fallback action. It links to Google Account connections, where the user can remove access. The UI must not claim that disconnect signs the user out of Google globally.
 
@@ -824,7 +828,7 @@ Local SVG paths must pass schema and semantic allowlists. The build sanitizes bu
 
 ### Browser policy and supply chain
 
-A static CSP meta policy permits same-origin assets, top-level Google authorization, the exact Google JSONP revocation origin, and Drive HTTPS connections. It permits no GIS script, authorization frame, or popup in release one. The release process generates hashes for required inline loader code. `frame-ancestors` and some reporting features need HTTP headers, so GitHub Pages limits full CSP enforcement. This is risk R-06.
+A static CSP meta policy permits same-origin assets, top-level Google authorization, the exact Google form-revocation origin, its transient hidden frame, and Drive HTTPS connections. It permits no GIS script, authorization frame, or popup in release one. The release process generates hashes for required inline loader code. `frame-ancestors` and some reporting features need HTTP headers, so GitHub Pages limits full CSP enforcement. This is risk R-06.
 
 The build remains hosting-portable: it produces relative static assets, a `CNAME`, and no GitHub runtime API dependency. If required security headers exceed GitHub Pages capabilities, deployment can move to a low-cost static origin such as Cloudflare R2 with a Worker or S3 with CloudFront. That move changes deployment and DNS, not application architecture or canonical data.
 
@@ -968,7 +972,7 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 - **Dependencies:** Existing authorization prototype and production OAuth test project.
 - **Deliverables:** Recorded Kindle results for checked and unchecked remember choices, expiry, denial, account switch, sign out, revocation, and fallback.
 - **Exit criteria:** No flow opens a popup, tab, or secondary window. Token cleanup and account rebinding pass after reload and expiry.
-- **Principal risks:** The revocation endpoint lacks CORS, and remembered access lasts only until token expiry.
+- **Principal risks:** The revocation endpoint lacks CORS, Silk can replace session storage during redirects, and remembered access lasts only until token expiry.
 
 ### Phase 1: Contracts and build validation
 

@@ -17,6 +17,8 @@ The prototype has these controls:
 - **Sign out from REP JOT** clears both token stores without revoking the grant.
 - **Disconnect Google Account** posts a hidden form to Google and waits for Drive to reject the revoked token.
 - **Open Google Account connections** is available when Google does not confirm revocation.
+- **Download authorization log (.txt)** saves the bounded local authorization log as `text/plain`.
+- **Clear authorization log** removes the local authorization log.
 
 REP JOT removes the OAuth fragment before it mounts the Svelte application. It then binds the token with Drive `about.get`.
 
@@ -141,16 +143,16 @@ Expected result: REP JOT does not report a successful disconnect. REP JOT keeps 
 | Tester               | Not recorded |
 
 
-| Case                       | Result          | Observed behavior                                                                                                                                                                                                              | Evidence reference |
-| -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
-| P0-01 Unchecked continuity | PASS            | PASS                                                                                                                                                                                                                           |                    |
-| P0-02 Checked continuity   | PASS            | PASS                                                                                                                                                                                                                           |                    |
-| P0-03 Expiry               | Not run         |                                                                                                                                                                                                                                |                    |
-| P0-04 Denial               | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: PASS with "Error: Google authorization was denied. No access token was saved." |                    |
-| P0-05 Account switch       | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: works as expected.                                                            |                    |
-| P0-06 Sign out             | PASS            | PASS                                                                                                                                                                                                                           |                    |
-| P0-07 Revocation           | FAIL            | "Error: REP JOT could not contact the Google revocation service. Use the Google Account connections page." Same behavior on Kindle and PC desktop browser.                                                                     |                    |
-| P0-08 Revocation fallback  | FAIL            | "Error: REP JOT could not contact the Google revocation service. Use the Google Account connections page."                                                                                                                     |                    |
+| Case                       | Result          | Observed behavior                                                                                                                                                   | Evidence reference |
+| -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| P0-01 Unchecked continuity | PASS            | PASS                                                                                                                                                                |                    |
+| P0-02 Checked continuity   | PASS            | PASS                                                                                                                                                                |                    |
+| P0-03 Expiry               | Not run         |                                                                                                                                                                     |                    |
+| P0-04 Denial               | PASS            | On Kindle, "Error: Google authorization was denied. No access token was saved."                                                                                     |                    |
+| P0-05 Account switch       | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: works as expected. |                    |
+| P0-06 Sign out             | PASS            | PASS                                                                                                                                                                |                    |
+| P0-07 Revocation           | PASS            | PASS                                                                                                                                                                |                    |
+| P0-08 Revocation fallback  | PASS            | PASS                                                                                                                                                                |                    |
 
 ## Retest scope
 
@@ -162,6 +164,20 @@ The first hardware run found two implementation problems. The next build contain
 - REP JOT confirms revocation only after Drive rejects the token with `401`.
 
 Run P0-03 through P0-08 again. Keep the first-run observations in the results table.
+
+## Capture a repeated-authorization failure
+
+1. Open REP JOT on the Kindle.
+2. Select **Clear authorization log**.
+3. Authorize REP JOT.
+4. Reproduce one failed switch or sign-out and sign-in sequence.
+5. Reload REP JOT after the failure.
+6. Select **Download authorization log (.txt)**.
+7. Save the `.txt` file before you start a different scenario.
+
+The downloaded file uses Markdown formatting and the `text/plain` content type. It excludes tokens, OAuth state values, account names, and Google identifiers.
+
+Capture separate files for **Switch Google account** and sign-out followed by sign-in.
 
 ## Exit decision
 
