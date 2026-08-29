@@ -1,5 +1,7 @@
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_REVOCATION_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
+const DRIVE_AUTHORIZATION_CHECK_ENDPOINT =
+  'https://www.googleapis.com/drive/v3/about?fields=user(permissionId)';
 export const GOOGLE_ACCOUNT_CONNECTIONS_URL = 'https://myaccount.google.com/connections';
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
@@ -7,11 +9,14 @@ const OAUTH_PENDING_KEY = 'repjot.oauth.pending.v1';
 const SESSION_TOKEN_KEY = 'repjot.oauth.token.v1';
 const LOCAL_TOKEN_KEY = 'repjot.oauth.token.v1';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const PENDING_AUTHORIZATION_LIFETIME_MS = 30 * 60 * 1000;
+const REVOCATION_CHECK_INTERVAL_MS = 500;
 
 interface PendingAuthorization {
   state: string;
   remember: boolean;
   returnRoute: string;
+  expiresAtUtc: string;
 }
 
 export interface DriveAuthorization {
@@ -80,7 +85,9 @@ function isPendingAuthorization(value: unknown): value is PendingAuthorization {
     typeof candidate.state === 'string' &&
     /^[0-9a-f]{48}$/.test(candidate.state) &&
     typeof candidate.remember === 'boolean' &&
-    typeof candidate.returnRoute === 'string'
+    typeof candidate.returnRoute === 'string' &&
+    typeof candidate.expiresAtUtc === 'string' &&
+    Number.isFinite(Date.parse(candidate.expiresAtUtc))
   );
 }
 
@@ -108,6 +115,21 @@ function tokenStorage(remember: boolean): Storage {
   return remember ? window.localStorage : window.sessionStorage;
 }
 
+function clearPendingAuthorization(): void {
+  window.sessionStorage.removeItem(OAUTH_PENDING_KEY);
+  window.localStorage.removeItem(OAUTH_PENDING_KEY);
+}
+
+function clearExpiredPendingAuthorization(nowMs: number): void {
+  const stores = [window.sessionStorage, window.localStorage];
+  stores.forEach((storage: Storage) => {
+    const value = parseJson(storage.getItem(OAUTH_PENDING_KEY));
+    if (!isPendingAuthorization(value) || Date.parse(value.expiresAtUtc) <= nowMs) {
+      storage.removeItem(OAUTH_PENDING_KEY);
+    }
+  });
+}
+
 function clearStoredTokens(): void {
   window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
   window.localStorage.removeItem(LOCAL_TOKEN_KEY);
@@ -123,12 +145,18 @@ function saveAuthorization(authorization: DriveAuthorization): void {
 
 export function beginDriveAuthorization(clientId: string, options: BeginAuthorizationOptions): void {
   clearStoredTokens();
+  clearPendingAuthorization();
   const pending: PendingAuthorization = {
     state: createState(),
     remember: options.remember,
-    returnRoute: safeReturnRoute(options.returnRoute)
+    returnRoute: safeReturnRoute(options.returnRoute),
+    expiresAtUtc: new Date(Date.now() + PENDING_AUTHORIZATION_LIFETIME_MS).toISOString()
   };
-  window.sessionStorage.setItem(OAUTH_PENDING_KEY, JSON.stringify(pending));
+  const serializedPending = JSON.stringify(pending);
+  window.sessionStorage.setItem(OAUTH_PENDING_KEY, serializedPending);
+  // Silk can replace sessionStorage during denial and account-selection redirects.
+  // Keep the non-secret, short-lived request state in both browser stores.
+  window.localStorage.setItem(OAUTH_PENDING_KEY, serializedPending);
 
   const parameters = new URLSearchParams();
   parameters.set('client_id', clientId);
@@ -148,14 +176,20 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
   const parameters = new URLSearchParams(window.location.hash.slice(1));
   if (!parameters.has('access_token') && !parameters.has('error')) return null;
 
-  const pendingValue = parseJson(window.sessionStorage.getItem(OAUTH_PENDING_KEY));
-  const pending = isPendingAuthorization(pendingValue) ? pendingValue : null;
-  window.sessionStorage.removeItem(OAUTH_PENDING_KEY);
-  replaceFragment(pending === null ? '#/' : pending.returnRoute);
-
-  if (pending === null || parameters.get('state') !== pending.state) {
-    throw new Error('Google authorization returned an invalid state. Try again.');
-  }
+  const sessionValue = parseJson(window.sessionStorage.getItem(OAUTH_PENDING_KEY));
+  const localValue = parseJson(window.localStorage.getItem(OAUTH_PENDING_KEY));
+  const sessionPending = isPendingAuthorization(sessionValue) ? sessionValue : null;
+  const localPending = isPendingAuthorization(localValue) ? localValue : null;
+  const returnedState = parameters.get('state');
+  const pendingCandidates = [sessionPending, localPending];
+  const pending = pendingCandidates.find((candidate: PendingAuthorization | null) => (
+    candidate !== null &&
+    Date.parse(candidate.expiresAtUtc) > nowMs &&
+    candidate.state === returnedState
+  )) ?? null;
+  const returnRoute = sessionPending?.returnRoute ?? localPending?.returnRoute ?? '#/';
+  clearPendingAuthorization();
+  replaceFragment(returnRoute);
 
   const oauthError = parameters.get('error');
   if (oauthError !== null) {
@@ -163,6 +197,10 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
       throw new Error('Google authorization was denied. No access token was saved.');
     }
     throw new Error('Google authorization did not complete. Try again.');
+  }
+
+  if (pending === null) {
+    throw new Error('Google authorization returned an invalid state. Try again.');
   }
 
   const accessToken = parameters.get('access_token');
@@ -201,6 +239,7 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
 }
 
 export function restoreDriveAuthorization(nowMs: number = Date.now()): DriveAuthorization | null {
+  clearExpiredPendingAuthorization(nowMs);
   const sessionValue = parseJson(window.sessionStorage.getItem(SESSION_TOKEN_KEY));
   const localValue = parseJson(window.localStorage.getItem(LOCAL_TOKEN_KEY));
   const sessionAuthorization = isDriveAuthorization(sessionValue) ? sessionValue : null;
@@ -231,7 +270,7 @@ export function bindDriveAuthorization(
 }
 
 export function clearDriveAuthorization(): void {
-  window.sessionStorage.removeItem(OAUTH_PENDING_KEY);
+  clearPendingAuthorization();
   clearStoredTokens();
 }
 
@@ -241,41 +280,72 @@ export function millisecondsUntilExpiry(authorization: DriveAuthorization, nowMs
 
 export function revokeDriveAuthorization(accessToken: string, timeoutMs = 15_000): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const callbackName = `__repjotRevoke_${createState()}`;
-    const script = document.createElement('script');
+    const frameName = `repjot_revoke_${createState()}`;
+    const frame = document.createElement('iframe');
+    const form = document.createElement('form');
+    const tokenField = document.createElement('input');
+    const deadline = Date.now() + timeoutMs;
+    let checkTimer: number | null = null;
     let finished = false;
+
+    frame.name = frameName;
+    frame.title = 'Google authorization revocation';
+    frame.style.display = 'none';
+    form.method = 'post';
+    form.action = GOOGLE_REVOCATION_ENDPOINT;
+    form.target = frameName;
+    form.style.display = 'none';
+    tokenField.type = 'hidden';
+    tokenField.name = 'token';
+    tokenField.value = accessToken;
+    form.appendChild(tokenField);
 
     const cleanup = (): void => {
       if (finished) return;
       finished = true;
-      window.clearTimeout(timeout);
-      script.remove();
-      delete (window as unknown as Record<string, unknown>)[callbackName];
+      if (checkTimer !== null) window.clearTimeout(checkTimer);
+      form.remove();
+      frame.remove();
     };
-    const fail = (message: string): void => {
+    const fail = (): void => {
       cleanup();
-      reject(new Error(message));
+      reject(new Error('Google did not confirm that it revoked access.'));
     };
-
-    (window as unknown as Record<string, unknown>)[callbackName] = (response: unknown): void => {
-      if (typeof response === 'object' && response !== null && 'error' in response) {
-        fail('Google did not confirm that it revoked access.');
+    const scheduleCheck = (): void => {
+      if (finished) return;
+      if (Date.now() >= deadline) {
+        fail();
         return;
       }
-      cleanup();
-      resolve();
+      const delay = Math.min(REVOCATION_CHECK_INTERVAL_MS, deadline - Date.now());
+      checkTimer = window.setTimeout(checkAuthorization, delay);
+    };
+    const checkAuthorization = async (): Promise<void> => {
+      if (finished) return;
+      try {
+        const response = await fetch(DRIVE_AUTHORIZATION_CHECK_ENDPOINT, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store'
+        });
+        if (response.status === 401) {
+          cleanup();
+          resolve();
+          return;
+        }
+      } catch {
+        // A network error cannot prove that Google revoked the token.
+      }
+      scheduleCheck();
     };
 
-    const timeout = window.setTimeout(() => {
-      fail('Google did not confirm that it revoked access.');
-    }, timeoutMs);
-    script.onerror = () => {
-      fail('REP JOT could not contact the Google revocation service.');
-    };
-
-    const parameters = new URLSearchParams({ token: accessToken, callback: callbackName });
-    script.src = `${GOOGLE_REVOCATION_ENDPOINT}?${parameters.toString()}`;
-    script.async = true;
-    document.head.appendChild(script);
+    document.body.appendChild(frame);
+    document.body.appendChild(form);
+    try {
+      form.submit();
+      form.remove();
+      scheduleCheck();
+    } catch {
+      fail();
+    }
   });
 }

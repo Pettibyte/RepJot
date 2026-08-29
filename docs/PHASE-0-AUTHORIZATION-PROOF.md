@@ -10,11 +10,12 @@ Do not mark Phase 0 as complete until the results table contains one physical Ki
 
 The prototype has these controls:
 
-- **Remember me on this device** selects `localStorage` instead of `sessionStorage`.
+- **Remember me on this device** selects `localStorage` instead of `sessionStorage` for the token.
 - **Continue with Google** starts a full-page redirect in the current window.
+- The short-lived OAuth request state uses both stores because Silk can replace `sessionStorage` during some redirects.
 - **Switch Google account** clears the token and requests the Google account selector.
 - **Sign out from REP JOT** clears both token stores without revoking the grant.
-- **Disconnect Google Account** uses the same-page Google revocation endpoint.
+- **Disconnect Google Account** posts a hidden form to Google and waits for Drive to reject the revoked token.
 - **Open Google Account connections** is available when Google does not confirm revocation.
 
 REP JOT removes the OAuth fragment before it mounts the Svelte application. It then binds the token with Drive `about.get`.
@@ -127,27 +128,40 @@ Expected result: REP JOT does not report a successful disconnect. REP JOT keeps 
 
 ## Results
 
-| Field | Value |
-| --- | --- |
-| Commit | Not recorded |
-| Test URL | Not recorded |
-| Kindle model | Not recorded |
-| Silk version | Not recorded |
-| Test account project | Not recorded |
-| Started at UTC | Not recorded |
-| Finished at UTC | Not recorded |
-| Tester | Not recorded |
 
-| Case | Result | Observed behavior | Evidence reference |
-| --- | --- | --- | --- |
-| P0-01 Unchecked continuity | Not run |  |  |
-| P0-02 Checked continuity | Not run |  |  |
-| P0-03 Expiry | Not run |  |  |
-| P0-04 Denial | Not run |  |  |
-| P0-05 Account switch | Not run |  |  |
-| P0-06 Sign out | Not run |  |  |
-| P0-07 Revocation | Not run |  |  |
-| P0-08 Revocation fallback | Not run |  |  |
+| Field                | Value        |
+| -------------------- | ------------ |
+| Commit               | Not recorded |
+| Test URL             | Not recorded |
+| Kindle model         | Not recorded |
+| Silk version         | Not recorded |
+| Test account project | Not recorded |
+| Started at UTC       | Not recorded |
+| Finished at UTC      | Not recorded |
+| Tester               | Not recorded |
+
+
+| Case                       | Result          | Observed behavior                                                                                                                                                                                                              | Evidence reference |
+| -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| P0-01 Unchecked continuity | PASS            | PASS                                                                                                                                                                                                                           |                    |
+| P0-02 Checked continuity   | PASS            | PASS                                                                                                                                                                                                                           |                    |
+| P0-03 Expiry               | Not run         |                                                                                                                                                                                                                                |                    |
+| P0-04 Denial               | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: PASS with "Error: Google authorization was denied. No access token was saved." |                    |
+| P0-05 Account switch       | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: works as expected.                                                            |                    |
+| P0-06 Sign out             | PASS            | PASS                                                                                                                                                                                                                           |                    |
+| P0-07 Revocation           | FAIL            | "Error: REP JOT could not contact the Google revocation service. Use the Google Account connections page." Same behavior on Kindle and PC desktop browser.                                                                     |                    |
+| P0-08 Revocation fallback  | FAIL            | "Error: REP JOT could not contact the Google revocation service. Use the Google Account connections page."                                                                                                                     |                    |
+
+## Retest scope
+
+The first hardware run found two implementation problems. The next build contains these changes:
+
+- The request state has a short-lived `localStorage` fallback for the affected Silk redirects.
+- A denial without returned `state` reports denial but cannot accept a token.
+- Revocation uses Google's documented form submission instead of a script request.
+- REP JOT confirms revocation only after Drive rejects the token with `401`.
+
+Run P0-03 through P0-08 again. Keep the first-run observations in the results table.
 
 ## Exit decision
 

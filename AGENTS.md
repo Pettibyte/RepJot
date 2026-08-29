@@ -24,4 +24,4 @@ The user-facing brand name is ALWAYS stylized in all caps -- "REP JOT" -- though
 
 ## Product and UI Requirements
 
-See `specs/requirements.md`
+See `docs/REQUIREMENTS.md`

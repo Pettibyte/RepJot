@@ -237,6 +237,7 @@ Mockup screenshots and HTML in `../design/**` are guidance only. `../design/DESI
 ### Settings
 
 - Settings contains Data Export and Exercise Units sections.
+- Settings contains text "For non-commercial use only. For commercial licensing, Contact Pettibyte LLC."
 - Settings provides a confirmed, irreversible `Delete All User Data` action.
 - Delete All User Data removes recognized files from `appDataFolder` and clears the account's local cache and pending edits.
 - Settings provides a separate `Disconnect Google Account` action.

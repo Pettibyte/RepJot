@@ -12,7 +12,7 @@ The architecture uses a small set of browser and build-time modules. It adds no 
 
 The architecture uses this authority order:
 
-1. `AGENTS.md` and `specs/requirements.md`
+1. `AGENTS.md` and `docs/REQUIREMENTS.md`
 2. `specs/rep-jot-json-schema-spec.md`, `specs/storage-and-lookup.md`, and `specs/schema-versioning.md`
 3. `design/DESIGN.md`
 4. The four Draft 2020-12 schemas in `schemas/`

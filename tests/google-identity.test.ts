@@ -9,7 +9,9 @@ import {
   revokeDriveAuthorization
 } from '../src/google-identity';
 
+const PENDING_KEY = 'repjot.oauth.pending.v1';
 const TOKEN_KEY = 'repjot.oauth.token.v1';
+const originalFetch = globalThis.fetch;
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -39,6 +41,21 @@ class MemoryStorage implements Storage {
   }
 }
 
+interface FakeElement {
+  action: string;
+  method: string;
+  name: string;
+  target: string;
+  title: string;
+  type: string;
+  value: string;
+  style: { display: string };
+  children: FakeElement[];
+  appendChild: (child: FakeElement) => void;
+  remove: () => void;
+  submit: () => void;
+}
+
 interface FakeBrowser {
   assignedUrl: string;
   replacedUrl: string;
@@ -51,9 +68,8 @@ interface FakeBrowser {
   };
   sessionStorage: MemoryStorage;
   localStorage: MemoryStorage;
-  scriptUrl: string;
-  scriptRemoved: boolean;
-  scriptOnError: (() => void) | null;
+  submittedForm: FakeElement | null;
+  removedElementCount: number;
 }
 
 function installBrowser(route = '#/settings'): FakeBrowser {
@@ -73,9 +89,8 @@ function installBrowser(route = '#/settings'): FakeBrowser {
     },
     sessionStorage,
     localStorage,
-    scriptUrl: '',
-    scriptRemoved: false,
-    scriptOnError: null
+    submittedForm: null,
+    removedElementCount: 0
   };
 
   Object.defineProperty(globalThis, 'window', {
@@ -99,23 +114,30 @@ function installBrowser(route = '#/settings'): FakeBrowser {
     configurable: true,
     value: {
       title: 'REP JOT',
-      createElement: (): Record<string, unknown> => {
-        const script: Record<string, unknown> = {
-          src: '',
-          async: false,
-          onerror: null,
+      createElement: (): FakeElement => {
+        const element: FakeElement = {
+          action: '',
+          method: '',
+          name: '',
+          target: '',
+          title: '',
+          type: '',
+          value: '',
+          style: { display: '' },
+          children: [],
+          appendChild: (child: FakeElement): void => {
+            element.children.push(child);
+          },
           remove: (): void => {
-            browser.scriptRemoved = true;
+            browser.removedElementCount += 1;
+          },
+          submit: (): void => {
+            browser.submittedForm = element;
           }
         };
-        return script;
+        return element;
       },
-      head: {
-        appendChild: (script: { src: string; onerror: (() => void) | null }): void => {
-          browser.scriptUrl = script.src;
-          browser.scriptOnError = script.onerror;
-        }
-      }
+      body: { appendChild: (): void => undefined }
     }
   });
   return browser;
@@ -125,13 +147,14 @@ function authorizationState(url: string): string {
   return new URL(url).searchParams.get('state') ?? '';
 }
 
-function responseHash(state: string, additions = ''): string {
-  return `#access_token=test-token&token_type=Bearer&expires_in=3600&scope=${encodeURIComponent(DRIVE_SCOPE)}&state=${state}${additions}`;
+function responseHash(state: string): string {
+  return `#access_token=test-token&token_type=Bearer&expires_in=3600&scope=${encodeURIComponent(DRIVE_SCOPE)}&state=${state}`;
 }
 
 afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
   delete (globalThis as { document?: unknown }).document;
+  globalThis.fetch = originalFetch;
 });
 
 describe('Google authorization continuity', () => {
@@ -146,11 +169,12 @@ describe('Google authorization continuity', () => {
     expect(new URL(browser.assignedUrl).searchParams.get('scope')).toBe(DRIVE_SCOPE);
     browser.location.hash = responseHash(authorizationState(browser.assignedUrl));
 
-    const authorization = consumeDriveAuthorizationResponse(Date.parse('2026-01-01T00:00:00Z'));
-    expect(authorization?.expiresAtUtc).toBe('2026-01-01T01:00:00.000Z');
+    const authorization = consumeDriveAuthorizationResponse(Date.now());
+    expect(Date.parse(authorization?.expiresAtUtc ?? '') - Date.now()).toBeGreaterThan(3_599_000);
     expect(browser.replacedUrl).toBe('/#/settings');
     expect(browser.localStorage.getItem(TOKEN_KEY)).not.toBeNull();
     expect(browser.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(browser.localStorage.getItem(PENDING_KEY)).toBeNull();
   });
 
   test('an unremembered response uses session storage', () => {
@@ -161,19 +185,46 @@ describe('Google authorization continuity', () => {
     });
     browser.location.hash = responseHash(authorizationState(browser.assignedUrl));
 
-    const authorization = consumeDriveAuthorizationResponse(1_000);
+    const authorization = consumeDriveAuthorizationResponse();
     expect(authorization?.remember).toBe(false);
     expect(browser.sessionStorage.getItem(TOKEN_KEY)).not.toBeNull();
     expect(browser.localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
+  test('local request state survives lost Kindle session storage', () => {
+    const browser = installBrowser();
+    beginDriveAuthorization('client.apps.googleusercontent.com', {
+      remember: false,
+      returnRoute: '#/settings',
+      selectAccount: true
+    });
+    browser.sessionStorage.removeItem(PENDING_KEY);
+    browser.location.hash = responseHash(authorizationState(browser.assignedUrl));
+
+    expect(consumeDriveAuthorizationResponse()?.accessToken).toBe('test-token');
+    expect(browser.replacedUrl).toBe('/#/settings');
+  });
+
+  test('an abandoned request state is removed after its short lifetime', () => {
+    const browser = installBrowser();
+    beginDriveAuthorization('client.apps.googleusercontent.com', { remember: false });
+    const pending = JSON.parse(browser.localStorage.getItem(PENDING_KEY) ?? '{}') as {
+      expiresAtUtc?: string;
+    };
+
+    restoreDriveAuthorization(Date.parse(pending.expiresAtUtc ?? ''));
+    expect(browser.sessionStorage.getItem(PENDING_KEY)).toBeNull();
+    expect(browser.localStorage.getItem(PENDING_KEY)).toBeNull();
   });
 
   test('expiry removes all token copies', () => {
     const browser = installBrowser();
     beginDriveAuthorization('client.apps.googleusercontent.com', { remember: true });
     browser.location.hash = responseHash(authorizationState(browser.assignedUrl));
-    consumeDriveAuthorizationResponse(1_000);
+    const authorization = consumeDriveAuthorizationResponse();
+    const expiresAtMs = Date.parse(authorization?.expiresAtUtc ?? '');
 
-    expect(restoreDriveAuthorization(3_601_000)).toBeNull();
+    expect(restoreDriveAuthorization(expiresAtMs)).toBeNull();
     expect(browser.localStorage.getItem(TOKEN_KEY)).toBeNull();
     expect(browser.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
   });
@@ -182,28 +233,37 @@ describe('Google authorization continuity', () => {
     const browser = installBrowser();
     beginDriveAuthorization('client.apps.googleusercontent.com', { remember: false });
     browser.location.hash = responseHash(authorizationState(browser.assignedUrl));
-    const authorization = consumeDriveAuthorizationResponse(1_000);
+    const authorization = consumeDriveAuthorizationResponse();
     if (authorization === null) throw new Error('Expected an authorization response.');
 
     bindDriveAuthorization(authorization, 'permission-id');
-    expect(restoreDriveAuthorization(2_000)?.accountKey).toBe('permission-id');
+    expect(restoreDriveAuthorization()?.accountKey).toBe('permission-id');
     clearDriveAuthorization();
     expect(browser.sessionStorage.length).toBe(0);
     expect(browser.localStorage.length).toBe(0);
   });
 
-  test('denial clears the fragment and saves no token', () => {
+  test('denial without returned state clears the fragment and saves no token', () => {
     const browser = installBrowser();
     beginDriveAuthorization('client.apps.googleusercontent.com', {
       remember: true,
       returnRoute: '#/settings'
     });
-    const state = authorizationState(browser.assignedUrl);
-    browser.location.hash = `#error=access_denied&state=${state}`;
+    browser.location.hash = '#error=access_denied';
 
     expect(() => consumeDriveAuthorizationResponse()).toThrow('Google authorization was denied');
     expect(browser.replacedUrl).toBe('/#/settings');
     expect(browser.localStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(browser.localStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  test('a successful response with invalid state is rejected', () => {
+    const browser = installBrowser();
+    beginDriveAuthorization('client.apps.googleusercontent.com', { remember: false });
+    browser.location.hash = responseHash('wrong-state');
+
+    expect(() => consumeDriveAuthorizationResponse()).toThrow('invalid state');
+    expect(browser.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
   });
 
   test('a response without the Drive app-data scope is rejected', () => {
@@ -216,30 +276,26 @@ describe('Google authorization continuity', () => {
     expect(browser.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
   });
 
-  test('revocation uses a transient same-page JSONP script', async () => {
+  test('revocation posts a hidden form and confirms token rejection', async () => {
     const browser = installBrowser();
-    const revocation = revokeDriveAuthorization('test-token', 1_000);
-    const revocationUrl = new URL(browser.scriptUrl);
-    const callbackName = revocationUrl.searchParams.get('callback');
+    globalThis.fetch = (async (): Promise<Response> => new Response(null, { status: 401 })) as typeof fetch;
 
-    expect(revocationUrl.origin + revocationUrl.pathname).toBe('https://oauth2.googleapis.com/revoke');
-    expect(revocationUrl.searchParams.get('token')).toBe('test-token');
-    expect(callbackName).not.toBeNull();
-    if (callbackName === null) throw new Error('Expected a JSONP callback.');
-    const callback = (window as unknown as Record<string, (response: unknown) => void>)[callbackName];
-    callback({});
-
+    const revocation = revokeDriveAuthorization('test-token', 10);
+    expect(browser.submittedForm?.method).toBe('post');
+    expect(browser.submittedForm?.action).toBe('https://oauth2.googleapis.com/revoke');
+    expect(browser.submittedForm?.target.startsWith('repjot_revoke_')).toBe(true);
+    expect(browser.submittedForm?.children[0]?.name).toBe('token');
+    expect(browser.submittedForm?.children[0]?.value).toBe('test-token');
     await expect(revocation).resolves.toBeUndefined();
-    expect(browser.scriptRemoved).toBe(true);
-    expect((window as unknown as Record<string, unknown>)[callbackName]).toBeUndefined();
+    expect(browser.removedElementCount).toBeGreaterThanOrEqual(2);
   });
 
-  test('a revocation script error keeps the fallback path available', async () => {
-    const browser = installBrowser();
-    const revocation = revokeDriveAuthorization('test-token', 1_000);
-    browser.scriptOnError?.();
+  test('an unconfirmed revocation keeps the fallback path available', async () => {
+    installBrowser();
+    globalThis.fetch = (async (): Promise<Response> => new Response('{}', { status: 200 })) as typeof fetch;
 
-    await expect(revocation).rejects.toThrow('could not contact the Google revocation service');
-    expect(browser.scriptRemoved).toBe(true);
+    await expect(revokeDriveAuthorization('test-token', 5)).rejects.toThrow(
+      'Google did not confirm that it revoked access'
+    );
   });
 });
