@@ -1,11 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import {
-    clearAuthorizationDiagnostics,
-    downloadAuthorizationDiagnostics,
-    recordAuthDiagnostic
-  } from './auth-diagnostics';
-  import {
     createHelloWorld,
     deleteHelloWorld,
     DriveHttpError,
@@ -57,7 +52,6 @@
   }
 
   function signOutWithStatus(message: string): void {
-    recordAuthDiagnostic('authorization_cleared');
     clearExpiryTimer();
     clearDriveAuthorization();
     authorization = null;
@@ -80,10 +74,6 @@
   }
 
   function handleDriveError(error: unknown): void {
-    recordAuthDiagnostic('drive_error', {
-      errorKind: error instanceof DriveHttpError ? 'http' : 'other',
-      httpStatus: error instanceof DriveHttpError ? error.status : null
-    });
     if (error instanceof DriveHttpError && error.status === 401) {
       signOutWithStatus('Google Drive access expired. Authorize REP JOT again.');
       return;
@@ -105,10 +95,6 @@
   }
 
   async function bindAccountAndLoad(current: DriveAuthorization): Promise<void> {
-    recordAuthDiagnostic('account_binding_begin', {
-      remember: current.remember,
-      previouslyBound: current.accountKey !== undefined
-    });
     authorization = current;
     remember = current.remember;
     startExpiryTimer(current);
@@ -117,15 +103,11 @@
     status = 'Binding this token to its Google Drive account…';
     try {
       const driveAccount = await getDriveAccount(current.accessToken);
-      recordAuthDiagnostic('account_binding_response', {
-        authorizationStillCurrent: authorization === current
-      });
       if (authorization !== current) return;
       authorization = bindDriveAuthorization(current, driveAccount.accountKey);
       account = driveAccount;
       status = 'Loading the prototype document from Google Drive…';
       await loadFromDrive(current.accessToken);
-      recordAuthDiagnostic('private_data_load_completed');
     } catch (error: unknown) {
       handleDriveError(error);
     } finally {
@@ -134,14 +116,7 @@
   }
 
   function authorize(selectAccount = false): void {
-    if (!configured || busy) {
-      recordAuthDiagnostic('authorization_action_ignored', {
-        configured,
-        busy,
-        selectAccount
-      });
-      return;
-    }
+    if (!configured || busy) return;
     busy = true;
     status = 'Redirecting to Google in this window…';
     try {
@@ -157,7 +132,6 @@
   }
 
   function switchAccount(): void {
-    recordAuthDiagnostic('switch_account_selected');
     clearDriveAuthorization();
     account = null;
     authorization = null;
@@ -166,7 +140,6 @@
   }
 
   function signOut(): void {
-    recordAuthDiagnostic('sign_out_selected');
     signOutWithStatus('Signed out from REP JOT. The Google grant remains active.');
   }
 
@@ -176,10 +149,6 @@
   }
 
   onMount(() => {
-    recordAuthDiagnostic('app_mounted', {
-      hasInitialAuthorization: initialAuthorization !== null,
-      hasInitialError: initialAuthorizationError !== null
-    });
     if (initialAuthorizationError !== null) {
       status = `Error: ${initialAuthorizationError}`;
       return;
@@ -230,7 +199,6 @@
 
   async function disconnect(): Promise<void> {
     if (authorization === null || account === null) return;
-    recordAuthDiagnostic('disconnect_selected');
     busy = true;
     showRevocationFallback = false;
     status = 'Asking Google to revoke REP JOT access…';
@@ -245,15 +213,6 @@
     }
   }
 
-  function downloadAuthLog(): void {
-    downloadAuthorizationDiagnostics();
-    status = 'Downloaded the authorization diagnostic log as a text file.';
-  }
-
-  function clearAuthLog(): void {
-    clearAuthorizationDiagnostics();
-    status = 'Cleared the authorization diagnostic log.';
-  }
 </script>
 
 <main>
@@ -313,11 +272,6 @@
       <a href={GOOGLE_ACCOUNT_CONNECTIONS_URL}>Open Google Account connections</a>.
     </p>
   {/if}
-
-  <h2>Authorization diagnostics</h2>
-  <p>The local log excludes tokens, OAuth state values, account names, and Google account identifiers.</p>
-  <button type="button" onclick={downloadAuthLog}>Download authorization log (.txt)</button>
-  <button type="button" onclick={clearAuthLog}>Clear authorization log</button>
 
   <p><a href="./capabilities.html">Run browser capability report</a></p>
 </main>

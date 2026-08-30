@@ -519,7 +519,6 @@
         support('Networking and security', 'URLSearchParams', typeof window.URLSearchParams === 'function');
         support('Networking and security', 'History replaceState', !!(window.history && typeof window.history.replaceState === 'function'), 'OAuth response parameters can be removed without reloading', 'history.replaceState is absent');
         support('Networking and security', 'Web Crypto', !!(window.crypto && window.crypto.subtle), 'crypto.subtle is present', 'crypto.subtle is absent (often requires a secure context)');
-        add('Networking and security', 'PKCE S256 challenge', 'Limited', 'Pending automatic SHA-256 and Base64URL execution check');
         var randomValuesWork = false;
         if (window.crypto && typeof window.crypto.getRandomValues === 'function' && typeof window.Uint8Array === 'function') {
           try {
@@ -533,8 +532,6 @@
         support('Networking and security', 'Random UUID', !!(window.crypto && window.crypto.randomUUID), 'crypto.randomUUID is present (used when creating a Drive file)', 'crypto.randomUUID is absent');
         support('Networking and security', 'Popup API', typeof window.open === 'function', 'window.open is exposed; popup policy still requires a user gesture', 'window.open is absent');
         add('Networking and security', 'Popupless Google authorization', 'Limited', 'Not automatically testable without initiating authorization; no window will be opened by this report');
-        add('Networking and security', 'Google Identity script', 'Limited', 'Pending automatic Google Identity Services check (contacts accounts.google.com)');
-        add('Networking and security', 'Google token client initialization', 'Limited', 'Pending automatic token-client initialization check');
         support('Networking and security', 'Credential Management API', !!(nav.credentials && typeof nav.credentials.get === 'function'));
 
         support('Files and sharing', 'Blob', typeof window.Blob === 'function');
@@ -691,53 +688,8 @@
         });
       }
 
-      function testPkceS256(done) {
-        if (!(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function' && typeof window.TextEncoder === 'function' && typeof window.Uint8Array === 'function' && typeof window.btoa === 'function')) {
-          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', 'SHA-256, TextEncoder, typed arrays, or Base64 encoding is absent');
-          done();
-          return;
-        }
-
-        var completed = false;
-        var timer = window.setTimeout(function () {
-          if (completed) return;
-          completed = true;
-          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', 'SHA-256 did not complete within 10 seconds');
-          done();
-        }, 10000);
-
-        try {
-          var encoded = new TextEncoder().encode('repjot-pkce-capability-probe');
-          window.crypto.subtle.digest('SHA-256', encoded).then(function (digest) {
-            if (completed) return;
-            completed = true;
-            window.clearTimeout(timer);
-            var bytes = new Uint8Array(digest);
-            var binary = '';
-            var index;
-            for (index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
-            var challenge = window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            var valid = bytes.length === 32 && challenge.length === 43 && !/[^A-Za-z0-9_-]/.test(challenge);
-            update('Networking and security', 'PKCE S256 challenge', valid ? 'Supported' : 'Error', valid ? 'SHA-256 digest and unpadded Base64URL encoding succeeded' : 'The generated S256 challenge had an unexpected shape');
-            done();
-          }, function (error) {
-            if (completed) return;
-            completed = true;
-            window.clearTimeout(timer);
-            update('Networking and security', 'PKCE S256 challenge', 'Unsupported', errorText(error));
-            done();
-          });
-        } catch (error) {
-          if (completed) return;
-          completed = true;
-          window.clearTimeout(timer);
-          update('Networking and security', 'PKCE S256 challenge', 'Unsupported', errorText(error));
-          done();
-        }
-      }
-
       function runAsynchronousTests(done) {
-        var remaining = 5;
+        var remaining = 3;
         function next() {
           remaining -= 1;
           if (remaining === 0) done();
@@ -745,8 +697,6 @@
         testIndexedDb(next);
         testExternalScripts(next);
         testSameOriginFetch(next);
-        testGoogleOAuthLibrary(next);
-        testPkceS256(next);
       }
 
       function counts() {
@@ -901,68 +851,6 @@
         } else {
           fallbackCopy(value);
         }
-      }
-      function testGoogleOAuthLibrary(done) {
-        function googleApiAvailable() {
-          return !!(window.google && window.google.accounts && window.google.accounts.oauth2 && typeof window.google.accounts.oauth2.initTokenClient === 'function');
-        }
-        function finishGoogleTest() {
-          done();
-        }
-        function inspectGoogleApi() {
-          if (!googleApiAvailable()) {
-            update('Networking and security', 'Google Identity script', 'Error', 'The script load event fired, but google.accounts.oauth2.initTokenClient is absent');
-            update('Networking and security', 'Google token client initialization', 'Unsupported', 'The OAuth API is absent');
-            finishGoogleTest();
-            return;
-          }
-
-          update('Networking and security', 'Google Identity script', 'Supported', 'Google Identity Services loaded and exposes initTokenClient');
-          try {
-            var client = window.google.accounts.oauth2.initTokenClient({
-              client_id: '123456789-repjot-capability-probe.apps.googleusercontent.com',
-              scope: 'https://www.googleapis.com/auth/drive.appdata',
-              callback: function () { },
-              error_callback: function () { }
-            });
-            update('Networking and security', 'Google token client initialization', client && typeof client.requestAccessToken === 'function' ? 'Supported' : 'Error', client && typeof client.requestAccessToken === 'function' ? 'initTokenClient returned a token client; requestAccessToken was not called' : 'initTokenClient returned an unexpected value');
-          } catch (error) {
-            update('Networking and security', 'Google token client initialization', 'Unsupported', errorText(error));
-          }
-          finishGoogleTest();
-        }
-
-        if (googleApiAvailable()) {
-          inspectGoogleApi();
-          return;
-        }
-
-        var script = document.createElement('script');
-        var completed = false;
-        var timer = window.setTimeout(function () {
-          if (completed) return;
-          completed = true;
-          update('Networking and security', 'Google Identity script', 'Unsupported', 'Google Identity Services did not load and execute within 10 seconds');
-          update('Networking and security', 'Google token client initialization', 'Unsupported', 'The Google Identity script did not load');
-          finishGoogleTest();
-        }, 10000);
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.onload = function () {
-          if (completed) return;
-          completed = true;
-          window.clearTimeout(timer);
-          inspectGoogleApi();
-        };
-        script.onerror = function () {
-          if (completed) return;
-          completed = true;
-          window.clearTimeout(timer);
-          update('Networking and security', 'Google Identity script', 'Unsupported', 'The Google Identity Services script emitted an error event');
-          update('Networking and security', 'Google token client initialization', 'Unsupported', 'The Google Identity script did not load');
-          finishGoogleTest();
-        };
-        document.head.appendChild(script);
       }
       function finishRun() {
         finishedAt = new Date();

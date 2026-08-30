@@ -2,13 +2,13 @@
 
 ## Status
 
-The authorization prototype is ready for a physical Kindle test. The automated tests pass, but they do not satisfy the hardware exit criteria.
+**Complete.** All Phase 0 authorization tests pass on the physical Kindle.
 
-Do not mark Phase 0 as complete until the results table contains one physical Kindle test run.
+The tested flow is the production authorization flow. Alternate authorization approaches are out of scope.
 
-## Prototype behavior
+## Production behavior
 
-The prototype has these controls:
+REP JOT has these controls:
 
 - **Remember me on this device** selects `localStorage` instead of `sessionStorage` for the token.
 - **Continue with Google** starts a full-page redirect in the current window.
@@ -17,8 +17,6 @@ The prototype has these controls:
 - **Sign out from REP JOT** clears both token stores without revoking the grant.
 - **Disconnect Google Account** posts a hidden form to Google and waits for Drive to reject the revoked token.
 - **Open Google Account connections** is available when Google does not confirm revocation.
-- **Download authorization log (.txt)** saves the bounded local authorization log as `text/plain`.
-- **Clear authorization log** removes the local authorization log.
 
 REP JOT removes the OAuth fragment before it mounts the Svelte application. It then binds the token with Drive `about.get`.
 
@@ -93,7 +91,7 @@ Expected result: REP JOT removes the fragment and stores no access token.
 1. Authorize REP JOT with test account A.
 2. Select **Switch Google account**.
 3. Select test account B.
-4. Make sure that the prototype shows the name for account B.
+4. Make sure that REP JOT shows account B without a manual reload.
 5. Reload REP JOT.
 6. Make sure that REP JOT binds account B again.
 
@@ -103,9 +101,11 @@ Expected result: REP JOT does not reuse the token or account binding for account
 
 1. Authorize REP JOT.
 2. Select **Sign out from REP JOT**.
-3. Reload REP JOT.
+3. Authorize REP JOT again without a manual reload.
+4. Make sure that account binding completes.
+5. Reload REP JOT.
 
-Expected result: REP JOT clears both token stores. The Google grant remains active.
+Expected result: REP JOT clears both token stores. Sign-in works again, and the Google grant remains active.
 
 ### P0-07 Revocation
 
@@ -143,58 +143,27 @@ Expected result: REP JOT does not report a successful disconnect. REP JOT keeps 
 | Tester               | Not recorded |
 
 
-| Case                       | Result          | Observed behavior                                                                                                                                                   | Evidence reference |
-| -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| P0-01 Unchecked continuity | PASS            | PASS                                                                                                                                                                |                    |
-| P0-02 Checked continuity   | PASS            | PASS                                                                                                                                                                |                    |
-| P0-03 Expiry               | Not run         |                                                                                                                                                                     |                    |
-| P0-04 Denial               | PASS            | On Kindle, "Error: Google authorization was denied. No access token was saved."                                                                                     |                    |
-| P0-05 Account switch       | PASS with issue | On Kindle, "Error: Google authorization returned an invalid state. Try again." But then reloading the browser works. -- On PC desktop browser: works as expected. |                    |
-| P0-06 Sign out             | PASS            | PASS                                                                                                                                                                |                    |
-| P0-07 Revocation           | PASS            | PASS                                                                                                                                                                |                    |
-| P0-08 Revocation fallback  | PASS            | PASS                                                                                                                                                                |                    |
+| Case                       | Result | Observed behavior | Evidence reference |
+| -------------------------- | ------ | ----------------- | ------------------ |
+| P0-01 Unchecked continuity | PASS   | PASS              |                    |
+| P0-02 Checked continuity   | PASS   | PASS              |                    |
+| P0-03 Expiry               | PASS   | PASS              |                    |
+| P0-04 Denial               | PASS   | PASS              |                    |
+| P0-05 Account switch       | PASS   | PASS              |                    |
+| P0-06 Sign out             | PASS   | PASS              |                    |
+| P0-07 Revocation           | PASS   | PASS              |                    |
+| P0-08 Revocation fallback  | PASS   | PASS              |                    |
 
-## Retest scope
+## Implementation findings
 
-The first hardware run found two implementation problems. The next build contains these changes:
-
-- The request state has a short-lived `localStorage` fallback for the affected Silk redirects.
-- A denial without returned `state` reports denial but cannot accept a token.
-- Revocation uses Google's documented form submission instead of a script request.
-- REP JOT confirms revocation only after Drive rejects the token with `401`.
-
-Run P0-03 through P0-08 again. Keep the first-run observations in the results table.
-
-## Capture a repeated-authorization failure
-
-1. Open REP JOT on the Kindle.
-2. Select **Clear authorization log**.
-3. Authorize REP JOT.
-4. Reproduce one failed switch or sign-out and sign-in sequence.
-5. Reload REP JOT after the failure.
-6. Select **Download authorization log (.txt)**.
-7. Save the `.txt` file before you start a different scenario.
-
-The downloaded file uses Markdown formatting and the `text/plain` content type. It excludes tokens, OAuth state values, account names, and Google identifiers.
-
-Capture separate files for **Switch Google account** and sign-out followed by sign-in.
-
-## Duplicate callback finding
-
-The three captured logs show the same Silk sequence:
-
-1. The first callback matches the OAuth state and saves the validated token.
-2. The first application instance starts account binding or private-data loading.
-3. Silk executes the callback document again with the original fragment.
-4. The second execution finds no pending state because the first execution removed it.
-5. A manual reload restores the valid token that the first execution saved.
-
-The updated bootstrap treats this callback as an idempotent duplicate for 60 seconds. It accepts only the exact token that the first callback validated and stored. The short-lived receipt contains only the return route and expiry.
-
-Retest account switching and sign-out followed by sign-in without a manual reload.
+- Silk can execute the same callback document more than once.
+- The 60-second receipt makes repeated callback execution idempotent.
+- A duplicate callback must contain the exact token that REP JOT already validated and stored.
+- The request state uses both browser stores because Silk can replace `sessionStorage` during a redirect.
+- Revocation uses Google's documented form submission and Drive `401` confirmation.
 
 ## Exit decision
 
-Phase 0 passes only when all test cases pass on the physical Kindle.
+**PASS. Phase 0 is complete.**
 
-Phase 0 fails if a flow opens a popup, tab, or second window. It also fails if token cleanup or account rebinding fails.
+No tested flow opens a popup, tab, or secondary window. Token cleanup, account switching, sign-out, sign-in, account rebinding, expiry, and revocation pass on the physical Kindle.

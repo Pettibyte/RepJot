@@ -1,5 +1,3 @@
-import { recordAuthDiagnostic } from './auth-diagnostics';
-
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_REVOCATION_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const DRIVE_AUTHORIZATION_CHECK_ENDPOINT =
@@ -193,24 +191,13 @@ function clearStoredTokens(): void {
 
 function saveAuthorization(authorization: DriveAuthorization): void {
   clearStoredTokens();
-  const store = authorization.remember ? 'local' : 'session';
   tokenStorage(authorization.remember).setItem(
     authorization.remember ? LOCAL_TOKEN_KEY : SESSION_TOKEN_KEY,
     JSON.stringify(authorization)
   );
-  recordAuthDiagnostic('token_saved', {
-    store,
-    accountBound: authorization.accountKey !== undefined
-  });
 }
 
 export function beginDriveAuthorization(clientId: string, options: BeginAuthorizationOptions): void {
-  recordAuthDiagnostic('authorization_begin', {
-    remember: options.remember,
-    selectAccount: options.selectAccount === true,
-    hadSessionPending: window.sessionStorage.getItem(OAUTH_PENDING_KEY) !== null,
-    hadLocalPending: window.localStorage.getItem(OAUTH_PENDING_KEY) !== null
-  });
   clearStoredTokens();
   clearPendingAuthorization();
   clearAuthorizationResponseReceipt();
@@ -225,12 +212,6 @@ export function beginDriveAuthorization(clientId: string, options: BeginAuthoriz
   // Silk can replace sessionStorage during denial and account-selection redirects.
   // Keep the non-secret, short-lived request state in both browser stores.
   window.localStorage.setItem(OAUTH_PENDING_KEY, serializedPending);
-  recordAuthDiagnostic('authorization_pending_saved', {
-    sessionPending: window.sessionStorage.getItem(OAUTH_PENDING_KEY) !== null,
-    localPending: window.localStorage.getItem(OAUTH_PENDING_KEY) !== null,
-    lifetimeSeconds: PENDING_AUTHORIZATION_LIFETIME_MS / 1000
-  });
-
   const parameters = new URLSearchParams();
   parameters.set('client_id', clientId);
   parameters.set('redirect_uri', redirectUri());
@@ -240,9 +221,6 @@ export function beginDriveAuthorization(clientId: string, options: BeginAuthoriz
   parameters.set('state', pending.state);
   if (options.selectAccount === true) parameters.set('prompt', 'select_account');
 
-  recordAuthDiagnostic('authorization_redirect', {
-    selectAccount: options.selectAccount === true
-  });
   window.location.replace(`${GOOGLE_AUTHORIZATION_ENDPOINT}?${parameters.toString()}`);
 }
 
@@ -271,16 +249,6 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
     ? null
     : currentAuthorizationResponseReceipt(nowMs);
   const duplicateResponse = duplicateAuthorization !== null && responseReceipt !== null;
-  recordAuthDiagnostic('authorization_response', {
-    hasToken: parameters.has('access_token'),
-    errorKind: oauthError === null ? 'none' : oauthError === 'access_denied' ? 'access_denied' : 'other',
-    returnedState: returnedState !== null,
-    sessionPending: sessionPending !== null,
-    localPending: localPending !== null,
-    pendingCopiesEqual: sessionPending !== null && localPending !== null && sessionPending.state === localPending.state,
-    stateMatched: pending !== null,
-    duplicateResponse
-  });
   const returnRoute = sessionPending?.returnRoute ??
     localPending?.returnRoute ??
     responseReceipt?.returnRoute ??
@@ -297,7 +265,6 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
 
   if (pending === null) {
     if (duplicateResponse && duplicateAuthorization !== null) {
-      recordAuthDiagnostic('authorization_duplicate_response_reused');
       return duplicateAuthorization;
     }
     throw new Error('Google authorization returned an invalid state. Try again.');
@@ -328,10 +295,6 @@ export function consumeDriveAuthorizationResponse(nowMs: number = Date.now()): D
     throw new Error('Google authorization returned an unsupported token type.');
   }
 
-  recordAuthDiagnostic('authorization_response_validated', {
-    remember: pending.remember,
-    expiresInSeconds
-  });
   const authorization: DriveAuthorization = {
     accessToken,
     expiresAtUtc: new Date(expiresAtMs).toISOString(),
@@ -354,12 +317,6 @@ export function restoreDriveAuthorization(nowMs: number = Date.now()): DriveAuth
   if (localAuthorization === null) window.localStorage.removeItem(LOCAL_TOKEN_KEY);
 
   const authorization = sessionAuthorization === null ? localAuthorization : sessionAuthorization;
-  recordAuthDiagnostic('authorization_restore', {
-    sessionTokenValid: sessionAuthorization !== null,
-    localTokenValid: localAuthorization !== null,
-    tokenFound: authorization !== null,
-    expired: authorization !== null && Date.parse(authorization.expiresAtUtc) <= nowMs
-  });
   if (authorization === null) return null;
   if (Date.parse(authorization.expiresAtUtc) <= nowMs) {
     clearDriveAuthorization();
@@ -376,7 +333,6 @@ export function bindDriveAuthorization(
 ): DriveAuthorization {
   if (accountKey.length === 0) throw new Error('Google Drive did not return an account key.');
   const bound: DriveAuthorization = { ...authorization, accountKey };
-  recordAuthDiagnostic('account_binding_saved');
   saveAuthorization(bound);
   return bound;
 }
@@ -392,7 +348,6 @@ export function millisecondsUntilExpiry(authorization: DriveAuthorization, nowMs
 }
 
 export function revokeDriveAuthorization(accessToken: string, timeoutMs = 15_000): Promise<void> {
-  recordAuthDiagnostic('revocation_begin', { timeoutMs });
   return new Promise<void>((resolve, reject) => {
     const frameName = `repjot_revoke_${createState()}`;
     const frame = document.createElement('iframe');
@@ -422,7 +377,6 @@ export function revokeDriveAuthorization(accessToken: string, timeoutMs = 15_000
       frame.remove();
     };
     const fail = (): void => {
-      recordAuthDiagnostic('revocation_unconfirmed');
       cleanup();
       reject(new Error('Google did not confirm that it revoked access.'));
     };
@@ -443,7 +397,6 @@ export function revokeDriveAuthorization(accessToken: string, timeoutMs = 15_000
           cache: 'no-store'
         });
         if (response.status === 401) {
-          recordAuthDiagnostic('revocation_confirmed');
           cleanup();
           resolve();
           return;
@@ -458,7 +411,6 @@ export function revokeDriveAuthorization(accessToken: string, timeoutMs = 15_000
     document.body.appendChild(form);
     try {
       form.submit();
-      recordAuthDiagnostic('revocation_form_submitted');
       form.remove();
       scheduleCheck();
     } catch {

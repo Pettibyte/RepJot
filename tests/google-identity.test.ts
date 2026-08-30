@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  authorizationDiagnosticText,
-  downloadAuthorizationDiagnostics,
-  recordAuthDiagnostic
-} from '../src/auth-diagnostics';
-import {
   DRIVE_SCOPE,
   beginDriveAuthorization,
   bindDriveAuthorization,
@@ -48,8 +43,6 @@ class MemoryStorage implements Storage {
 
 interface FakeElement {
   action: string;
-  download: string;
-  href: string;
   method: string;
   name: string;
   target: string;
@@ -59,7 +52,6 @@ interface FakeElement {
   style: { display: string };
   children: FakeElement[];
   appendChild: (child: FakeElement) => void;
-  click: () => void;
   remove: () => void;
   submit: () => void;
 }
@@ -77,9 +69,6 @@ interface FakeBrowser {
   sessionStorage: MemoryStorage;
   localStorage: MemoryStorage;
   submittedForm: FakeElement | null;
-  downloadedFileName: string;
-  downloadedBlobType: string;
-  downloadClicked: boolean;
   removedElementCount: number;
 }
 
@@ -101,9 +90,6 @@ function installBrowser(route = '#/settings'): FakeBrowser {
     sessionStorage,
     localStorage,
     submittedForm: null,
-    downloadedFileName: '',
-    downloadedBlobType: '',
-    downloadClicked: false,
     removedElementCount: 0
   };
 
@@ -120,21 +106,8 @@ function installBrowser(route = '#/settings'): FakeBrowser {
           browser.location.hash = url.includes('#') ? url.slice(url.indexOf('#')) : '';
         }
       },
-      setTimeout: (callback: () => void, delay: number): ReturnType<typeof setTimeout> | number => {
-        if (delay === 1_000) {
-          callback();
-          return 0;
-        }
-        return globalThis.setTimeout(callback, delay);
-      },
-      clearTimeout: globalThis.clearTimeout,
-      URL: {
-        createObjectURL: (blob: Blob): string => {
-          browser.downloadedBlobType = blob.type;
-          return 'blob:diagnostic';
-        },
-        revokeObjectURL: (): void => undefined
-      }
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout
     }
   });
   Object.defineProperty(globalThis, 'document', {
@@ -144,8 +117,6 @@ function installBrowser(route = '#/settings'): FakeBrowser {
       createElement: (): FakeElement => {
         const element: FakeElement = {
           action: '',
-          download: '',
-          href: '',
           method: '',
           name: '',
           target: '',
@@ -156,10 +127,6 @@ function installBrowser(route = '#/settings'): FakeBrowser {
           children: [],
           appendChild: (child: FakeElement): void => {
             element.children.push(child);
-          },
-          click: (): void => {
-            browser.downloadClicked = true;
-            browser.downloadedFileName = element.download;
           },
           remove: (): void => {
             browser.removedElementCount += 1;
@@ -188,32 +155,6 @@ afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
   delete (globalThis as { document?: unknown }).document;
   globalThis.fetch = originalFetch;
-});
-
-describe('authorization diagnostics', () => {
-  test('the text export uses Markdown and removes unapproved context', () => {
-    installBrowser();
-    recordAuthDiagnostic('test_event', {
-      errorKind: 'invalid_state',
-      accessToken: 'secret-token',
-      oauthState: 'secret-state'
-    });
-
-    const text = authorizationDiagnosticText('2026-01-01T00:00:00Z');
-    expect(text.startsWith('# REP JOT authorization diagnostics')).toBe(true);
-    expect(text).toContain('invalid_state');
-    expect(text).not.toContain('secret-token');
-    expect(text).not.toContain('secret-state');
-  });
-
-  test('the Kindle download uses a txt name and text/plain content type', () => {
-    const browser = installBrowser();
-    downloadAuthorizationDiagnostics();
-
-    expect(browser.downloadClicked).toBe(true);
-    expect(browser.downloadedFileName.endsWith('.txt')).toBe(true);
-    expect(browser.downloadedBlobType).toBe('text/plain;charset=utf-8');
-  });
 });
 
 describe('Google authorization continuity', () => {
@@ -251,7 +192,6 @@ describe('Google authorization continuity', () => {
 
     expect(duplicate?.accessToken).toBe(first?.accessToken);
     expect(browser.replacedUrl).toBe('/#/settings');
-    expect(authorizationDiagnosticText()).toContain('authorization_duplicate_response_reused');
   });
 
   test('an unremembered response uses session storage', () => {

@@ -12,11 +12,11 @@
 
 | Result | Count |
 | --- | ---: |
-| Supported | 94 |
+| Supported | 92 |
 | Unsupported | 10 |
 | Limited or Error | 1 |
 | Informational | 14 |
-| Total checks displayed | 119 |
+| Total checks displayed | 117 |
 
 ## Browser and display
 
@@ -144,8 +144,6 @@
 | Random UUID | Unsupported | crypto.randomUUID is absent |
 | Popup API | Supported | window.open is exposed; popup policy still requires a user gesture |
 | Popupless Google authorization | Limited | Not automatically testable without initiating authorization; no window will be opened by this report |
-| Google Identity script | Supported | Google Identity Services loaded and exposes initTokenClient |
-| Google token client initialization | Supported | initTokenClient returned a token client; requestAccessToken was not called |
 | Credential Management API | Supported | Available |
 | Same-origin fetch request | Supported | Fetch, Response.ok, and Response.text succeeded |
 

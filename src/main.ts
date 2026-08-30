@@ -1,7 +1,6 @@
 import './polyfills';
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { recordAuthDiagnostic } from './auth-diagnostics';
 import {
   consumeDriveAuthorizationResponse,
   type DriveAuthorization
@@ -17,18 +16,8 @@ let initialAuthorization: DriveAuthorization | null = null;
 let initialAuthorizationError: string | null = null;
 try {
   initialAuthorization = consumeDriveAuthorizationResponse();
-  recordAuthDiagnostic('bootstrap_authorization_result', {
-    responseConsumed: initialAuthorization !== null
-  });
 } catch (error: unknown) {
   initialAuthorizationError = error instanceof Error ? error.message : String(error);
-  recordAuthDiagnostic('bootstrap_authorization_error', {
-    errorKind: initialAuthorizationError.includes('invalid state')
-      ? 'invalid_state'
-      : initialAuthorizationError.includes('denied')
-        ? 'denied'
-        : 'other'
-  });
 }
 
 mount(App, {

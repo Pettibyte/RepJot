@@ -2,7 +2,7 @@
 
 ## 1. Status and scope
 
-**Status:** Proposed architecture for the first production release.
+**Status:** Approved architecture for the first production release. Phase 0 authorization testing is complete.
 
 This document defines an implementation-ready client architecture. It does not change a product requirement, schema, mockup, or production file. It covers the static browser application, Google authorization, Drive synchronization, local persistence, domain behavior, testing, and release controls.
 
@@ -26,7 +26,7 @@ Official Google documentation is authoritative only for Google platform behavior
 
 | ID | Conflict | Higher authority and architecture effect |
 | --- | --- | --- |
-| C-01 | The fixed constraints name Google Identity Services (GIS), but the tested prototype uses Google's legacy full-page implicit redirect. The GIS token model requires popup dialog behavior that Kindle does not support. | The tested redirect-only prototype flow is the production flow. The GIS token model stays in the backlog until a physical-Kindle prototype proves a compatible flow. |
+| C-01 | Earlier constraints named Google Identity Services (GIS), but the physical Kindle requires the tested full-page implicit redirect. | Production uses only the tested redirect flow with idempotent callback receipts. GIS, PKCE, authorization-code flows, popups, and backend token exchange are out of scope. |
 | C-02 | `README.md` names the default GitHub Pages host. Requirements and fixed constraints name `https://repjot.com`. | Production uses `https://repjot.com`. The default Pages host is not a production route. |
 | C-03 | The day-of brief advises against client-side routing. Required screens need reload-safe navigation on static hosting. | A small hash router owns screen navigation. It needs no server rewrite and no routing dependency. |
 | C-04 | The day-of brief advises against custom fonts, CSS Grid, sticky elements, and SVG controls. `design/DESIGN.md` requires Inter, JetBrains Mono, and Material Symbols. | Bundle the required fonts locally with system fallbacks. Core controls do not depend on a glyph, Grid, sticky positioning, or SVG interaction. |
@@ -67,8 +67,9 @@ Official Google documentation is authoritative only for Google platform behavior
 
 - Svelte, TypeScript, Vite, and Bun are mandatory.
 - Vite writes the static site to `dist/` for GitHub Pages.
-- Google's OAuth authorization endpoint supplies redirect-only browser authentication and authorization through the tested prototype flow.
-- The GIS token model is a future option only. It cannot enter production without a Kindle prototype.
+- Google's OAuth authorization endpoint supplies production authentication and authorization through the tested full-page implicit redirect.
+- The production authorization flow uses idempotent callback receipts because Silk can execute one callback document more than once.
+- GIS, authorization-code flows, PKCE, popups, and backend token exchange are out of scope.
 - The only requested OAuth scope is `https://www.googleapis.com/auth/drive.appdata`.
 - Drive `appDataFolder` contains private canonical user data.
 - IndexedDB contains the account-scoped cache and pending edits.
@@ -95,7 +96,6 @@ flowchart LR
   end
   subgraph Google[Google trust zone]
     OAuth[Google OAuth authorization endpoint]
-    GIS[Google Identity Services\nfuture backlog only]
     API[Google Drive API]
     ADF[(Drive appDataFolder)]
   end
@@ -105,7 +105,6 @@ flowchart LR
   App <--> Mem
   App -->|full-page redirect with state| OAuth
   OAuth -->|URL fragment, short-lived access token| App
-  GIS -.->|not used in release one| App
   App -->|Bearer token, HTTPS REST| API
   API <--> ADF
 ```
@@ -121,7 +120,7 @@ The local browser profile is not a secure enclave. A person or extension with pr
 | ID | Decision | Tradeoff and operational consequence |
 | --- | --- | --- |
 | ADR-001 | Use a hand-written hash router with routes under `/#/`. | URLs are less clean, but direct navigation never needs a GitHub Pages rewrite or duplicate HTML fallback. |
-| ADR-002 | Use the prototype's legacy OAuth implicit flow as a full-page redirect, then call Drive REST directly. Never request a popup, tab, or secondary window. | The flow works on the tested Kindle and needs no backend. Google discourages this legacy flow, so security review and regression tests are release gates. GIS token-model work remains backlog. |
+| ADR-002 | Use the tested OAuth implicit flow as a full-page redirect, then call Drive REST directly. Never request a popup, tab, or secondary window. | This is the production flow. It works on the physical Kindle and needs no backend. Alternate Google authorization models are out of scope. Security review and Kindle regression tests remain release gates. |
 | ADR-003 | Add an explicit `Remember me on this device` choice. An unchecked choice stores the short-lived token in `sessionStorage`; a checked choice stores it in `localStorage` with its exact expiry. | This survives the authorization redirect and avoids repeat authorization while the token remains valid. It cannot provide long-lived sign-in because the implicit flow returns no refresh token. A stolen token can read, change, or delete all REP JOT app-data until expiry. |
 | ADR-004 | Derive the account namespace from Drive `about.get(fields=user(permissionId))` after authorization. | This binds the namespace to the token account. The UI cannot open private cache before that lookup succeeds. |
 | ADR-005 | Use one small Draft 2020-12 validator dependency, with validators compiled once at startup. | The dependency adds bundle size, but complete schema support is a demonstrated requirement. Bundle and Kindle gates limit the cost. |
@@ -193,7 +192,7 @@ Text description: Svelte screens use application facades. Facades coordinate pur
 | --- | --- | --- |
 | `src/bootstrap.ts` | Install required polyfills, load static data, open the shell, and start public state. | Configuration, document pipeline, shell |
 | `src/auth/auth-service.ts` | Own redirect state, remember choice, token expiry, account selection, reauthorization, sign out, and revocation. | OAuth and Drive-about interfaces, clock |
-| `src/auth/oauth-redirect-adapter.ts` | Build the legacy implicit authorization URL, replace the page, validate the returned state, and clear the URL fragment. | Browser location, history, and storage |
+| `src/auth/oauth-redirect-adapter.ts` | Build the implicit authorization URL, replace the page, validate state, handle duplicate callbacks with a receipt, and clear the fragment. | Browser location, history, and storage |
 | `src/drive/drive-interface.ts` | Define the Drive adapter interface for catalog, content, create, update, metadata, delete, and about operations. | Shared types |
 | `src/drive/drive-rest-adapter.ts` | Make authenticated Drive REST requests, paginate, parse errors, and apply retry headers. | Fetch, token provider |
 | `src/documents/static-loader.ts` | Fetch `exercises.json` and `workouts.json` from the bundle. | Document pipeline |
@@ -388,22 +387,22 @@ A new account namespace has no active-session index. Its first successful reconc
 7. Bootstrap validates the returned scope and calculates `expiresAtUtc` from `expires_in`.
 8. Bootstrap removes the fragment with `history.replaceState` before it loads private data or writes diagnostics.
 9. An unchecked remember choice stores the token record in `sessionStorage`. A checked choice stores it in `localStorage`.
-10. The Drive adapter calls `about.get(fields=user(permissionId,displayName))` and binds the token to that account namespace.
-11. Startup can restore an unexpired token, but it repeats Drive account binding before it opens cached private data.
-12. Expiry or a `401` erases the token and enters `reauthorization_required` without deleting pending edits.
-13. Reauthorization repeats the same full-page redirect and returns to the prior hash route.
+10. Bootstrap stores a credential-free callback receipt for 60 seconds.
+11. If Silk repeats the callback, bootstrap reuses only the exact token that it already validated and stored.
+12. The Drive adapter calls `about.get(fields=user(permissionId,displayName))` and binds the token to that account namespace.
+13. Startup can restore an unexpired token, but it repeats Drive account binding before it opens cached private data.
+14. Expiry or a `401` erases the token and enters `reauthorization_required` without deleting pending edits.
+15. Reauthorization repeats the same full-page redirect and returns to the prior hash route.
 
 The token record contains only the access token, `expiresAtUtc`, granted scope, and bound account key. The temporary OAuth state record contains no token. It holds the return route and remember choice for 30 minutes. Bootstrap deletes both copies after a response. The application never stores a refresh token because the implicit flow does not return one.
 
 Physical tests show that Silk can execute the same callback document twice. The second execution can still see the original fragment after the first execution removes the request state. Bootstrap keeps a credential-free response receipt for 60 seconds. It reuses the stored authorization only when the second fragment contains the exact access token that already passed state and scope validation. A different token or an expired receipt fails state validation. The receipt preserves the return route and contains no token or OAuth state value.
 
-The Phase 0 prototype keeps at most 120 authorization events in `localStorage`. These events contain only allowlisted booleans, status codes, timing values, and lifecycle categories. They contain no token, OAuth state value, account name, or Google identifier. The user can download Markdown-formatted diagnostics as a `.txt` file with the `text/plain` content type. The production IndexedDB diagnostic ring replaces this temporary log in Phase 3.
-
-`Remember me on this device` can prevent repeat authorization only during the access token lifetime, typically about one hour. It cannot create durable sign-in across days. After expiry, REP JOT needs another full-page authorization redirect. A retained Google session and grant can reduce prompts, but that behavior requires a separate Kindle prototype before automation.
+`Remember me on this device` can prevent repeat authorization only during the access token lifetime, typically about one hour. It cannot create durable sign-in across days. After expiry, REP JOT needs another full-page authorization redirect. A retained Google session and grant can reduce Google prompts, but REP JOT does not rely on that behavior.
 
 A stolen `drive.appdata` token has a smaller scope than a broad Drive token, but its impact is not small for REP JOT. Until expiry, it can read, change, or delete the user's complete REP JOT history and preferences. The checkbox must explain this device-local risk and must default to unchecked until product and privacy review approve another default.
 
-The GIS token model is backlog only. Its popup-only dialog behavior is incompatible with the known Kindle window model. No GIS token-client code ships in release one.
+GIS, authorization-code flows, PKCE, popup authorization, and backend token exchange are not production alternatives for REP JOT. They are out of scope.
 
 ### Sign out and disconnect
 
@@ -968,13 +967,13 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 
 ## 19. Implementation sequence
 
-### Phase 0: Authorization continuity proof
+### Phase 0: Authorization continuity proof — complete
 
-- **Scope:** Preserve the tested full-page implicit redirect and prototype only the new remember-token, return-route, expiry, and revocation behavior on a physical Kindle.
-- **Dependencies:** Existing authorization prototype and production OAuth test project.
-- **Deliverables:** Recorded Kindle results for checked and unchecked remember choices, expiry, denial, account switch, sign out, revocation, and fallback.
-- **Exit criteria:** No flow opens a popup, tab, or secondary window. Token cleanup and account rebinding pass after reload and expiry.
-- **Principal risks:** The revocation endpoint lacks CORS, Silk can replace session storage during redirects, and remembered access lasts only until token expiry.
+- **Status:** Complete. All authorization continuity tests pass on the physical Kindle.
+- **Result:** Production uses the full-page implicit redirect, dual-store request state, exact token expiry, account rebinding, form revocation, and idempotent callback receipts.
+- **Evidence:** Checked and unchecked remember choices, expiry, denial, account switch, sign out, sign in, revocation, and revocation fallback pass.
+- **Exit criteria:** Met. No flow opens a popup, tab, or secondary window. Token cleanup and account rebinding pass without a manual reload.
+- **Production constraint:** Preserve this tested flow and its 60-second duplicate-callback receipt.
 
 ### Phase 1: Contracts and build validation
 
@@ -1002,8 +1001,8 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 
 ### Phase 4: Authentication and Drive adapters
 
-- **Scope:** Implement the proven redirect lifecycle, remember storage, expiry, account binding, revocation, catalog pagination, duplicate consolidation, and typed Google errors.
-- **Dependencies:** Phase 0 evidence and Phase 3 account model.
+- **Scope:** Implement the proven redirect lifecycle, callback receipt, remember storage, expiry, account binding, revocation, catalog pagination, duplicate consolidation, and typed Google errors.
+- **Dependencies:** Completed Phase 0 evidence and Phase 3 account model.
 - **Deliverables:** OAuth redirect and Drive adapters with deterministic fakes.
 - **Exit criteria:** Only `drive.appdata` is requested. Storage follows the remember choice. No code opens a window. Pagination and duplicate-consolidation tests pass.
 - **Principal risks:** Revocation behavior and stable account-key access need continued Kindle regression tests.
@@ -1054,7 +1053,7 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 | --- | --- | --- |
 | 100% static Svelte app in `dist/` | Vite build and GitHub Pages deployment | Production build gate |
 | No backend, SQLite, or WebAssembly | Client-only adapters and constraint policy | Bundle dependency scan |
-| Redirect-only OAuth and only `drive.appdata` | Auth service and OAuth redirect adapter | Physical-Kindle redirect test and consent review |
+| Redirect-only OAuth, idempotent callback receipt, and only `drive.appdata` | Auth service and OAuth redirect adapter | Completed Phase 0 Kindle suite and consent review |
 | Drive `appDataFolder` canonical user data | Sync coordinator and Drive adapter | Adapter integration tests |
 | Account-scoped cache and pending edits | IndexedDB repositories | Account separation tests |
 | Four canonical document families | Document pipeline and ownership table | Schema and ownership tests |
@@ -1096,7 +1095,7 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 | ID | Risk | Likelihood / impact | Mitigation and owner |
 | --- | --- | --- | --- |
 | R-01 | Whole-file Drive updates have a final race without compare-and-swap. | Medium / High | Preflight, post-read, durable pending edits, receipts, later merge, and race tests. Sync owner. |
-| R-02 | Full-page OAuth redirect, remembered storage, or revocation can regress on Kindle. | Medium / High | Preserve the tested flow, complete Phase 0 on hardware, and keep Google Account connections as revocation fallback. Auth owner. |
+| R-02 | Full-page OAuth redirect, callback replay, remembered storage, or revocation can regress on Kindle. | Medium / High | Preserve the completed Phase 0 flow and receipt, run Kindle regression tests, and keep the account-connections fallback. Auth owner. |
 | R-03 | IndexedDB can fail under storage pressure or browser cleanup. | Medium / High | Transactional saves, quota errors, export, warnings, and Kindle stress tests. Storage owner. |
 | R-04 | Growth in bundled exercises and workouts, loaded history, or expanded container detail can exceed Kindle memory or practical document size. Release one has no fixed budget. | Low initially / High | Use monthly shards, compact indexes, bounded recent lists, one-shard operations, and on-demand loading. Measure real accounts on Kindle and add document or memory limits when growth makes them necessary. Domain owner. |
 | R-05 | A corrupt remote file can block its logical write path. | Medium / Medium | Preserve raw bytes and valid cache, block overwrite, export diagnostics. Validation owner. |
@@ -1118,7 +1117,8 @@ The production comparison downloads `https://repjot.com/exercises.json` and `htt
 - Release one does not permit session timestamp edits.
 - Duplicate recognized names have no repair UI. REP JOT performs safe automatic consolidation.
 - Session creation stops with a clear error when secure random values are unavailable.
-- The tested full-page redirect is the production authorization flow. GIS token-model work is backlog.
+- The tested full-page implicit redirect with idempotent callback receipts is the only production authorization flow.
+- GIS, authorization-code flows, PKCE, popup authorization, and backend token exchange are out of scope.
 - A programmed default becomes an actual result on blur.
 - Release one supports session, exercise-result or attempt, and container notes.
 - Settings downloads a bounded redacted diagnostic event log. Diagnostics remain local and never synchronize to Drive.

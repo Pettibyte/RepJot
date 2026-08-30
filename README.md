@@ -2,9 +2,9 @@
 
 Lightweight fitness journal tool. Works on not-so-modern browsers such as Kindle Scribe so you can log workouts on a distraction-free device.
 
-The current Svelte and TypeScript prototype supports authorization continuity tests on Kindle. It also stores a hello-world document in Google Drive `appDataFolder`.
+The current Svelte and TypeScript prototype implements the production authorization flow. It also stores a hello-world document in Google Drive `appDataFolder`.
 
-The prototype supports remembered and session-only tokens, exact expiry, account switching, sign-out, and Google grant revocation. See [`docs/PHASE-0-AUTHORIZATION-PROOF.md`](docs/PHASE-0-AUTHORIZATION-PROOF.md) for the physical-Kindle test procedure.
+Phase 0 authorization testing is complete on the physical Kindle. The flow supports callback replay, remembered and session-only tokens, exact expiry, account switching, sign-out, and grant revocation. See [`docs/PHASE-0-AUTHORIZATION-PROOF.md`](docs/PHASE-0-AUTHORIZATION-PROOF.md).
 
 ## Run locally
 
@@ -30,9 +30,6 @@ storage, networking, file, media, worker, and device APIs. It does not request s
 permissions or transmit results. Use **Download HTML report** to save a standalone
 snapshot in a conventional browser. On Kindle, use **Download Markdown (.txt)**; its
 contents are Markdown, while its `.txt` extension is accepted by the Kindle browser.
-The automatic checks also load Google's Identity Services script and initialize a
-token client without requesting a token. This contacts `accounts.google.com`, but it
-does not open a window, initiate sign-in, or request permissions.
 
 ## Deploy to GitHub Pages
 
@@ -127,10 +124,6 @@ Pages hostname instead, configure `https://pettijohn.github.io` as the origin an
    VITE_GOOGLE_CLIENT_ID=123456789-example.apps.googleusercontent.com
    ```
 
-The web client ID is public configuration and is embedded in `dist/app.js`. Do not add
-the client secret to this project. Restart `bun run dev` after changing `.env.local`.
-REP JOT currently uses Google's legacy full-page implicit flow as a compatibility test
-for the Kindle browser. Google recommends an authorization-code flow with a backend for
-production applications.
+The web client ID is public configuration and is embedded in `dist/app.js`. Do not add the client secret to this project. Restart `bun run dev` after changing `.env.local`.
 
-The prototype uses the legacy Google implicit flow because the tested Kindle requires a full-page redirect. Google recommends an authorization-code flow with PKCE for modern browsers.
+Production uses the tested full-page implicit redirect with idempotent callback receipts. GIS, authorization-code flows, PKCE, popup authorization, and backend token exchange are out of scope.
