@@ -1,0 +1,34 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-08",
+  "sessions": [
+    {
+      "id": "session-cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-08-10T16:00:00Z",
+      "endedAtUtc": "2026-08-10T16:45:00Z",
+      "updatedAtUtc": "2026-08-10T16:45:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" } ],
+          "exerciseId": "back-squat",
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 2 }, { "nodeId": "set-1" } ],
+          "exerciseId": "back-squat",
+          "status": "completed",
+          "values": { "reps": 4, "weight": { "value": 90, "unit": "kg" } }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

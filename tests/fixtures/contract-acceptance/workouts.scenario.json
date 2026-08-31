@@ -1,0 +1,84 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "cindy-omission",
+      "name": "Cindy Omission Scenario",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "cindy",
+            "type": "container",
+            "name": "Cindy",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "children": [
+              { "id": "set-1", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 10 } },
+              { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "push-up", "stimulus": "conditioning", "prescription": { "reps": 20 } },
+              { "id": "cindy-air-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 30 } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "squat-day",
+      "name": "Squat Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-sets",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 2 },
+            "children": [
+              { "id": "set-1", "type": "exercise", "exerciseId": "back-squat", "stimulus": "strength", "setType": "working", "prescription": { "reps": 5, "weight": { "value": 100, "unit": "kg" } } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-scored",
+      "name": "Nested Scored Scenario",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "blocks",
+            "type": "container",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 2, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "mini-amrap",
+                "type": "container",
+                "strategy": "amrap",
+                "strategyConfig": { "duration": { "value": 5, "unit": "minute" } },
+                "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+                "children": [
+                  { "id": "nested-pull-up", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 5 } },
+                  { "id": "nested-air-squat", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 10 } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

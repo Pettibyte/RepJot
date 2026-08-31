@@ -1,0 +1,25 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-07",
+  "sessions": [
+    {
+      "id": "session-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "workoutId": "cindy-omission",
+      "status": "completed",
+      "startedAtUtc": "2026-07-20T18:05:00Z",
+      "endedAtUtc": "2026-07-20T18:26:30Z",
+      "updatedAtUtc": "2026-07-20T18:26:30Z",
+      "results": [
+        {
+          "type": "container",
+          "workoutId": "cindy-omission",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "cindy" } ],
+          "status": "completed",
+          "score": { "type": "rounds_and_reps", "completedRounds": 12, "additionalReps": 7 }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

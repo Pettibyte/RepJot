@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P1-T01 — Resolve document contracts and terminal omission**
+- [x] **P1-T01 — Resolve document contracts and terminal omission**
   - **Objective:** Give every document rule one source, owner, input fact, and acceptance case.
   - **Inspect:** All schemas, all three specifications, Requirements Sections 5-13, and Architecture Sections 7-13 and 20.
   - **Create or edit:** A contract matrix under `docs/contracts/` and an architecture decision under `docs/decisions/`.

@@ -1,0 +1,39 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-08",
+  "sessions": [
+    {
+      "id": "session-9f8e7d6c-5b4a-4321-8abc-def012345678",
+      "workoutId": "nested-scored",
+      "status": "completed",
+      "startedAtUtc": "2026-08-18T09:00:00Z",
+      "endedAtUtc": "2026-08-18T09:12:00Z",
+      "updatedAtUtc": "2026-08-18T09:12:00Z",
+      "results": [
+        {
+          "type": "container",
+          "workoutId": "nested-scored",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "blocks" } ],
+          "status": "completed",
+          "score": { "type": "intervals", "completedIntervals": 2, "totalIntervals": 2 }
+        },
+        {
+          "type": "container",
+          "workoutId": "nested-scored",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "blocks", "iteration": 1 }, { "nodeId": "mini-amrap" } ],
+          "status": "completed",
+          "score": { "type": "rounds_and_reps", "completedRounds": 3, "additionalReps": 0 }
+        },
+        {
+          "type": "container",
+          "workoutId": "nested-scored",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "blocks", "iteration": 2 }, { "nodeId": "mini-amrap" } ],
+          "status": "completed",
+          "score": { "type": "rounds_and_reps", "completedRounds": 2, "additionalReps": 5 }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

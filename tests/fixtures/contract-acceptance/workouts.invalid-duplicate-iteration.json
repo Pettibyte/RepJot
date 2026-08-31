@@ -1,0 +1,41 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "invalid-duplicate-iteration",
+      "name": "Duplicate Iteration (negative fixture)",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-sets",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 3 },
+            "children": [
+              {
+                "id": "set-1",
+                "type": "exercise",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "prescription": {
+                  "reps": 5,
+                  "weight": { "value": 80, "unit": "kg" },
+                  "iterations": [
+                    { "iteration": 1, "reps": 5, "weight": { "value": 80, "unit": "kg" } },
+                    { "iteration": 2, "reps": 4, "weight": { "value": 90, "unit": "kg" } },
+                    { "iteration": 2, "reps": 3, "weight": { "value": 100, "unit": "kg" } }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

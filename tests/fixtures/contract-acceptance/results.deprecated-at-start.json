@@ -1,0 +1,49 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-08",
+  "sessions": [
+    {
+      "id": "session-11111111-2222-4333-8444-555555555555",
+      "workoutId": "cindy-omission",
+      "status": "completed",
+      "startedAtUtc": "2026-08-15T14:30:00Z",
+      "endedAtUtc": "2026-08-15T14:52:00Z",
+      "updatedAtUtc": "2026-08-15T14:52:00Z",
+      "results": [
+        {
+          "type": "container",
+          "workoutId": "cindy-omission",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "cindy" } ],
+          "status": "completed",
+          "score": { "type": "nonstandard" }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "cindy-omission",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "cindy", "iteration": 1 }, { "nodeId": "set-1" } ],
+          "exerciseId": "pull-up",
+          "status": "completed",
+          "values": { "reps": 10 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "cindy-omission",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "cindy", "iteration": 1 }, { "nodeId": "cindy-push-ups" } ],
+          "exerciseId": "push-up",
+          "status": "skipped",
+          "reasonCode": "deprecated"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "cindy-omission",
+          "executionPath": [ { "nodeId": "root" }, { "nodeId": "cindy", "iteration": 1 }, { "nodeId": "cindy-air-squats" } ],
+          "exerciseId": "air-squat",
+          "status": "completed",
+          "values": { "reps": 30 }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}
