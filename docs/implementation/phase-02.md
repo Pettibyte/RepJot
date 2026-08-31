@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P2-T01 — Define canonical document types**
+- [x] **P2-T01 — Define canonical document types**
   - **Objective:** Implement the document shapes that Phase 1 approved.
   - **Inspect:** The approved contract matrix, every file under `schemas/`, and the three data specifications.
   - **Create or edit:** `src/domain/documents.ts`, focused domain type files, and deterministic test builders.
