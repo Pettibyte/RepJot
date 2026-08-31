@@ -7,6 +7,7 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
+    "validate:schemas": "bun scripts/validate-schemas.ts",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts"
   },
   "devDependencies": {
@@ -19,6 +20,7 @@
     "vite": "latest"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "core-js": "^3.50.0"
   }
 }

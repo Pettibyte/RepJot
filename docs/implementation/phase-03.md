@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P3-T01 — Build the schema registry**
+- [x] **P3-T01 — Build the schema registry**
   - **Objective:** Register and compile every supported schema once.
   - **Inspect:** The approved contract matrix, all schemas, and JSON Schema external-reference rules.
   - **Create or edit:** `src/validation/schema-registry.ts`, `src/validation/schema-validator.ts`, `scripts/validate-schemas.ts`, and focused tests.
