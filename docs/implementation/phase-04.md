@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P4-T01 — Validate static document semantics**
+- [x] **P4-T01 — Validate static document semantics**
   - **Objective:** Validate static references, dimensions, units, prescriptions, and workout structure.
   - **Inspect:** The approved invariant matrix, Requirements Sections 6, 9, and 10, and the JSON specification.
   - **Create or edit:** Focused modules under `src/validation/semantic/` and static semantic tests.
