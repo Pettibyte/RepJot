@@ -10,7 +10,7 @@ The parent judge must accept Phase 4 before this phase starts.
 
 This phase owns result identity, paths, direct IDs, uniqueness, side rules, lifecycle, shard agreement, UTC fields, and sync-copy links.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 

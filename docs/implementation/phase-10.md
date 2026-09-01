@@ -10,7 +10,7 @@ The parent judge must accept Phase 9 before this phase starts.
 
 This phase owns command integration and the final contract audit. It cannot repair semantic behavior without returning the defect to its owning phase.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 

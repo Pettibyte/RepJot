@@ -58,13 +58,31 @@ Use these stop conditions:
 - Stop when persisted data cannot prove a required fact.
 - Stop when a repair needs a new stored field or a new product decision.
 - Stop when a test requires a guess about past product state.
-- Stop when the phase can exceed 1,500 added lines or 20 changed files.
 
-If a size limit can be exceeded, split the phase before implementation. Do not let a worker silently expand the scope.
+Use these review-size targets:
+
+- Aim for about 1,500 added lines and 20 changed files in one phase.
+- Treat both values as targets, not hard limits.
+- Before implementation, split a phase when its scope is clearly too large for one review.
+- During implementation, preserve clear comments, readable code, and useful tests when the change exceeds a target.
+- Do not rewrite or compact correct work only to meet a target.
+
+When coherent work exceeds a target, the worker must stop and return control to the parent. The report must give the size facts and a possible split. The parent can accept the overage or request a split. An overage alone is not a reason to reject the phase.
 
 If the judge rejects a phase, send one narrow defect family to a fresh repair worker. Do not combine unrelated repairs.
 
-Do not start the next phase until the parent accepts the current phase. Keep one accepted commit per phase.
+Do not start the next phase until the parent accepts the current phase.
+
+After acceptance, keep one commit per phase. Use this commit-message format:
+
+```text
+Phase N: <one-line summary>
+
+- <material change>
+- <material change>
+```
+
+The first line must start with `Phase N:`. Do not put a conventional commit prefix before the phase. Add a blank line and a bulleted list of material changes.
 
 ## 5. Contract gate
 

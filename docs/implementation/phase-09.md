@@ -10,7 +10,7 @@ The parent judge must accept Phase 8 before this phase starts.
 
 This phase covers one isolated contract boundary. It cannot wire broad build commands or audit unrelated contract families.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 

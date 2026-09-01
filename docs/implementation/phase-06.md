@@ -10,7 +10,7 @@ The parent judge must accept Phase 5 before this phase starts.
 
 This phase cannot infer past state from missing results. It must use only the persisted facts that Phase 1 approved.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 

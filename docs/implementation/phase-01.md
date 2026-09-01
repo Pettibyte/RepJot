@@ -10,7 +10,7 @@ The Phase 0 baseline at commit `433e3a061e690e6ae3943ba9e1480511c8a26d5f` is the
 
 This phase can edit contract and architecture documents only. It can add independent acceptance fixtures. It cannot implement production validators, schemas, persistence, or UI.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 

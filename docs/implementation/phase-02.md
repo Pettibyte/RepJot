@@ -10,7 +10,7 @@ The parent judge must accept Phase 1 before this phase starts.
 
 This phase owns domain document types, family constants, filename recognition types, and deterministic test builders. It does not own schema compilation.
 
-The phase has one task. Keep the change within 1,500 added lines and 20 changed files.
+The phase has one task. Use the review-size targets in `docs/implementation/README.md`, Section 4.
 
 ## 3. Required reading
 
