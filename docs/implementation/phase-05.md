@@ -22,7 +22,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
   - **Objective:** Apply only the result lifecycle rows from the approved invariant matrix.
   - **Inspect:** Requirements Sections 11 and 12, the JSON specification, and the approved matrix.
   - **Create or edit:** Focused result semantic modules and result lifecycle tests.
-  - **Steps:** Validate paths, direct IDs, uniqueness, sides, status fields, shard identity, timestamps, tombstones, and sync-copy links. Keep score and deprecated-omission logic outside this phase.
+  - **Steps:** Validate paths, direct IDs, uniqueness, sides, status fields, shard identity, timestamps, tombstones, and sync-copy links. For tombstones and sync copies, validate only the current document state. Phases 37-42 own merge precedence, ID reservation, retry, and convergence. Keep score and deprecated-omission logic outside this phase.
   - **Edge cases:** Cover duplicate paths, wrong direct IDs, live/tombstone collisions, wrong shards, invalid links, and terminal timestamp changes.
   - **Tests:** Add positive, malformed, and recovery fixtures for each owned row.
 
