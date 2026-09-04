@@ -8,11 +8,10 @@
  * directories (docs/contracts/user-data-contracts.md rows RS-01, RS-03..RS-11, RS-15, RS-17..RS-19 and
  * docs/contracts/temporal-and-omission-contracts.md rows TR-04, TR-05, TR-08, TR-12). Paths and direct IDs
  * resolve in the frozen plan of an `in_progress` session and in the retained workout tree of a terminal one.
- * It stays a separate entry point: the static pass never reads a shard, and this pass reads no preferences and
- * infers no score and no omission. Where it touches those two subjects it reads one stored fact and derives
- * nothing more from it: whether a container result stores a `score` at all (RS-11) and a recorded
- * `reasonCode: "deprecated"` skip, the only omission evidence under TR-12, because a missing result never
- * proves an omission. */
+ * It stays a separate entry point: the static pass never reads a shard, and this pass reads no preferences.
+ * Phase 5 lifecycle checks and the Phase 6 score module are both pure result semantic stages. The score module
+ * uses only stored scores, detail, and recorded `reasonCode: "deprecated"` skips; it never proves omission from
+ * a missing result. */
 
 import { buildExercisesModel } from "./exercises";
 import type { ExercisesSemanticModel } from "./exercises";
@@ -33,6 +32,25 @@ export { buildWorkoutIndex } from "./workout-index";
 export type { NodeKind, RepeatedState, WorkoutIndexEntry, WorkoutsSemanticIndex } from "./workout-index";
 export { RESULT_SEMANTIC_MESSAGES, makeResultDiagnostic, REASON_CODES, RESULT_SIDES, REPEATED_STRATEGIES } from "./result-types";
 export type { ResultSemanticCode, ResultSemanticDiagnostic, ResultSemanticResult } from "./result-types";
+export {
+  validateResultScores,
+  validateScoresAndDeprecatedOmissions,
+  deriveScoreFromDetail,
+  deriveRoundsAndRepsScore,
+  deriveCyclesScore,
+  deriveIntervalsScore,
+  scoresEqual
+} from "./result-score";
+export type {
+  CyclesScore,
+  IntervalsScore,
+  NonstandardScore,
+  RoundsAndRepsScore,
+  Score,
+  ScoreDerivation,
+  ScoreDetailCompleteness,
+  ScoreType
+} from "./result-score";
 
 /** Validate both static documents together; pure, deterministic, never mutates its inputs. */
 export function validateStaticDocuments(

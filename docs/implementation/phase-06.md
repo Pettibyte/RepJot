@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P6-T01 — Validate scores and deprecated omissions**
+- [x] **P6-T01 — Validate scores and deprecated omissions**
   - **Objective:** Validate aggregate scores, detailed results, and deprecated omissions.
   - **Inspect:** The approved terminal-omission decision, score rules, Requirements 10.10-10.17 and 11.16-11.24, and Architecture Section 13.
   - **Create or edit:** Focused score and omission validators, pure score helpers, and focused tests.

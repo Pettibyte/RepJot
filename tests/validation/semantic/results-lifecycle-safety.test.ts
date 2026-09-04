@@ -6,8 +6,8 @@
  * the fixed safe message for their code; hostile input fails closed without throwing; the module imports
  * no Svelte, DOM, OAuth, Drive, or IndexedDB code and ships no ES2020-only syntax; a persisted instant is
  * counted from validated components rather than handed to a date parser; deep trees cannot
- * overflow the iterative walk; and the phase boundary holds — no score, child-detail, or
- * deprecated-omission rule and no preferences input exists in this pass.
+ * overflow the iterative walk; and the phase boundary holds — score/omission behavior is isolated in its
+ * Phase 6 module and no preferences input exists in the result semantic passes.
  *
  * Authority: docs/implementation/README.md §3 and §4, docs/implementation/GATES.md §2 ("Make sure that
  * domain and validation modules import no Svelte, DOM, OAuth, Drive, or IndexedDB code"),
@@ -37,6 +37,7 @@ const MODULE_NAMES: readonly string[] = [
   "result-types.ts",
   "result-session.ts",
   "result-correction.ts",
+  "result-score.ts",
   "workout-index.ts"
 ];
 
@@ -212,13 +213,12 @@ describe("module purity (binding rules and GATES §2)", () => {
   });
 });
 
-describe("phase boundary: no score, detail, omission, or preference rule", () => {
-  test("no lifecycle code or message names a score, detail, or omission rule", () => {
-    const forbidden = /score|detail|omission|nonstandard|child|deprecated|cycle|round|interval/i;
-    for (const code of Object.keys(RESULT_SEMANTIC_MESSAGES)) {
-      expect(forbidden.test(code)).toBe(false);
-      expect(forbidden.test(RESULT_SEMANTIC_MESSAGES[code as keyof typeof RESULT_SEMANTIC_MESSAGES])).toBe(false);
-    }
+describe("Phase 5 boundary and Phase 6 ownership", () => {
+  test("score and omission diagnostics are owned by the Phase 6 score module", () => {
+    const source = readModule("result-score.ts");
+    expect(/container-score/.test(source)).toBe(true);
+    expect(/deprecated-omission/.test(source)).toBe(true);
+    expect(importSpecifiers(readModule("result-correction.ts")).indexOf("./result-score")).toBe(-1);
   });
 
   test("the result pass reads no preferences document", () => {

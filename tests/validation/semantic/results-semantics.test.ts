@@ -2641,9 +2641,9 @@ describe("RS-11 / Save and Omission Rules: a stored state carries its evidence",
     const partial = clone(asRecord(contextShard));
     stripResultEvidence(resultsOf(partial, 0)[6]);
     resultsOf(partial, 0)[6]["score"] = { type: "rounds_and_reps", completedRounds: 3, additionalReps: 0 };
-    // The score is read only as a fact that evidence exists: its type and agreement with the container's
-    // configured `resultCapture` belong to the score service, so nothing reports here.
-    expect(under(check(partial), CONTAINER)).toEqual([]);
+    // Phase 6 now validates the aggregate. This existing fixture also carries a recorded deprecated skip,
+    // so a standard aggregate is forbidden by TR-12 even though the incomplete-state rule itself is satisfied.
+    expect(under(check(partial), CONTAINER)).toEqual(["deprecated-omission-aggregate-forbidden"]);
   });
 
   test("completed and skipped states are outside this rule", () => {
@@ -2896,7 +2896,7 @@ describe("RS-17: sync-copy links as facts of the current document", () => {
   });
 });
 
-describe("TR-12: no omission inference and no score rule in this phase", () => {
+describe("TR-12 and Phase 6: no omission inference with score validation", () => {
   test("S1: a recorded deprecated skip and `nonstandard` detail validate as-is", () => {
     expect(schema.validate("results", 1, acceptanceDeprecatedAtStart).valid).toBe(true);
     const result = checkAcceptance(acceptanceDeprecatedAtStart, "results-2026-08.json");
@@ -2925,23 +2925,26 @@ describe("TR-12: no omission inference and no score rule in this phase", () => {
     expect(check(document).valid).toBe(true);
   });
 
-  test("score shapes are untouched: a mismatched aggregate stores no lifecycle diagnostic (RS-12 owns it)", () => {
+  test("a mismatched aggregate score is rejected by the Phase 6 semantic pass", () => {
     const document = clone(asRecord(contextShard));
     const container = resultsOf(document, 0)[6];
     container["status"] = "completed";
-    // `cycles` is not the AMRAP's configured score type. Deriving or rejecting it is Phase 6 / Phase 53.
+    // `cycles` is not the AMRAP's configured score type. Phase 6 reports the semantic mismatch.
     container["score"] = { type: "cycles", completedCycles: 4 };
     expect(schemaValid(document)).toBe(true);
     const result = check(document);
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(at(result, "/sessions/0/results/6/score/type")).toEqual(["container-score-type-mismatch"]);
   });
 
-  test("child detail completeness is untouched (RS-13 owns it)", () => {
+  test("partial child detail is rejected separately from score completeness (RS-13)", () => {
     const document = clone(asRecord(contextShard));
-    // One leaf of the three-node `finisher` cycle only: no completeness rule exists in this phase.
+    // One leaf of the two-node `finisher` cycle is removed. The omission evidence remains, but the remaining
+    // detail no longer covers the observed block.
     resultsOf(document, 0).splice(5, 1);
     expect(schemaValid(document)).toBe(true);
-    expect(check(document).valid).toBe(true);
+    const result = check(document);
+    expect(at(result, "/sessions/0/results/5/executionPath")).toEqual(["container-detail-incomplete"]);
   });
 });
 

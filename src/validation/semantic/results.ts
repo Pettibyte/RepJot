@@ -34,10 +34,10 @@
  * the UTC year and month it needs and reports `session-start-month-unreadable` when even that cannot be
  * derived, because the row's own input fact is then missing.
  *
- * No score, child-detail, or omission rule runs here (RS-12, RS-13, invariants 10-13, 25, 28). Under
- * approved D-01 Option A (TR-12) a recorded `reasonCode: "deprecated"` skip is the only omission
- * evidence, so this module never inspects paths that hold no result, never requires `nonstandard` on
- * historical data, and never rejects a document for a fact it cannot prove.
+ * Score, child-detail, and deprecated-omission behavior is delegated to the separate Phase 6 score module
+ * below. Under approved D-01 Option A (TR-12), that module uses a recorded `reasonCode: "deprecated"` skip
+ * as the only omission evidence, never inspects missing paths as evidence, and never rejects a terminal
+ * document for a historical fact it cannot prove.
  *
  * Pure: the `unknown` inputs are never mutated, no clock, locale, randomness, storage, or browser
  * module is read, and repeated calls on equal inputs return identical sorted diagnostics.
@@ -48,6 +48,7 @@ import { buildWorkoutIndex } from "./workout-index";
 import { finalizeDiagnostics, joinPointer } from "./types";
 import { makeResultDiagnostic, type ResultSemanticDiagnostic, type ResultSemanticResult } from "./result-types";
 import { validateSession, type SessionValidationContext } from "./result-session";
+import { validateResultScores } from "./result-score";
 
 const YEAR_MONTH_TEXT = /^([0-9]{4})-([0-9]{2})$/;
 const SHARD_FILE_NAME = /^results-([0-9]{4})-([0-9]{2})\.json$/;
@@ -238,6 +239,14 @@ export function validateResultsShard(
     } else {
       tombstonedIds.add(sessionId);
     }
+  }
+
+  // Phase 6 owns score, structural-detail, and persisted deprecated-omission semantics. It runs after the
+  // Phase 5 path/lifecycle pass and uses the same lifecycle-selected root without changing that pass's
+  // diagnostics or inferring any missing result.
+  const scoreResult = validateResultScores(shardDocument, workoutsDocument);
+  for (const diagnostic of scoreResult.diagnostics) {
+    diagnostics.push(diagnostic);
   }
 
   // --- RS-17 (invariant 22, document half): every sync-copy link names another session in this shard. ---

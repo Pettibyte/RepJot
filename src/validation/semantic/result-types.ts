@@ -13,9 +13,9 @@
  * Row ownership is stated on every code below. Where the contract matrix lists `schema` or another
  * module as primary and `sem` as supporting, the code here is the semantic validator's own supporting
  * assertion over `unknown` input: it never replaces the primary owner and it never reorders merge
- * behavior. Phases 37-42 own merge precedence, ID reservation, retry, and convergence; the score and
- * deprecated-omission rules (RS-12, RS-13, invariant 25, invariant 28, and every omission inference
- * under TR-12) stay outside this module.
+ * behavior. Phases 37-42 own merge precedence, ID reservation, retry, and convergence; score and
+ * deprecated-omission behavior is implemented by the separate Phase 6 score module, not by these
+ * diagnostic type declarations.
  */
 
 /** Every stable diagnostic code emitted by result lifecycle validation. */
@@ -136,7 +136,18 @@ export type ResultSemanticCode =
   // must be an ID another session carries here, live or tombstoned: a copy forks the session both sides
   // changed, and that session may be deleted afterwards (spec §5 "Session Sync Copy", Req 11.14).
   | "sync-copy-self-reference"
-  | "sync-copy-target-missing";
+  | "sync-copy-target-missing"
+  // Score and detail semantics — RS-12, RS-13, invariant 10-13 and 25; TR-02/TR-12 omission handling.
+  | "container-result-duplicate"
+  | "container-score-required"
+  | "container-score-type-mismatch"
+  | "container-score-bounds-invalid"
+  | "container-score-mismatch"
+  | "container-detail-forbidden"
+  | "container-detail-required"
+  | "container-detail-incomplete"
+  | "deprecated-omission-aggregate-forbidden"
+  | "deprecated-omission-empty-container-required";
 
 /** One stable lifecycle diagnostic at one JSON Pointer location. */
 export interface ResultSemanticDiagnostic {
@@ -210,7 +221,17 @@ export const RESULT_SEMANTIC_MESSAGES: Readonly<Record<ResultSemanticCode, strin
   "tombstone-session-collision": "a live session and a tombstone share one session identifier in this shard",
   "tombstone-session-id-duplicate": "a tombstone session identifier appears more than once in this shard",
   "sync-copy-self-reference": "a sync copy references its own session identifier",
-  "sync-copy-target-missing": "a sync copy references a session identifier that no session in this shard carries"
+  "sync-copy-target-missing": "a sync copy references a session identifier that no session in this shard carries",
+  "container-result-duplicate": "more than one container result uses one execution path in a session",
+  "container-score-required": "a completed scored container has no score",
+  "container-score-type-mismatch": "a container score type does not match the configured scoring contract",
+  "container-score-bounds-invalid": "a container score exceeds the configured finite work or has invalid interval totals",
+  "container-score-mismatch": "a stored aggregate score does not match its complete authoritative child detail",
+  "container-detail-forbidden": "a scored container forbids the recorded child detail",
+  "container-detail-required": "a scored container requires complete child detail but none was recorded",
+  "container-detail-incomplete": "recorded child detail does not cover every leaf in each observed execution block",
+  "deprecated-omission-aggregate-forbidden": "a deprecated omission affected this container, so it cannot retain an aggregate score",
+  "deprecated-omission-empty-container-required": "an omission emptied this scored or timed container, so a deprecated skipped container result is required"
 };
 
 /** The eight controlled reason codes (RS-11); free text belongs in notes. */
