@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P7-T01 — Validate trusted local icons**
+- [x] **P7-T01 — Validate trusted local icons**
   - **Objective:** Prevent remote, traversal, missing, and unsafe SVG references before build output.
   - **Inspect:** Requirements 8.5-8.9, schema icon patterns, Architecture Sections 14 and 15, and current assets.
   - **Create or edit:** `src/validation/semantic/icon-validation.ts`, `scripts/validate-static.ts`, icon fixtures, and SVG sanitizer tests.

@@ -1,0 +1,100 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "full-spectrum",
+      "name": "Full Spectrum",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-block",
+            "type": "container",
+            "name": "Squat Block",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 3 },
+            "children": [
+              {
+                "id": "set-1",
+                "type": "exercise",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "setType": "working",
+                "prescription": {
+                  "reps": 5,
+                  "weight": { "value": 80, "unit": "kg" },
+                  "iterations": [
+                    { "iteration": 1, "reps": 5, "weight": { "value": 80, "unit": "kg" } },
+                    { "iteration": 2, "reps": 3 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "cindy",
+            "type": "container",
+            "name": "Cindy",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "benchmark": { "name": "Cindy", "organization": "CrossFit" },
+            "children": [
+              { "id": "cindy-pull-ups", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 10 } },
+              { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "push-up", "stimulus": "conditioning", "prescription": { "reps": 20 } },
+              { "id": "cindy-air-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 30 } }
+            ]
+          },
+          {
+            "id": "emom-block",
+            "type": "container",
+            "name": "EMOM Block",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 4, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              { "id": "plank-hold", "type": "exercise", "exerciseId": "plank", "stimulus": "conditioning", "prescription": { "duration": { "value": 30, "unit": "second" } } }
+            ]
+          },
+          {
+            "id": "complex-block",
+            "type": "container",
+            "name": "Complex Block",
+            "strategy": "complex",
+            "strategyConfig": { "cycles": 2 },
+            "resultCapture": { "mode": "scored", "scoreType": "cycles", "childDetail": "none" },
+            "children": [
+              { "id": "cx-pull-ups", "type": "exercise", "exerciseId": "pull-up", "stimulus": "power", "prescription": { "reps": 10 } },
+              { "id": "cx-air-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "strength", "prescription": { "reps": 5 } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "second-workout",
+      "name": "Second Workout",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "pair-block",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 2 },
+            "children": [
+              { "id": "set-1", "type": "exercise", "exerciseId": "back-squat", "stimulus": "strength", "prescription": { "reps": 8 } }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
