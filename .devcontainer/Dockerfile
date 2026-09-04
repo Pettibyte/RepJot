@@ -24,7 +24,7 @@ RUN apt-get update \
         unzip \
         wget \
         sqlite3 \
-        sudo \
+        ripgrep \
     && locale-gen en_US.UTF-8 \
     && update-locale LANG=en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
