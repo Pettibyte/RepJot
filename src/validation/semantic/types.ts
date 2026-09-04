@@ -84,10 +84,16 @@ export function makeDiagnostic(code: StaticSemanticCode, path: string): StaticSe
   return { code, path, message: STATIC_SEMANTIC_MESSAGES[code] };
 }
 
+/** The two fields the finalize step needs; lets one deterministic helper serve every semantic pass. */
+export interface DiagnosticShape {
+  readonly code: string;
+  readonly path: string;
+}
+
 /** Deduplicate by (code, path) and sort for deterministic output. */
-export function finalizeDiagnostics(raw: readonly StaticSemanticDiagnostic[]): StaticSemanticDiagnostic[] {
+export function finalizeDiagnostics<T extends DiagnosticShape>(raw: readonly T[]): T[] {
   const seen = new Set<string>();
-  const unique: StaticSemanticDiagnostic[] = [];
+  const unique: T[] = [];
   for (const diagnostic of raw) {
     const key = diagnostic.code + "\u0000" + diagnostic.path;
     if (seen.has(key)) {

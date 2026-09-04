@@ -1,0 +1,81 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0003-0003-4003-8003-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-06T08:00:00Z",
+      "endedAtUtc": "2026-09-06T08:30:00Z",
+      "updatedAtUtc": "2026-09-06T08:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 1,
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 1,
+          "status": "completed",
+          "values": { "reps": 4, "weight": { "value": 105, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 2,
+          "status": "completed",
+          "values": { "reps": 3, "weight": { "value": 100, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 1,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 2, "weight": { "value": 100, "unit": "kg" } }
+        }
+      ]
+    },
+    {
+      "id": "session-aaaa0003-0003-4003-8003-000000000002",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-06T09:00:00Z",
+      "endedAtUtc": "2026-09-06T09:30:00Z",
+      "updatedAtUtc": "2026-09-06T09:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "singles" }, { "nodeId": "dead-1" }],
+          "exerciseId": "deadlift",
+          "status": "completed",
+          "values": { "reps": 1 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "singles" }, { "nodeId": "dead-1" }],
+          "exerciseId": "deadlift",
+          "status": "skipped",
+          "reasonCode": "user_skipped"
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

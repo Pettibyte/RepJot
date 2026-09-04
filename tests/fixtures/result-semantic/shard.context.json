@@ -1,0 +1,206 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-1111a111-1111-4111-8111-111111111111",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-04T10:00:00Z",
+      "endedAtUtc": "2026-09-04T10:40:00Z",
+      "updatedAtUtc": "2026-09-05T08:15:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 1,
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 100, "unit": "kg" } },
+          "effort": { "type": "rpe", "value": 8 },
+          "startedAtUtc": "2026-09-04T10:02:00Z",
+          "endedAtUtc": "2026-09-04T10:03:00Z"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 2,
+          "status": "incomplete",
+          "values": { "reps": 0, "weight": { "value": 100, "unit": "kg" } },
+          "reasonCode": "unsuccessful_attempt",
+          "notes": "Bar stalled out of the hole."
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 2 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "status": "completed",
+          "side": "alternating",
+          "startingSide": "left",
+          "values": { "reps": 9, "weight": { "value": 12, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "singles" }, { "nodeId": "dead-1" }],
+          "exerciseId": "deadlift",
+          "status": "completed",
+          "side": "both",
+          "values": { "reps": 3, "weight": { "value": 150, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher", "iteration": 1 }, { "nodeId": "push-1" }],
+          "exerciseId": "push-up",
+          "status": "skipped",
+          "reasonCode": "deprecated"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher", "iteration": 1 }, { "nodeId": "squat-1" }],
+          "exerciseId": "air-squat",
+          "status": "completed",
+          "values": { "reps": 30 }
+        },
+        {
+          "type": "container",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher" }],
+          "status": "incomplete",
+          "reasonCode": "time_constraint"
+        }
+      ]
+    },
+    {
+      "id": "session-2222a222-2222-4222-8222-222222222222",
+      "workoutId": "nested-workout",
+      "status": "in_progress",
+      "startedAtUtc": "2026-09-12T05:15:00Z",
+      "updatedAtUtc": "2026-09-12T05:41:00Z",
+      "executionPlan": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "blocks",
+            "type": "container",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 2, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "mini",
+                "type": "container",
+                "strategy": "amrap",
+                "strategyConfig": { "duration": { "value": 5, "unit": "minute" } },
+                "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+                "children": [
+                  {
+                    "id": "row-1",
+                    "type": "exercise",
+                    "exerciseId": "row-meter",
+                    "stimulus": "conditioning",
+                    "prescription": { "distance": { "value": 100, "unit": "m" } }
+                  },
+                  {
+                    "id": "squat-1",
+                    "type": "exercise",
+                    "exerciseId": "air-squat",
+                    "stimulus": "conditioning",
+                    "prescription": { "reps": 10 }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "nested-workout",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "blocks", "iteration": 1 },
+            { "nodeId": "mini", "iteration": 1 },
+            { "nodeId": "row-1" }
+          ],
+          "exerciseId": "row-meter",
+          "status": "completed",
+          "values": { "distance": { "value": 250, "unit": "m" }, "duration": { "value": 60, "unit": "second" } }
+        }
+      ]
+    },
+    {
+      "id": "session-3333a333-3333-4333-8333-333333333333",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-04T10:00:00Z",
+      "endedAtUtc": "2026-09-04T10:40:00Z",
+      "updatedAtUtc": "2026-09-04T11:02:00Z",
+      "conflictOfSessionId": "session-1111a111-1111-4111-8111-111111111111",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 97.5, "unit": "kg" } }
+        }
+      ]
+    },
+    {
+      "id": "session-4444a444-4444-4444-8444-444444444444",
+      "workoutId": "interval-workout",
+      "status": "completed",
+      "startedAtUtc": "2026-09-30T23:00:00Z",
+      "endedAtUtc": "2026-10-01T00:20:00Z",
+      "updatedAtUtc": "2026-10-01T00:20:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "interval-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "blocks", "iteration": 3 }, { "nodeId": "row-1" }],
+          "exerciseId": "row-meter",
+          "status": "completed",
+          "values": { "distance": { "value": 250, "unit": "m" } },
+          "startedAtUtc": "2026-10-01T00:05:00Z",
+          "endedAtUtc": "2026-10-01T00:06:00Z"
+        }
+      ]
+    },
+    {
+      "id": "session-5555a555-5555-4555-8555-555555555555",
+      "workoutId": "retired-workout",
+      "status": "abandoned",
+      "startedAtUtc": "2026-09-20T12:00:00Z",
+      "endedAtUtc": "2026-09-20T12:04:00Z",
+      "updatedAtUtc": "2026-09-20T12:04:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "retired-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "old-set-1" }],
+          "exerciseId": "push-up",
+          "status": "incomplete",
+          "values": { "reps": 4 },
+          "reasonCode": "physical_limitation",
+          "effort": { "type": "failure", "achieved": true }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": [
+    { "sessionId": "session-9999a999-9999-4999-8999-999999999999", "deletedAtUtc": "2026-09-21T09:30:00Z" }
+  ]
+}

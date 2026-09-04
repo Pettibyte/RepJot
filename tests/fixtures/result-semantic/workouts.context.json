@@ -1,0 +1,172 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "squat-day",
+      "name": "Squat Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-sets",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 2 },
+            "children": [
+              {
+                "id": "set-1",
+                "type": "exercise",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "setType": "working",
+                "prescription": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+              },
+              {
+                "id": "raise-1",
+                "type": "exercise",
+                "exerciseId": "lateral-raise",
+                "stimulus": "hypertrophy",
+                "prescription": { "reps": 12, "weight": { "value": 12, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "singles",
+            "type": "container",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "dead-1",
+                "type": "exercise",
+                "exerciseId": "deadlift",
+                "stimulus": "strength",
+                "prescription": { "reps": 3, "weight": { "value": 150, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "finisher",
+            "type": "container",
+            "name": "Finisher",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "push-1",
+                "type": "exercise",
+                "exerciseId": "push-up",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 20 }
+              },
+              {
+                "id": "squat-1",
+                "type": "exercise",
+                "exerciseId": "air-squat",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 30 }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "interval-workout",
+      "name": "Interval Workout",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "blocks",
+            "type": "container",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 3, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "row-1",
+                "type": "exercise",
+                "exerciseId": "row-meter",
+                "stimulus": "conditioning",
+                "prescription": { "distance": { "value": 250, "unit": "m" }, "duration": { "value": 60, "unit": "second" } }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-workout",
+      "name": "Nested Workout",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "blocks",
+            "type": "container",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 2, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "mini",
+                "type": "container",
+                "strategy": "amrap",
+                "strategyConfig": { "duration": { "value": 5, "unit": "minute" } },
+                "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+                "children": [
+                  {
+                    "id": "row-1",
+                    "type": "exercise",
+                    "exerciseId": "row-meter",
+                    "stimulus": "conditioning",
+                    "prescription": { "distance": { "value": 100, "unit": "m" } }
+                  },
+                  {
+                    "id": "squat-1",
+                    "type": "exercise",
+                    "exerciseId": "air-squat",
+                    "stimulus": "conditioning",
+                    "prescription": { "reps": 10 }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "retired-workout",
+      "name": "Retired Workout",
+      "deprecated": true,
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "old-set-1",
+            "type": "exercise",
+            "exerciseId": "push-up",
+            "stimulus": "conditioning",
+            "prescription": { "reps": 10 }
+          }
+        ]
+      }
+    }
+  ]
+}

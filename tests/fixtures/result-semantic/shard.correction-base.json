@@ -1,0 +1,58 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-08",
+  "sessions": [
+    {
+      "id": "session-aaaa0008-0008-4008-8008-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-08-20T14:00:00Z",
+      "endedAtUtc": "2026-08-20T14:45:00Z",
+      "updatedAtUtc": "2026-08-20T14:45:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+        }
+      ]
+    },
+    {
+      "id": "session-aaaa0008-0008-4008-8008-000000000002",
+      "workoutId": "interval-workout",
+      "status": "in_progress",
+      "startedAtUtc": "2026-08-21T05:00:00Z",
+      "updatedAtUtc": "2026-08-21T05:05:00Z",
+      "executionPlan": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "blocks",
+            "type": "container",
+            "strategy": "emom",
+            "strategyConfig": { "cycles": 3, "interval": { "value": 1, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "intervals", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "row-1",
+                "type": "exercise",
+                "exerciseId": "row-meter",
+                "stimulus": "conditioning",
+                "prescription": { "distance": { "value": 250, "unit": "m" } }
+              }
+            ]
+          }
+        ]
+      },
+      "results": []
+    }
+  ],
+  "sessionTombstones": []
+}

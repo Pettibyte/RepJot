@@ -11,12 +11,18 @@ import { hasUnitOrderViolation } from "./unit-table";
 import { finalizeDiagnostics, joinPointer, makeDiagnostic } from "./types";
 import type { StaticSemanticDiagnostic, StaticSemanticResult } from "./types";
 
-/** Per-exercise facts the workout semantic pass needs (WK-10, WK-06, EX-10). */
+/** Per-exercise facts the workout and result semantic passes need (WK-10, WK-06, EX-10; RS-09). */
 export interface ExerciseIndexEntry {
   readonly id: string;
   /** Deprecated entries stay resolvable for retained references (EX-10). */
   readonly deprecated: boolean;
   readonly dimensions: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The controlled laterality the entry states (spec §1 Laterality). Retained because a result records
+   * actuals per side only for a unilateral exercise (RS-09, Req 11.5). Null when the entry names no
+   * controlled laterality: an unreadable fact asks for nothing, so no side is ever guessed onto an exercise.
+   */
+  readonly laterality: "bilateral" | "unilateral" | null;
 }
 
 /** The indexed model of one exercises document plus its own diagnostics. */
@@ -43,6 +49,17 @@ function stringUnits(entry: Record<string, unknown>): string[] {
     }
   }
   return units;
+}
+
+/** The one controlled laterality an entry states; any other value reads as no stated laterality. */
+function readLaterality(value: unknown): "bilateral" | "unilateral" | null {
+  if (value === "bilateral") {
+    return "bilateral";
+  }
+  if (value === "unilateral") {
+    return "unilateral";
+  }
+  return null;
 }
 
 /** Index one exercises document and collect its semantically owned diagnostics (pure). */
@@ -85,7 +102,12 @@ export function buildExercisesModel(document: unknown): ExercisesSemanticModel {
       if (exercises.has(id)) {
         diagnostics.push(makeDiagnostic("exercise-id-duplicate", joinPointer(basePath, "id")));
       } else {
-        indexEntry = { id, deprecated: entry["deprecated"] === true, dimensions };
+        indexEntry = {
+          id,
+          deprecated: entry["deprecated"] === true,
+          dimensions,
+          laterality: readLaterality(entry["laterality"])
+        };
         exercises.set(id, indexEntry);
       }
     }

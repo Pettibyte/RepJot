@@ -1,0 +1,70 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0005-0005-4005-8005-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-08T12:00:00Z",
+      "endedAtUtc": "2026-09-08T12:30:00Z",
+      "updatedAtUtc": "2026-09-08T12:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "singles" }, { "nodeId": "dead-1" }],
+          "exerciseId": "deadlift",
+          "status": "completed",
+          "values": { "reps": 3, "weight": { "value": 200, "unit": "lb" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 2,
+          "status": "completed",
+          "values": { "reps": 5, "distance": { "value": 5, "unit": "km" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 3,
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 225, "unit": "lb" } }
+        }
+      ]
+    },
+    {
+      "id": "session-aaaa0005-0005-4005-8005-000000000002",
+      "workoutId": "interval-workout",
+      "status": "completed",
+      "startedAtUtc": "2026-09-08T13:00:00Z",
+      "endedAtUtc": "2026-09-08T13:30:00Z",
+      "updatedAtUtc": "2026-09-08T13:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "interval-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "blocks", "iteration": 1 }, { "nodeId": "row-1" }],
+          "exerciseId": "row-meter",
+          "status": "completed",
+          "values": { "reps": 10, "distance": { "value": 250, "unit": "m" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "interval-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "blocks", "iteration": 2 }, { "nodeId": "row-1" }],
+          "exerciseId": "row-meter",
+          "status": "completed",
+          "values": { "distance": { "value": 500, "unit": "m" }, "duration": { "value": 90, "unit": "second" } }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

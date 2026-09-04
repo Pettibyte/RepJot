@@ -1,0 +1,218 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-6a100000-0000-4000-8000-000000000001",
+      "workoutId": "squat-day",
+      "status": "in_progress",
+      "startedAtUtc": "2026-09-14T04:00:00Z",
+      "updatedAtUtc": "2026-09-14T04:20:00Z",
+      "executionPlan": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-sets",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 2 },
+            "children": [
+              {
+                "id": "set-1",
+                "type": "exercise",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "setType": "working",
+                "prescription": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+              },
+              {
+                "id": "raise-1",
+                "type": "exercise",
+                "exerciseId": "lateral-raise",
+                "stimulus": "hypertrophy",
+                "prescription": { "reps": 12, "weight": { "value": 12, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "singles",
+            "type": "container",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "dead-1",
+                "type": "exercise",
+                "exerciseId": "deadlift",
+                "stimulus": "strength",
+                "prescription": { "reps": 3, "weight": { "value": 150, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "finisher",
+            "type": "container",
+            "name": "Finisher",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "squat-1",
+                "type": "exercise",
+                "exerciseId": "air-squat",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 30 }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "status": "completed",
+          "values": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher", "iteration": 1 }, { "nodeId": "push-1" }],
+          "exerciseId": "push-up",
+          "status": "skipped",
+          "reasonCode": "deprecated"
+        }
+      ]
+    },
+    {
+      "id": "session-6a100000-0000-4000-8000-000000000002",
+      "workoutId": "squat-day",
+      "status": "in_progress",
+      "startedAtUtc": "2026-09-14T05:00:00Z",
+      "updatedAtUtc": "2026-09-14T05:20:00Z",
+      "executionPlan": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-sets",
+            "type": "container",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 2 },
+            "children": [
+              {
+                "id": "set-1",
+                "type": "exercise",
+                "exerciseId": "back-squat",
+                "stimulus": "strength",
+                "setType": "working",
+                "prescription": { "reps": 5, "weight": { "value": 100, "unit": "kg" } }
+              },
+              {
+                "id": "raise-1",
+                "type": "exercise",
+                "exerciseId": "lateral-raise",
+                "stimulus": "hypertrophy",
+                "prescription": { "reps": 12, "weight": { "value": 12, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "singles",
+            "type": "container",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "dead-1",
+                "type": "exercise",
+                "exerciseId": "deadlift",
+                "stimulus": "strength",
+                "prescription": { "reps": 3, "weight": { "value": 150, "unit": "kg" } }
+              }
+            ]
+          },
+          {
+            "id": "finisher",
+            "type": "container",
+            "name": "Finisher",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "squat-1",
+                "type": "exercise",
+                "exerciseId": "air-squat",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 30 }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher", "iteration": 1 }, { "nodeId": "push-1" }],
+          "exerciseId": "push-up",
+          "status": "completed",
+          "values": { "reps": 15 }
+        }
+      ]
+    },
+    {
+      "id": "session-6a100000-0000-4000-8000-000000000003",
+      "workoutId": "squat-day",
+      "status": "in_progress",
+      "startedAtUtc": "2026-09-14T06:00:00Z",
+      "updatedAtUtc": "2026-09-14T06:20:00Z",
+      "executionPlan": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "finisher",
+            "type": "container",
+            "name": "Finisher",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": { "mode": "scored", "scoreType": "rounds_and_reps", "childDetail": "optional" },
+            "children": [
+              {
+                "id": "squat-1",
+                "type": "exercise",
+                "exerciseId": "air-squat",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 30 }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "finisher", "iteration": 1 }, { "nodeId": "push-1" }],
+          "exerciseId": "ghost-exercise",
+          "status": "skipped",
+          "reasonCode": "deprecated"
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

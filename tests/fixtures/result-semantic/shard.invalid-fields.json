@@ -1,0 +1,110 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0006-0006-4006-8006-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-09T10:00:00Z",
+      "endedAtUtc": "2026-09-09T10:30:00Z",
+      "updatedAtUtc": "2026-09-09T10:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 1,
+          "side": "sideways",
+          "status": "completed",
+          "values": { "reps": 12 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 2,
+          "side": "left",
+          "startingSide": "right",
+          "status": "completed",
+          "values": { "reps": 12 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 3,
+          "side": "alternating",
+          "status": "completed",
+          "values": { "reps": 12 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 4,
+          "startingSide": "left",
+          "status": "completed",
+          "values": { "reps": 12 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 5,
+          "status": "skipped",
+          "reasonCode": "because_i_said_so"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 6,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 12 },
+          "effort": { "type": "rpe", "value": 11 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 7,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 12 },
+          "effort": { "type": "failure" }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 8,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 12, "effort": { "type": "rpe", "value": 7 } }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 0,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 12 }
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

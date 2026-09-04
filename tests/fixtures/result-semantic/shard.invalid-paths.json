@@ -1,0 +1,123 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0002-0002-4002-8002-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-10T15:00:00Z",
+      "endedAtUtc": "2026-09-10T15:40:00Z",
+      "updatedAtUtc": "2026-09-10T15:40:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "other-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "singles" }, { "nodeId": "dead-1" }],
+          "exerciseId": "deadlift",
+          "status": "completed",
+          "values": { "reps": 3 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 2,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets" }, { "nodeId": "set-1" }],
+          "exerciseId": "back-squat",
+          "attempt": 3,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [
+            { "nodeId": "root" },
+            { "nodeId": "squat-sets", "iteration": 1 },
+            { "nodeId": "set-1", "iteration": 1 }
+          ],
+          "exerciseId": "back-squat",
+          "attempt": 4,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [
+            { "nodeId": "not-the-root" },
+            { "nodeId": "squat-sets", "iteration": 1 },
+            { "nodeId": "singles" }
+          ],
+          "exerciseId": "back-squat",
+          "attempt": 5,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "container",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "status": "incomplete",
+          "reasonCode": "other"
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "ghost-set" }],
+          "exerciseId": "back-squat",
+          "attempt": 7,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "air-squat",
+          "attempt": 8,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 1 }, { "nodeId": "set-1" }],
+          "exerciseId": "ghost-exercise",
+          "attempt": 9,
+          "status": "completed",
+          "values": { "reps": 5 }
+        },
+        {
+          "type": "exercise",
+          "workoutId": "squat-day",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "squat-sets", "iteration": 2 }, { "nodeId": "raise-1" }],
+          "exerciseId": "lateral-raise",
+          "attempt": 10,
+          "side": "left",
+          "status": "completed",
+          "values": { "reps": 12, "weight": { "value": 12, "unit": "kg" } }
+        }
+      ]
+    },
+    {
+      "id": "session-aaaa0002-0002-4002-8002-000000000002",
+      "workoutId": "ghost-workout",
+      "status": "completed",
+      "startedAtUtc": "2026-09-11T15:00:00Z",
+      "endedAtUtc": "2026-09-11T15:30:00Z",
+      "updatedAtUtc": "2026-09-11T15:30:00Z",
+      "results": []
+    }
+  ],
+  "sessionTombstones": []
+}

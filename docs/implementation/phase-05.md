@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P5-T01 — Validate result lifecycle semantics**
+- [x] **P5-T01 — Validate result lifecycle semantics**
   - **Objective:** Apply only the result lifecycle rows from the approved invariant matrix.
   - **Inspect:** Requirements Sections 11 and 12, the JSON specification, and the approved matrix.
   - **Create or edit:** Focused result semantic modules and result lifecycle tests.

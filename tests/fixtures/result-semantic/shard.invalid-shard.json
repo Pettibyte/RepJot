@@ -1,0 +1,46 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0001-0001-4001-8001-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-08-31T23:30:00Z",
+      "endedAtUtc": "2026-09-01T00:10:00Z",
+      "updatedAtUtc": "2026-09-01T00:10:00Z",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0001-0001-4001-8001-000000000002",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-10-01T00:00:00Z",
+      "endedAtUtc": "2026-10-01T00:45:00Z",
+      "updatedAtUtc": "2026-10-01T00:45:00Z",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0001-0001-4001-8001-000000000003",
+      "workoutId": "interval-workout",
+      "status": "completed",
+      "startedAtUtc": "2026-09-15T07:00:00Z",
+      "endedAtUtc": "2026-10-02T07:30:00Z",
+      "updatedAtUtc": "2026-10-02T07:30:00Z",
+      "results": [
+        {
+          "type": "exercise",
+          "workoutId": "interval-workout",
+          "executionPath": [{ "nodeId": "root" }, { "nodeId": "blocks", "iteration": 1 }, { "nodeId": "row-1" }],
+          "exerciseId": "row-meter",
+          "status": "completed",
+          "values": { "distance": { "value": 250, "unit": "m" } },
+          "startedAtUtc": "2026-10-02T07:05:00Z",
+          "endedAtUtc": "2026-10-02T07:06:00Z"
+        }
+      ]
+    }
+  ],
+  "sessionTombstones": []
+}

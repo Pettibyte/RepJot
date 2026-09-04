@@ -1,0 +1,60 @@
+{
+  "format": "repjot/results",
+  "schemaVersion": 1,
+  "yearMonthUtc": "2026-09",
+  "sessions": [
+    {
+      "id": "session-aaaa0004-0004-4004-8004-000000000001",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-02T06:00:00Z",
+      "endedAtUtc": "2026-09-02T06:30:00Z",
+      "updatedAtUtc": "2026-09-02T06:30:00Z",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0004-0004-4004-8004-000000000002",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-02T07:00:00Z",
+      "endedAtUtc": "2026-09-02T07:30:00Z",
+      "updatedAtUtc": "2026-09-02T07:30:00Z",
+      "conflictOfSessionId": "session-aaaa0004-0004-4004-8004-000000000002",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0004-0004-4004-8004-000000000003",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-02T08:00:00Z",
+      "endedAtUtc": "2026-09-02T08:30:00Z",
+      "updatedAtUtc": "2026-09-02T08:30:00Z",
+      "conflictOfSessionId": "session-00000000-0000-4000-8000-000000000000",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0004-0004-4004-8004-000000000004",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-02T09:00:00Z",
+      "endedAtUtc": "2026-09-02T09:30:00Z",
+      "updatedAtUtc": "2026-09-02T09:30:00Z",
+      "conflictOfSessionId": "session-aaaa0004-0004-4004-8004-000000000001",
+      "results": []
+    },
+    {
+      "id": "session-aaaa0004-0004-4004-8004-000000000005",
+      "workoutId": "squat-day",
+      "status": "completed",
+      "startedAtUtc": "2026-09-02T10:00:00Z",
+      "endedAtUtc": "2026-09-02T10:30:00Z",
+      "updatedAtUtc": "2026-09-02T10:30:00Z",
+      "conflictOfSessionId": "session-aaaa0004-0004-4004-8004-000000000009",
+      "results": []
+    }
+  ],
+  "sessionTombstones": [
+    { "sessionId": "session-aaaa0004-0004-4004-8004-000000000001", "deletedAtUtc": "2026-09-03T10:00:00Z" },
+    { "sessionId": "session-aaaa0004-0004-4004-8004-000000000009", "deletedAtUtc": "2026-09-03T11:00:00Z" }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "format": "repjot/exercises",
+  "schemaVersion": 1,
+  "equipment": [
+    { "id": "barbell", "name": "Barbell" },
+    { "id": "rower", "name": "Rower" }
+  ],
+  "exercises": [
+    {
+      "id": "back-squat",
+      "name": "Back Squat",
+      "instructions": ["Set the bar on the upper back.", "Squat to depth."],
+      "equipmentIds": ["barbell"],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "squat",
+      "primaryMuscles": ["quadriceps"],
+      "secondaryMuscles": ["glutes"],
+      "laterality": "bilateral",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "deadlift",
+      "name": "Deadlift",
+      "instructions": ["Lift the bar from the floor."],
+      "equipmentIds": ["barbell"],
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "hinge",
+      "primaryMuscles": ["glutes"],
+      "secondaryMuscles": ["lower back"],
+      "laterality": "bilateral",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg"] }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "lateral-raise",
+      "name": "Lateral Raise",
+      "instructions": ["Raise the dumbbells to shoulder height."],
+      "equipmentIds": [],
+      "force": "push",
+      "mechanic": "isolation",
+      "category": "strength",
+      "movementPattern": "horizontal_push",
+      "primaryMuscles": ["shoulders"],
+      "secondaryMuscles": [],
+      "laterality": "unilateral",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "row-meter",
+      "name": "Row",
+      "instructions": ["Row the measured distance."],
+      "equipmentIds": ["rower"],
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "cardio",
+      "movementPattern": "vertical_pull",
+      "primaryMuscles": ["lats"],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        { "dimension": "distance", "compatibleUnits": ["m", "km"] },
+        { "dimension": "duration", "compatibleUnits": ["second", "minute"] }
+      ]
+    },
+    {
+      "id": "push-up",
+      "name": "Push-Up",
+      "instructions": ["Keep the body straight.", "Lower the chest."],
+      "equipmentIds": [],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "horizontal_push",
+      "primaryMuscles": ["chest"],
+      "secondaryMuscles": ["triceps"],
+      "laterality": "bilateral",
+      "measurements": [{ "dimension": "reps", "compatibleUnits": ["rep"] }],
+      "deprecated": true
+    },
+    {
+      "id": "air-squat",
+      "name": "Air Squat",
+      "instructions": ["Squat to full depth without load."],
+      "equipmentIds": [],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "squat",
+      "primaryMuscles": ["quadriceps"],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [{ "dimension": "reps", "compatibleUnits": ["rep"] }]
+    }
+  ]
+}
