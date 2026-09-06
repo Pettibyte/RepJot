@@ -67,11 +67,9 @@ MODEL ROUTING
 
 Use lemonade/Qwen3.8-27B-GGUF-UD-Q4_K_XL for the initial builder by default.
 
-Use openai-codex/gpt-5.6-luna as the initial builder only when the whole phase has one local behavior change, exact cases, and no contract or architecture design.
-
 Use openai-codex/gpt-5.6-sol for every contract judge and adversarial reviewer.
 
-Use openai-codex/gpt-5.6-luna for localized production-logic repairs with exact reproductions.
+Use lemonade/Qwen3.8-27B-GGUF-UD-Q4_K_XL for localized production-logic repairs with exact reproductions.
 
 Use lemonade/Qwen3.8-27B-GGUF-UD-Q4_K_XL only for exact mechanical documentation, fixture, comment, allowlist, or repetitive-data repairs. Do not use it for security, timestamps, synchronization, authentication, parsers, schema ownership, or policy interpretation.
 
