@@ -1,0 +1,55 @@
+{
+  "format": "repjot/curation/exercises",
+  "schemaVersion": 1,
+  "equipment": [
+    { "id": "barbell", "name": "Barbell", "source": "barbell" },
+    { "id": "cable", "name": "Cable Machine", "source": "cable" },
+    { "id": "kettlebell", "name": "Kettlebell", "source": "kettlebells" },
+    { "id": "pull-up-bar", "name": "Pull-up Bar" }
+  ],
+  "exercises": [
+    {
+      "sourceId": "Barbell_Bench_Press",
+      "laterality": "bilateral",
+      "movementPattern": "horizontal_push",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "sourceId": "Push_Up",
+      "laterality": "bilateral",
+      "movementPattern": "horizontal_push",
+      "measurements": [{ "dimension": "reps", "compatibleUnits": ["rep"] }]
+    },
+    {
+      "sourceId": "Lat_Pulldown",
+      "laterality": "bilateral",
+      "movementPattern": "vertical_pull",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "sourceId": "Dead_Hang",
+      "laterality": "bilateral",
+      "movementPattern": "other",
+      "equipmentIds": ["pull-up-bar"],
+      "measurements": [{ "dimension": "duration", "compatibleUnits": ["second"] }]
+    },
+    {
+      "sourceId": "Kettlebell_Swing",
+      "laterality": "bilateral",
+      "movementPattern": "hinge",
+      "measurements": [
+        { "dimension": "reps", "compatibleUnits": ["rep"] },
+        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+      ],
+      "loadSemantics": "per_implement"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "Barbell_Bench_Press",
+  "name": "Barbell Bench Press",
+  "force": "push",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "equipment": "barbell",
+  "primaryMuscles": ["chest"],
+  "secondaryMuscles": ["triceps", "shoulders"],
+  "instructions": [
+    "Lie on a flat bench and hold the bar over the chest.",
+    "Lower the bar to the chest.",
+    "Press the bar until the arms are extended."
+  ],
+  "category": "strength",
+  "images": ["Barbell_Bench_Press/0.jpg"]
+}

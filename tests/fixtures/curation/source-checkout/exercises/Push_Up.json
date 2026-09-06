@@ -1,0 +1,17 @@
+{
+  "id": "Push_Up",
+  "name": "Push-Up",
+  "force": "push",
+  "level": "beginner",
+  "mechanic": "compound",
+  "equipment": "body only",
+  "primaryMuscles": ["chest"],
+  "secondaryMuscles": ["triceps", "shoulders"],
+  "instructions": [
+    "Start in a straight-line plank on the hands.",
+    "Lower the chest toward the floor.",
+    "Press until the arms are extended."
+  ],
+  "category": "strength",
+  "images": ["Push_Up/0.jpg"]
+}

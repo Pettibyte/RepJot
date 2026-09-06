@@ -1,0 +1,16 @@
+{
+  "id": "Dead_Hang",
+  "name": "Dead Hang",
+  "force": "static",
+  "level": "beginner",
+  "mechanic": null,
+  "equipment": null,
+  "primaryMuscles": ["forearms"],
+  "secondaryMuscles": [],
+  "instructions": [
+    "Hang from the bar with extended arms.",
+    "Hold the hang for the prescribed duration."
+  ],
+  "category": "strength",
+  "images": []
+}

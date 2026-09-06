@@ -1,0 +1,17 @@
+{
+  "id": "Kettlebell_Swing",
+  "name": "Kettlebell Swing",
+  "force": "push",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "equipment": "kettlebells",
+  "primaryMuscles": ["glutes"],
+  "secondaryMuscles": ["hamstrings", "lower back"],
+  "instructions": [
+    "Hinge at the hips with a straight back.",
+    "Swing the kettlebell to chest height.",
+    "Let it drop between the legs and repeat."
+  ],
+  "category": "strongman",
+  "images": ["Kettlebell_Swing/0.jpg"]
+}

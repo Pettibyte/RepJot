@@ -1,0 +1,5 @@
+{
+  "format": "repjot/curation/approval",
+  "schemaVersion": 1,
+  "candidateSha256": "<paste the candidateSha256 line from the review report>"
+}

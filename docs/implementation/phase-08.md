@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P8-T01 — Build the curation contract**
+- [x] **P8-T01 — Build the curation contract**
   - **Objective:** Produce deterministic REP JOT exercise data from approved local source data and explicit curation.
   - **Inspect:** Requirements 13.1-13.5, exercise schema classifications, and the source checkout at `../free-exercise-db`.
   - **Create or edit:** `scripts/build-static-data.ts`, typed files under `src/curation/`, process templates under `data/curation/`, and `tests/static-transform.test.ts`. Do not create production `src/public/exercises.json` or `src/public/workouts.json` in this phase without recorded human approval.

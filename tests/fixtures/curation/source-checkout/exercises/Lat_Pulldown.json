@@ -1,0 +1,17 @@
+{
+  "id": "Lat_Pulldown",
+  "name": "Lat Pulldown",
+  "force": "pull",
+  "level": "beginner",
+  "mechanic": "compound",
+  "equipment": "cable",
+  "primaryMuscles": ["lats"],
+  "secondaryMuscles": ["biceps"],
+  "instructions": [
+    "Grip the bar wider than shoulder width.",
+    "Pull the bar to the upper chest.",
+    "Return with control to extended arms."
+  ],
+  "category": "strength",
+  "images": ["Lat_Pulldown/0.jpg"]
+}
