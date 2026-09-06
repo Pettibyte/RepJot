@@ -55,9 +55,11 @@ A child must not read Prompts-v2.md or all runtime templates.
 
 Before each spawn:
 1. Read only the required file under prompts/phase-work/.
-2. Replace every `${...}` placeholder.
+2. Replace every `${...}` placeholder, including `${REPORT_FILE}`. Assign every role (builder, fixer, analyst, judge, adversarial reviewer) a report file path under `.agent-work/phase-${PHASE}/`, named `<revision>-<role>.md`.
 3. Put the complete rendered text directly in the spawn_subsession prompt argument.
 4. Pass the recommended model in the spawn_subsession model argument.
+
+Every child writes its full report to its report file and returns only a compact summary. Record each report file path in the ledger.
 
 Do not merely tell a child to read its template. The rendered child prompt must be self-contained.
 
@@ -93,7 +95,7 @@ For a high-risk phase, spawn two fresh Sol reviewers against the same R0 tree:
 - One contract judge from prompts/phase-work/judge.md.
 - One adversarial reviewer from prompts/phase-work/adversarial-reviewer.md.
 
-The two read-only reviews can run in parallel. Do not start a repair until both return. Require each reviewer to inspect the complete assigned boundary and not stop after the first defect.
+Run the two read-only reviews sequentially in the same container; heavy parallel probe suites contend for resources and parallel reports were lost at once in Phase 8. Do not start a repair until both return. Require each reviewer to inspect the complete assigned boundary and not stop after the first defect.
 
 Reviewers must classify each finding as a contract defect, implementation-created obligation, optional hardening, or an excluded scenario. Only an in-scope contract defect blocks acceptance automatically.
 
@@ -116,13 +118,15 @@ Select one template and model for each family:
 - prompts/phase-work/mechanical-fixer.md with Qwen 27B for exact mechanical work.
 - prompts/phase-work/repair-builder.md with Qwen 27B for a coherent cross-module repair.
 
-Give the fixer only its defect packet and relevant authority. Do not give it private cases or the full ledger.
+Give the fixer only its defect packet, relevant authority, the mandatory acceptance-case file, and an adjacent-invariant checklist generated from the ledger: every other open or verified family's core invariant plus one probe per changed-file family (writer to failure injection, validator to forgery, path handling to path variants, parser to malformed bytes). Do not give it private cases or the full ledger.
+
+Every accepted blocking probe becomes a committed regression test when its fix lands. Hand judge-found probes to the fixer as required tests.
 
 Before repair, consider whether deletion, isolated outputs, a documented single-operator workflow, or last-write-wins satisfies the approved contract. Prefer the least complex compliant design.
 
 Require explicit authority before adding custom locks, journals, rollback protocols, stale-owner recovery, or multi-process coordination.
 
-A fixer can report only FIXED_UNVERIFIED. Compare each report with Git facts and run the focused reproductions. Update the ledger and review revision after each repair.
+A fixer can report only FIXED_UNVERIFIED. After each fixer returns, run the parent battery yourself: focused suite, full suite, mandatory acceptance cases, and git diff --check. Compare the report with Git facts. Freeze a new snapshot digest only when a fresh reviewer session will run. Update the ledger, including the report file path, after each repair.
 
 Do not spawn a judge after every fixer while known defect families remain. Complete the planned sequential repair set first.
 
@@ -130,7 +134,7 @@ FINAL REVIEW
 
 When all known defects are FIXED_UNVERIFIED, render prompts/phase-work/judge.md for one fresh Sol judge. This judge must review the complete current diff, all ledger defects, private cases, applicable gates, and regressions.
 
-For high-risk work, require the final judge to rerun the adversarial matrix. Spawn another adversarial reviewer only when a repair materially changed the trust boundary.
+For high-risk work, spawn another adversarial reviewer only when a repair materially changed the trust boundary since the last full adversarial pass. When the repairs are local, make that pass delta-scoped: list the files changed since the last full pass, attack only the changed behavior, and replay the committed probe bank via the test suite. The full matrix runs only on a material trust-boundary change.
 
 A bare SIGN-OFF is insufficient. Require a detailed RECOMMEND SIGN-OFF report with revision, cases, commands, Git state, and ledger results.
 
@@ -146,7 +150,9 @@ SESSION REUSE
 
 Use spawn_subsession for new roles, changed trees, repairs, reviews, phases, and root-cause resets.
 
-Use continue_subsession only to request missing output, clarify a report, resume an interrupted unchanged assignment, or provide a human answer before code changed.
+If a child returns no output or a truncated report, never re-spawn the unchanged prompt. Continue the same session once with: your report file is missing or incomplete at <path>; finish the remaining sections there; return only the compact summary. If that continuation also fails, split the assignment into two smaller fresh sessions.
+
+Use continue_subsession for that resumable recovery, to clarify a report, resume an interrupted unchanged assignment, or provide a human answer before code changed.
 
 Never continue a judge after repository changes. Never continue after context compaction, transcript summarization, a role change, or one failed repair attempt.
 

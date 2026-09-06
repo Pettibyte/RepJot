@@ -14,6 +14,11 @@ ${AUTHORITY_PACKET}
 Allowed files or areas:
 ${ALLOWED_SCOPE}
 
+Report file: ${REPORT_FILE}
+Mandatory acceptance cases: ${ACCEPTANCE_CASES_FILE}
+Adjacent-invariant checklist (each entry is one invariant plus one probe):
+${ADJACENT_INVARIANT_CHECKLIST}
+
 Do not read or edit the private review ledger.
 
 Read AGENTS.md, the phase file, the relevant authority, and every supplied reproduction.
@@ -36,11 +41,17 @@ Add focused regression tests for:
 - One recovery case when applicable.
 - One equivalent representation that exercises the root cause.
 
+Verification gate (all required before returning FIXED_UNVERIFIED):
+- Run every case in ${ACCEPTANCE_CASES_FILE} and record each result.
+- Run every entry in the adjacent-invariant checklist above.
+- Self-adversarial pass scoped to your changed files: a writer touched, inject write/sync/close/rename failures and confirm cleanup; a validator touched, forge the validated fields and confirm rejection; path handling touched, run the path-variant list; a parser touched, run malformed-byte and duplicate-member probes. At least one probe per touched family.
+- Record every command and its exact result in the report file. List any probe you did not run as NOT_RUN with a reason.
+
 Run focused tests, affected regressions, required phase commands, and git diff --check. Inspect all changed and untracked files.
 
 Do not claim acceptance or VERIFIED.
 
-Return exactly these headings:
+Write the full report to ${REPORT_FILE} as you work, with exactly these headings:
 1. Defect IDs.
 2. Reproduction results before the fix.
 3. Root-cause invariant.
@@ -49,6 +60,8 @@ Return exactly these headings:
 6. Commands and exact results.
 7. Status: FIXED_UNVERIFIED | BLOCKED_POLICY | NEEDS_REDESIGN.
 8. New risks found.
+
+Return a compact summary under 100 lines with the same eight headings, one line each where possible, and the report file path.
 
 Stop with BLOCKED_POLICY or NEEDS_REDESIGN if the repair requires policy interpretation, new persisted facts, or a broader architecture change.
 ```

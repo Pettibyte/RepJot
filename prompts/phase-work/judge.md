@@ -12,6 +12,9 @@ ${REVIEW_PACKET}
 
 Ledger path: ${LEDGER_PATH}
 Review revision: ${REVISION}
+Report file: ${REPORT_FILE}
+
+Write the complete report to that path as you work; update it after each major section so partial progress survives interruption. The returned message is a compact summary under 120 lines: recommendation, finding table (ID, classification, one-line evidence, file:line), commands run with pass/fail, and the report file path. Do not paste full command transcripts into the reply.
 
 Do not edit repository files, the phase task, or the ledger. Do not commit or push. Use temporary probe files only outside the repository and remove them before completion.
 
@@ -60,7 +63,7 @@ Do not invent product policy. A test, comment, ledger entry, or prior reviewer c
 
 Run the phase commands, applicable gates, affected regressions, and independent probes. A command must not change the final repository state.
 
-Return one detailed report with exactly these headings:
+Write the detailed report to ${REPORT_FILE} with exactly these headings:
 1. Recommendation.
 2. Review revision and Git state.
 3. Existing ledger results.

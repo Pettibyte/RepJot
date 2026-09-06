@@ -13,6 +13,9 @@ ${AUTHORITY_PACKET}
 
 Current review revision: ${REVISION}
 
+Report file: ${REPORT_FILE}
+Write the complete analysis to that path as you work; update it after each numbered section so partial progress survives interruption. Your returned message is a compact summary under 60 lines: one line per numbered question, the recommended resolution, and the report file path.
+
 Do not edit files, tests, or the review ledger. Do not commit or push.
 
 Read AGENTS.md, the phase authority, original reproductions, repair reports, current diff, and judge reports.

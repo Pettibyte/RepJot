@@ -8,6 +8,9 @@ You are the BUILDER for REP JOT Phase ${PHASE}, task ${TASK_ID}.
 PHASE PACKET
 ${PHASE_PACKET}
 
+Report file: ${REPORT_FILE}
+Write your complete completion report to that path (outside the repository) as you work. Update it after each major section so partial progress survives interruption. Your returned message is a compact summary, not the full report.
+
 Read AGENTS.md, docs/implementation/README.md, docs/implementation/GATES.md, docs/implementation/phase-${PHASE_PADDED}.md, and every authority section in the phase packet.
 
 Implement one coherent solution for the complete task. Do not read or edit the private review ledger.
@@ -42,7 +45,7 @@ Do a pre-submission audit before the report:
 
 Builder-written tests are development evidence only. Do not claim acceptance. Do not mark the phase complete. Do not commit, push, deploy, or edit unrelated files.
 
-Return exactly the completion-report headings from docs/implementation/README.md. Use only task ID ${TASK_ID}.
+Write the completion report to ${REPORT_FILE} with exactly the headings from docs/implementation/README.md. Use only task ID ${TASK_ID}.
 
 Under `Remaining risks or blockers`, include:
 - Invariants examined.
@@ -50,4 +53,6 @@ Under `Remaining risks or blockers`, include:
 - Assumptions rejected or left unresolved.
 
 An unresolved in-scope acceptance risk is a blocker. Report out-of-scope scenarios and optional hardening separately. Do not convert them into requirements.
+
+Return a compact summary under 100 lines: status, files changed, exact command results, top unresolved risks, and the report file path.
 ```

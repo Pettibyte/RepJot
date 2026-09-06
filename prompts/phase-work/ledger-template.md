@@ -48,7 +48,7 @@ Do not convert an excluded scenario into a defect without new authority.
 
 ## Private acceptance cases
 
-Do not send exact private inputs to builders or fixers.
+Mandatory acceptance cases live in the worker-readable `docs/implementation/phase-${PHASE_PADDED}-acceptance.md`. Keep additional judge-only probe inputs private in this ledger and do not send them to builders or fixers.
 
 | Case | Authority | Expected result | Last result | Review revision |
 |---|---|---|---|---|
@@ -86,6 +86,14 @@ Notes and rejected interpretations: NONE
 |---|---|---|---|
 | ${FINDING} | OPTIONAL_HARDENING | Not required by ${SOURCE} | DEFERRED |
 | ${FINDING} | EXCLUDED_SCENARIO | Outside `${WORKFLOW}` | REJECTED_INTERPRETATION |
+
+## Child sessions
+
+Record every spawned child, its model, revision range, report file path, and result. No-output attempts are recorded as NO_OUTPUT and not counted as completed reviews.
+
+| Role | Session ID | Model | Revision | Report file | Result |
+|---|---|---|---|---|---|
+| ${ROLE} | ${SESSION_ID} | ${MODEL} | ${REVISION_RANGE} | ${REPORT_FILE_OR_NONE} | ${RESULT} |
 
 ## Review history
 

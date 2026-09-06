@@ -14,6 +14,11 @@ Known relevant defects:
 ${RELEVANT_DEFECTS}
 
 Review revision: ${REVISION}
+Report file: ${REPORT_FILE}
+
+Write the complete report to that path as you work; update it after each major section so partial progress survives interruption. The returned message is a compact summary under 120 lines: finding table (ID, classification, one-line evidence, file:line), commands run with pass/fail, areas attacked with no defect found, and the report file path. Do not paste full command transcripts into the reply.
+
+If the packet declares this pass delta-scoped, attack only the listed changed behavior plus replay the committed probe bank via the test suite. Do not re-run full-matrix categories for unchanged code.
 
 Do not edit repository files or the review ledger. Do not commit or push. Create temporary probes only outside the repository and remove them before completion.
 
@@ -46,7 +51,7 @@ Use complete-command probes when a gate covers command integration. A direct fun
 
 Use stable identifiers for known defects. Use NEW-1 and higher for new candidates.
 
-Return exactly these headings:
+Write the report to ${REPORT_FILE} with exactly these headings:
 1. Reviewed revision.
 2. Threat and failure matrix.
 3. Existing defect results.
