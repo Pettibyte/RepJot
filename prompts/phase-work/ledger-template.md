@@ -30,6 +30,16 @@ Prohibited changes:
 Stop conditions:
 - ${STOP_CONDITION}
 
+## Operating model
+
+Intended actor and workflow: ${WORKFLOW}
+Supported concurrency: ${CONCURRENCY_OR_NONE}
+Trusted inputs and environment: ${TRUST_MODEL}
+Excluded threats and failure modes: ${EXCLUSION}
+Output classification: ${USER_DATA_CANONICAL_OR_REGENERABLE}
+
+Do not convert an excluded scenario into a defect without new authority.
+
 ## Public acceptance matrix
 
 | Contract area | Positive category | Negative category | Recovery category | Persistence or concurrency category |
@@ -50,11 +60,17 @@ Do not send exact private inputs to builders or fixers.
 
 State: OPEN
 Severity: blocker | major | minor
+Finding classification: CONTRACT_DEFECT | IMPLEMENTATION_CREATED_OBLIGATION
 Root-cause family: ${FAMILY}
-Authority: ${SOURCE}
+Requirement origin and exact authority: ${SOURCE}
+Supported workflow affected: ${WORKFLOW}
+Reproduction assumptions: ${ASSUMPTIONS}
 Expected behavior: ${EXPECTED}
 Observed behavior: ${OBSERVED}
+Concrete consequence: ${CONSEQUENCE}
 Reproduction: ${REPRODUCTION}
+Simplest compliant resolution: ${SIMPLEST_RESOLUTION}
+Reason simplification was rejected: ${REASON_OR_NOT_REJECTED}
 Affected area: ${AREA}
 Found by session: ${SESSION_ID}
 Introduced or exposed at revision: ${REVISION}
@@ -63,6 +79,13 @@ Repair evidence: NONE
 Verification session: NONE
 Verification evidence: NONE
 Notes and rejected interpretations: NONE
+
+## Nonblocking review findings
+
+| Finding | Classification | Authority assessment | Disposition |
+|---|---|---|---|
+| ${FINDING} | OPTIONAL_HARDENING | Not required by ${SOURCE} | DEFERRED |
+| ${FINDING} | EXCLUDED_SCENARIO | Outside `${WORKFLOW}` | REJECTED_INTERPRETATION |
 
 ## Review history
 

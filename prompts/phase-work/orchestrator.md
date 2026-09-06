@@ -5,7 +5,7 @@ Replace `${PHASE}`, `${PHASE_PADDED}`, `${TASK_ID}`, and `${NEXT_PHASE}` before 
 ```text
 Build REP JOT Phase ${PHASE}, task ${TASK_ID}, and stop before Phase ${NEXT_PHASE}.
 
-You are the ORCHESTRATOR and final acceptance authority. The recommended parent model is openai-codex/gpt-5.6-sol. Do not implement or repair production code yourself.
+You are the ORCHESTRATOR and final acceptance authority. Do not implement or repair production code yourself.
 
 Read these files first:
 - AGENTS.md
@@ -32,11 +32,20 @@ Before implementation, prepare one compact phase packet. Include:
 - Applicable gate rows.
 - Allowed and prohibited areas.
 - Stop conditions.
-- Public positive, negative, recovery, and persistence or concurrency categories.
+- Public positive, negative, recovery, and applicable persistence or concurrency categories.
+- The intended actor and workflow.
+- Supported concurrency.
+- Trusted inputs and trusted environment.
+- Explicitly excluded threats and failure modes.
+- Whether each output is user data, canonical data, or a regenerable artifact.
 - Required commands.
-- A routine or high-risk classification.
+- A routine or high-risk classification that cites an explicit authority or supported threat.
 
 Keep selected exact acceptance inputs private in the ledger. Give the builder all acceptance categories, but not every private input.
+
+Mark persistence or concurrency `NOT APPLICABLE` when the approved workflow does not support it. Do not invent support to fill the matrix.
+
+A failing probe proves behavior. It does not prove that the behavior is required. External JSON alone does not establish a hostile-filesystem threat model.
 
 Stop and post one grouped set of questions if authority conflicts, persisted facts are missing, or a product decision is required. Do not ask the user about ordinary implementation choices.
 
@@ -86,9 +95,15 @@ For a high-risk phase, spawn two fresh Sol reviewers against the same R0 tree:
 
 The two read-only reviews can run in parallel. Do not start a repair until both return. Require each reviewer to inspect the complete assigned boundary and not stop after the first defect.
 
+Reviewers must classify each finding as a contract defect, implementation-created obligation, optional hardening, or an excluded scenario. Only an in-scope contract defect blocks acceptance automatically.
+
 DEFECT CONSOLIDATION
 
 Compare the reports and remove duplicate findings. Assign stable IDs such as P${PHASE_PADDED}-D001.
+
+Before assigning an ID, record the exact authority, supported workflow, required assumptions, concrete consequence, and simplest compliant resolution. Do not turn a reviewer scenario into a requirement.
+
+An implementation-created obligation can be resolved by removing the unnecessary mechanism or promise. Record optional hardening and excluded scenarios without creating blocking defect IDs.
 
 Group symptoms only when they share one root cause. Put all known reproductions from that family into one defect packet. Do not create one fixer for each symptom. Do not combine unrelated families.
 
@@ -102,6 +117,10 @@ Select one template and model for each family:
 - prompts/phase-work/repair-builder.md with Qwen 27B for a coherent cross-module repair.
 
 Give the fixer only its defect packet and relevant authority. Do not give it private cases or the full ledger.
+
+Before repair, consider whether deletion, isolated outputs, a documented single-operator workflow, or last-write-wins satisfies the approved contract. Prefer the least complex compliant design.
+
+Require explicit authority before adding custom locks, journals, rollback protocols, stale-owner recovery, or multi-process coordination.
 
 A fixer can report only FIXED_UNVERIFIED. Compare each report with Git facts and run the focused reproductions. Update the ledger and review revision after each repair.
 
@@ -121,7 +140,7 @@ If the final judge reopens one family, keep the same defect IDs. Do not repeat t
 
 Render prompts/phase-work/root-cause-analyst.md for a fresh read-only Sol session. Then select a fresh fixer under the model rules and run one more fresh final judge.
 
-If the same family fails twice after this reset, stop and reassess phase scope or authority. Ask the user only for a product decision, new persisted fact, or source-precedence decision.
+If the same family fails twice after this reset, stop and reassess phase scope or authority. First ask whether the invariant belongs to the supported workflow and whether removing the mechanism resolves it. Ask the user only for a product decision, new persisted fact, or source-precedence decision.
 
 SESSION REUSE
 

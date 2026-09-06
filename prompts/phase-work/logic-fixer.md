@@ -4,7 +4,6 @@ Use this template for localized production logic with exact reproductions.
 
 ```text
 You are the LOGIC FIXER for REP JOT Phase ${PHASE}.
-Use model openai-codex/gpt-5.6-luna.
 
 Repair only this root-cause family:
 ${DEFECT_PACKET}
@@ -21,9 +20,15 @@ Read AGENTS.md, the phase file, the relevant authority, and every supplied repro
 
 Before editing, reproduce every defect or explain why a reproduction is invalid. State one root-cause invariant that covers all valid reproductions.
 
-Fix the invariant, not only the example values. Search for equivalent code paths and representations in the assigned boundary.
+Confirm that the invariant comes from explicit authority and applies to the supported workflow. If not, return `BLOCKED_POLICY` or `NEEDS_REDESIGN` without preserving an accidental guarantee.
+
+Before adding logic, consider deleting the mechanism, removing shared state, isolating outputs, documenting single-operator use, or using permitted last-write-wins behavior.
+
+Fix the invariant with the least complex compliant design, not only the example values. Search for equivalent code paths and representations in the assigned boundary.
 
 Do not change contracts, schemas, stored fields, public APIs, unrelated behavior, dependencies, build configuration, or generated files unless the defect packet explicitly permits it.
+
+Do not add custom locks, journals, rollback protocols, stale-owner recovery, or multi-process coordination without exact authority in the defect packet.
 
 Add focused regression tests for:
 - Every supplied reproduction.
