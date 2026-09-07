@@ -32,9 +32,9 @@ Explain:
 9. Whether authority or persisted facts are insufficient.
 10. A complete, scope-limited repair acceptance matrix.
 11. The recommended resolution: `REJECTED_INTERPRETATION`, `REMOVE_ABSTRACTION`, `BLOCKED_POLICY`, or a fixer class and model:
-   - Local production logic with exact reproductions: lemonade/Qwen3.8-27B-GGUF-UD-Q4_K_XL.
-   - Exact mechanical documentation, fixture, comment, or data work: llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS.
-   - Coherent cross-module redesign: lemonade/Qwen3.8-27B-GGUF-UD-Q4_K_XL.
+   - Local production logic with exact reproductions: lemonade/Muse-Glimmer-30B-GGUF.
+   - Exact mechanical documentation, fixture, comment, or data work: lemonade/Muse-Glimmer-30B-GGUF.
+   - Coherent cross-module redesign: lemonade/Muse-Glimmer-30B-GGUF.
 
 Do not propose code. A failed probe alone cannot establish authority. Prefer `REJECTED_INTERPRETATION` or `REMOVE_ABSTRACTION` when prior work escalated scope.
 ```
