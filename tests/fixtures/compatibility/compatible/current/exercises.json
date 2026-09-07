@@ -1,0 +1,154 @@
+{
+  "format": "repjot/exercises",
+  "schemaVersion": 1,
+  "equipment": [
+    {
+      "id": "dumbbell",
+      "name": "Dumbbell"
+    },
+    {
+      "id": "barbell",
+      "name": "Barbell"
+    },
+    {
+      "id": "kettlebell",
+      "name": "Kettlebell"
+    }
+  ],
+  "exercises": [
+    {
+      "id": "plank",
+      "name": "Plank Hold",
+      "instructions": [
+        "Keep the body in one straight line."
+      ],
+      "equipmentIds": [],
+      "force": "static",
+      "mechanic": "isolation",
+      "category": "cardio",
+      "movementPattern": "anti_rotation",
+      "primaryMuscles": [
+        "abdominals"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "duration",
+          "compatibleUnits": [
+            "second",
+            "minute"
+          ]
+        },
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        }
+      ],
+      "deprecated": true
+    },
+    {
+      "id": "goblet-squat",
+      "name": "Goblet Squat",
+      "instructions": [],
+      "equipmentIds": [
+        "dumbbell"
+      ],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "squat",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "back-squat",
+      "name": "Back Squat (Bar)",
+      "instructions": [
+        "Set the bar on the upper back.",
+        "Descend until the hip crease is below the knee."
+      ],
+      "equipmentIds": [
+        "barbell"
+      ],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "squat",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        },
+        {
+          "dimension": "distance",
+          "compatibleUnits": [
+            "m",
+            "km"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "wall-sit",
+      "name": "Wall Sit",
+      "instructions": [],
+      "equipmentIds": [],
+      "force": null,
+      "mechanic": null,
+      "category": "strength",
+      "movementPattern": "other",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        }
+      ]
+    }
+  ]
+}

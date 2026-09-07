@@ -1,0 +1,119 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "core-day",
+      "name": "Core Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "core-plank",
+            "type": "exercise",
+            "exerciseId": "plank",
+            "stimulus": "conditioning",
+            "prescription": {
+              "duration": {
+                "value": 30,
+                "unit": "second"
+              }
+            }
+          }
+        ]
+      },
+      "notes": "Keep the core braced."
+    },
+    {
+      "id": "strength-day",
+      "name": "Strength Session",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "engine-room",
+            "type": "container",
+            "name": "Engine Room",
+            "strategy": "emom",
+            "strategyConfig": {
+              "cycles": 6,
+              "interval": {
+                "value": 1,
+                "unit": "minute"
+              }
+            },
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "intervals",
+              "childDetail": "optional"
+            },
+            "children": [
+              {
+                "id": "plank-hold",
+                "type": "exercise",
+                "exerciseId": "plank",
+                "stimulus": "conditioning",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "squat-set",
+            "type": "exercise",
+            "exerciseId": "back-squat",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 8,
+              "weight": {
+                "value": 100,
+                "unit": "lb"
+              }
+            }
+          },
+          {
+            "id": "goblet-set",
+            "type": "exercise",
+            "exerciseId": "goblet-squat",
+            "stimulus": "conditioning",
+            "prescription": {
+              "reps": 12
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "accessory-day",
+      "name": "Accessory Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "acc-goblet",
+            "type": "exercise",
+            "exerciseId": "goblet-squat",
+            "stimulus": "conditioning",
+            "prescription": {
+              "reps": 12
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

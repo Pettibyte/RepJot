@@ -1,0 +1,109 @@
+{
+  "format": "repjot/exercises",
+  "schemaVersion": 1,
+  "equipment": [
+    {
+      "id": "barbell",
+      "name": "Barbell"
+    },
+    {
+      "id": "dumbbell",
+      "name": "Dumbbell"
+    }
+  ],
+  "exercises": [
+    {
+      "id": "back-squat",
+      "name": "Back Squat",
+      "instructions": [
+        "Set the bar on the upper back.",
+        "Squat to depth."
+      ],
+      "equipmentIds": [
+        "barbell"
+      ],
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "movementPattern": "squat",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        },
+        {
+          "dimension": "distance",
+          "compatibleUnits": [
+            "m",
+            "km"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "plank",
+      "name": "Plank",
+      "instructions": [],
+      "equipmentIds": [],
+      "force": "static",
+      "mechanic": "isolation",
+      "category": "cardio",
+      "movementPattern": "anti_rotation",
+      "primaryMuscles": [
+        "abdominals"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "duration",
+          "compatibleUnits": [
+            "second",
+            "minute"
+          ]
+        }
+      ],
+      "deprecated": true
+    },
+    {
+      "id": "wall-sit",
+      "name": "Wall Sit",
+      "instructions": [],
+      "equipmentIds": [],
+      "force": null,
+      "mechanic": null,
+      "category": "strength",
+      "movementPattern": "other",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "rep"
+          ]
+        }
+      ]
+    }
+  ]
+}

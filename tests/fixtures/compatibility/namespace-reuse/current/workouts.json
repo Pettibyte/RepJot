@@ -1,0 +1,112 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "strength-day",
+      "name": "Strength Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-set",
+            "type": "exercise",
+            "exerciseId": "back-squat",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 5,
+              "weight": {
+                "value": 80,
+                "unit": "kg"
+              }
+            }
+          },
+          {
+            "id": "engine-room",
+            "type": "container",
+            "name": "Engine Room",
+            "strategy": "emom",
+            "strategyConfig": {
+              "cycles": 4,
+              "interval": {
+                "value": 1,
+                "unit": "minute"
+              }
+            },
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "intervals",
+              "childDetail": "optional"
+            },
+            "children": [
+              {
+                "id": "plank-hold",
+                "type": "exercise",
+                "exerciseId": "plank",
+                "stimulus": "conditioning",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "core-day",
+      "name": "Core Day",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "core-plank",
+            "type": "exercise",
+            "exerciseId": "plank",
+            "stimulus": "conditioning",
+            "prescription": {
+              "duration": {
+                "value": 30,
+                "unit": "second"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "wall-sit",
+      "name": "Wall Sit Workout",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "ws-plank",
+            "type": "exercise",
+            "exerciseId": "plank",
+            "stimulus": "conditioning",
+            "prescription": {
+              "duration": {
+                "value": 30,
+                "unit": "second"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

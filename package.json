@@ -8,6 +8,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "validate:schemas": "bun scripts/validate-schemas.ts",
+    "compare:production": "bun scripts/compare-production.ts",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts"
   },
   "devDependencies": {

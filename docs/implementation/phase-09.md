@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P9-T01 — Compare static-data compatibility**
+- [x] **P9-T01 — Compare static-data compatibility**
   - **Objective:** Support a blank first release and detect forbidden identity changes after the first approved baseline exists.
   - **Inspect:** Requirements 6.1-6.17, Architecture Section 18, and schema-versioning Static Bundle Compatibility.
   - **Create or edit:** `src/compatibility/compare-static-data.ts`, `scripts/compare-production.ts`, `tests/compatibility.test.ts`, and `tests/fixtures/compatibility/**`.
