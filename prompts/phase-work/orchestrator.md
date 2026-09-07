@@ -112,7 +112,7 @@ REPAIR
 Run fixers sequentially against the latest tree.
 
 Select one template and model for each family:
-- prompts/phase-work/logic-fixer.md with Luna for local production logic.
+- prompts/phase-work/logic-fixer.md with Qwen 27B for local production logic.
 - prompts/phase-work/mechanical-fixer.md with Qwen 27B for exact mechanical work.
 - prompts/phase-work/repair-builder.md with Qwen 27B for a coherent cross-module repair.
 
