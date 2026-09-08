@@ -18,10 +18,19 @@ Retain each defect's original reproduction and before/after results. Link long o
 - Risk: ROUTINE | HIGH, with requirement-backed reason
 - Approved adversarial risk rows, or NONE:
 - Expected external blockers and manual evidence:
-- Models: inherited unless the user selects exact role models
-- Sessions: builder / judge / fixer / adversary IDs
+- Models: from MODEL ROUTING in `prompts/v2/orchestrator.md`, one per role, recorded in the dispatch ledger below
 - Invocation budget used: judge 0/2 routine or 0/3 high-risk, adversary 0/1
 - Budget exception or process override: NONE unless explicitly authorized
+
+### Dispatch ledger — orchestrator
+
+<!-- One row per child session, written at spawn. A session keeps one role for its whole life:
+     before every continuation, read the row and send only work for the role in the row. To change
+     role, spawn a new row. Record every dispatch mistake here with the time and whether it touched
+     any file. -->
+
+| Role | Exact model | Session ID | Stage |
+| --- | --- | --- | --- |
 
 ## Requirements and coverage — builder, then judge
 

@@ -26,13 +26,13 @@ Resolve genuine scope or authority decisions with one grouped user question.
 
 ## Run one pipeline
 
-1. Run the builder once. For existing work, assess its evidence instead of rebuilding it.
-2. Run the judge in `DISCOVER` mode over the frozen requirement matrix.
+1. Run the Builder once. For existing work, assess its evidence instead of rebuilding it.
+2. Run the Judge in `DISCOVER` mode over the frozen requirement matrix. Judge uses Sol.
 3. Reject unsupported findings. Return incomplete packets to their discovering reviewer without starting a fixer.
-4. Give all accepted packets to one fixer as a batch. Group the work by cause within that session.
-5. Continue the same judge in `CONFIRM` mode with the repair diff, snapshot, and evidence.
-6. For approved high-risk work, run one adversary after contract confirmation.
-7. If the adversary finds defects, continue the fixer with the complete batch. Then continue the judge for confirmation.
+4. Give all accepted packets to one Fixer as a batch. Group the work by cause within that session. Fixer uses Qwen.
+5. Continue the same Judge in `CONFIRM` mode with the repair diff, snapshot, and evidence. Judge continues prior session with Sol.
+6. For approved high-risk work, run one adversary after contract confirmation. Adversary uses Sol, in a new, separate session from Judge.
+7. If the adversary finds defects, continue the fixer (with Qwen) with the complete batch. Then continue the Judge session (with Sol) for confirmation.
 8. Run final acceptance and stop.
 
 Skip empty repair stages. A routine phase needs at most two judge invocations. High-risk work needs at most three.
@@ -44,6 +44,12 @@ If a repair changes the approved trust boundary, stop for a revised probe plan i
 ## Dispatch and accept
 
 Use one active child at a time. Send its role file path, task file path, mode, and assigned sections or IDs.
+Keep a dispatch ledger in the task file. One row per child: role, exact model, session ID, and stage. Write the row when the child starts and update the stage when it changes.
+A session keeps one role for its whole life. Before every `continue_subsession`, read that session's row and send only work for the role in the row. To change role, start a new session.
+Reuse is per role, never across roles. Sending repair work to a review session sends it to the review model, because `continue_subsession` selects the model by choosing the session.
+Pass the model explicitly on every `spawn_subsession`, taken from MODEL ROUTING below. Never inherit a model for a role that MODEL ROUTING names.
+Write the whole dispatch prompt before you call `spawn_subsession`. A stub or placeholder call still creates a real session, and that session is then bound to a role you did not intend.
+Open every dispatch prompt with one line naming the role and the model, and have the child echo both before it works. See `prompts/v2/protocol.md`.
 Use `spawn_subsession` for the first assignment. Use `continue_subsession` for later work in the same role.
 Give continuations the changed inputs explicitly. Prior conclusions are evidence, not authority.
 Use `yield_to_subsessions` at the join point. Do not poll or create retry sessions on silence.
@@ -58,20 +64,21 @@ Inspect the complete final diff and run every authority-required parent gate on 
 Reuse current logs for duplicate reporting, not as a substitute for mandatory parent execution.
 Require complete coverage, verified defects, explicit external blockers, and the judge recommendation.
 Mark only the selected task complete. Commit only accepted files using `Phase N: <summary>` and material-change bullets.
-Return the implementation plan's completion report, review invocation counts, unresolved external evidence, and commit ID.
+Return the implementation plan's completion report, review invocation counts, unresolved external evidence, the commit ID, and the dispatch ledger.
 
-Important: Spawn one subsession at a time, sequentially, using `yield_subsession` to wait for callback. We are running in a constrained environment, and child sessions share the same file system, so parallel runs may be slow and have side effects. 
+Important: Spawn one subsession at a time, sequentially, using `yield_subsession` to wait for callback. We are running in a constrained environment, and child sessions share the same file system, so parallel runs may be slow and have side effects.
+Important: Check the dispatch ledger row for the target session before every dispatch. If a child reports a role mismatch, or you find you sent work to the wrong role, stop that child at once, record the mistake with its time, verify whether it changed any file, and redo the work in a correctly routed session. Do not let the misrouted child's output stand as phase evidence.
 
 ## MODEL ROUTING
 
-For all BUILDER tasks use halogen/halogen-qwen3.8-flash-next.
+For all BUILDER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
 
-For all FIXER tasks use halogen/halogen-qwen3.8-flash-next.
+For all FIXER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
 
 For JUDGE use openai-codex/gpt-5.6-sol.
 
 For ADVERSARIAL REVIEW use openai-codex/gpt-5.6-sol.
 
-For everything else, use halogen/halogen-qwen3.8-flash-next.
+For everything else, use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
 
 Do not silently substitute a model. Ask the user for one replacement decision if a required model is unavailable. If a model fails, STOP, `ask_user` what to do next. 

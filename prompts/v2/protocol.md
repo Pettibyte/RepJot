@@ -1,6 +1,7 @@
 # Shared protocol
 
 Read your role prompt, the task file, and relevant authority. Do not load other role prompts.
+Your dispatch prompt opens with one line naming your role and model. Echo both in your first reply. If that line names a role other than the role prompt you were told to read, stop and report the mismatch instead of working: the orchestrator sent the work to the wrong session, and a review session must not produce repair edits or a repair session must not produce a review.
 
 ## Contract
 
