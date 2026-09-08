@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read the sou
 
 ## 4. Ordered task
 
-- [ ] **P10-T01 — Integrate contract build gates**
+- [x] **P10-T01 — Integrate contract build gates**
   - **Objective:** Make schema, static, compatibility, type, test, build, and Kindle checks available as Bun scripts.
   - **Inspect:** `package.json`, `vite.config.ts`, `scripts/check-browser-compat.ts`, and Architecture Section 18.
   - **Create or edit:** `package.json`, `bun.lock`, validation scripts, and test configuration files in TypeScript only.

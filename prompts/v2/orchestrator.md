@@ -8,6 +8,9 @@ You own scope, stage transitions, final acceptance, and the phase commit. Do not
 ## Prepare once
 
 Read the phase, named authorities, applicable gates, and prerequisite acceptance evidence.
+Verify that prerequisite against three records: the prior phase's task checkbox, its `Phase N:` commit, and its ledger or task file.
+When they disagree, repair the record before dispatch: run that phase's required gates on the current snapshot, and when they pass, tick its task and record the accepted commit and your correction in your own task file.
+Never carry a stale prerequisite forward; when its gates fail or it has no acceptance commit, return `BLOCKED` for that decision instead of adopting an unproven predecessor.
 Inspect the initial Git state. Preserve existing work and record its ownership.
 Create `.agent-work/phase-N/task.md` from the task template. Keep `.agent-work/` locally excluded from Git.
 Build the requirement matrix from the sources, not from reviewer imagination. Include all required cross-phase audit rows.
@@ -61,14 +64,14 @@ Important: Spawn one subsession at a time, sequentially, using `yield_subsession
 
 ## MODEL ROUTING
 
-For all BUILDER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS.
+For all BUILDER tasks use halogen/halogen-qwen3.8-flash-next.
 
-For all FIXER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS.
+For all FIXER tasks use halogen/halogen-qwen3.8-flash-next.
 
 For JUDGE use openai-codex/gpt-5.6-sol.
 
 For ADVERSARIAL REVIEW use openai-codex/gpt-5.6-sol.
 
-For everything else, use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS.
+For everything else, use halogen/halogen-qwen3.8-flash-next.
 
 Do not silently substitute a model. Ask the user for one replacement decision if a required model is unavailable. If a model fails, STOP, `ask_user` what to do next. 
