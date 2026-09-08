@@ -121,7 +121,7 @@ describe("input immutability", () => {
 describe("determinism and safe output", () => {
   test("repeated validation of equal inputs returns identical sorted diagnostics", () => {
     const document = clone(contextShard);
-    asRecord(asRecord(document)["sessions"])[0]["startedAtUtc"] = "2026-07-04T10:00:00Z";
+    (asRecord(document)["sessions"] as Array<Record<string, unknown>>)[0]["startedAtUtc"] = "2026-07-04T10:00:00Z";
     const a = validateResultsShard(document, workouts, exercises, "results-2026-09.json");
     const b = validateResultsShard(document, workouts, exercises, "results-2026-09.json");
     expect(a.valid).toBe(false);
@@ -132,7 +132,7 @@ describe("determinism and safe output", () => {
 
   test("repeated correction validation returns identical diagnostics", () => {
     const candidate = clone(correctionCandidate);
-    asRecord(asRecord(candidate)["sessions"])[0]["startedAtUtc"] = "2026-08-19T14:00:00Z";
+    (asRecord(candidate)["sessions"] as Array<Record<string, unknown>>)[0]["startedAtUtc"] = "2026-08-19T14:00:00Z";
     const a = validateShardCorrection(correctionBase, candidate);
     const b = validateShardCorrection(correctionBase, candidate);
     expect(a).toEqual(b);

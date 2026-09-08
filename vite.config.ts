@@ -1,28 +1,47 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig, type Plugin } from 'vite';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 function kindleClassicEntry(): Plugin {
-  const buildId = Date.now().toString(36);
+  let outDir = '';
   return {
     name: 'kindle-classic-entry',
     apply: 'build',
-    transformIndexHtml: {
-      order: 'post',
-      handler(html, context): string {
-        if (!context.filename.endsWith('/index.html')) return html;
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    writeBundle() {
+      const appJsPath = join(outDir, 'app.js');
+      const indexPath = join(outDir, 'index.html');
 
-        const moduleTag = '<script type="module" crossorigin src="./app.js"></script>';
-        if (!html.includes(moduleTag)) {
-          throw new Error('The expected app module tag was not found in built index.html.');
-        }
+      let appJsBytes: Buffer;
+      let html: string;
+      try {
+        appJsBytes = readFileSync(appJsPath);
+        html = readFileSync(indexPath, 'utf8');
+      } catch (error) {
+        throw new Error(`The emitted app.js and index.html were not available in ${outDir}: ${String(error)}`);
+      }
 
-        const withoutModuleTag = html.replace(moduleTag, '').replace(/^[ \t]+$/gm, '');
-        return withoutModuleTag.replace(
+      // Cache-busting token derived from the emitted app.js bytes so equal
+      // inputs produce equal output and any source change changes the token.
+      const buildId = createHash('sha256').update(appJsBytes).digest('hex');
+
+      const moduleTag = '<script type="module" crossorigin src="./app.js"></script>';
+      if (!html.includes(moduleTag)) {
+        throw new Error('The expected app module tag was not found in built index.html.');
+      }
+
+      const withoutModuleTag = html.replace(moduleTag, '').replace(/^[ \t]+$/gm, '');
+      writeFileSync(
+        indexPath,
+        withoutModuleTag.replace(
           '</body>',
           `<script>window.__repjotLoadApp("./app.js?v=${buildId}");</script>\n</body>`
-        );
-      }
+        )
+      );
     }
   };
 }

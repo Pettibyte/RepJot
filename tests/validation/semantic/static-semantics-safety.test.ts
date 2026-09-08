@@ -77,7 +77,7 @@ describe("determinism", () => {
     const root = (doc["workouts"] as Record<string, unknown>[])[0]["root"] as Record<string, unknown>;
     const children = root["children"] as Record<string, unknown>[];
     children[1]["id"] = "squat-block"; // duplicates the rounds container id in this workout
-    (children[2]["children"] as Record<string, unknown>)[0]["exerciseId"] = "ghost-exercise";
+    (children[2]["children"] as Array<Record<string, unknown>>)[0]["exerciseId"] = "ghost-exercise";
     const a = validateStaticDocuments(exercisesContext, doc);
     const b = validateStaticDocuments(exercisesContext, doc);
     expect(a.valid).toBe(false);

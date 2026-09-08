@@ -118,7 +118,7 @@ async function artifactDoc(staging: string): Promise<Record<string, unknown>> {
 }
 
 /** The exact canonical candidate bytes embedded in the artifact (what a promotion would write). */
-function candidateBytesFromArtifact(doc: Record<string, unknown>): Uint8Array {
+function candidateBytesFromArtifact(doc: Record<string, unknown>): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(JSON.stringify(doc["candidate"], null, 2) + "\n");
 }
 
@@ -207,7 +207,7 @@ describe("P08-D005 exact numeric ingress", () => {
 
     const recovered = runPromote(["--artifact", artifactPath, "--approval", approvalPath, "--canonical", canonical]);
     expect(recovered.code).toBe(0);
-    expect(await readFile(canonical)).toEqual(candidateBytesFromArtifact(doc));
+    expect(new Uint8Array(await readFile(canonical))).toEqual(candidateBytesFromArtifact(doc));
   });
 });
 
@@ -799,7 +799,7 @@ describe("P8-T01 promotion: separate explicit action", () => {
 
     const result = runPromote(["--artifact", join(staging, REVIEW_ARTIFACT_FILE_NAME), "--approval", approvalPath, "--canonical", canonical]);
     expect(result.code).toBe(0);
-    expect(await readFile(canonical)).toEqual(expectedBytes);
+    expect(new Uint8Array(await readFile(canonical))).toEqual(expectedBytes);
     // Determinism: a fresh generation of the same inputs yields the same promoted bytes.
     const staging2 = stagingFor("promote-exact-ref");
     await generateWithCuration(curation, staging2);
@@ -913,7 +913,7 @@ describe("P8-T01 promotion: separate explicit action", () => {
     await writeApproval(approvalPath, digestB);
     const recovered = runPromote(["--artifact", join(staging, REVIEW_ARTIFACT_FILE_NAME), "--approval", approvalPath, "--canonical", canonical]);
     expect(recovered.code).toBe(0);
-    expect(await readFile(canonical)).toEqual(candidateBytesFromArtifact(await artifactDoc(staging)));
+    expect(new Uint8Array(await readFile(canonical))).toEqual(candidateBytesFromArtifact(await artifactDoc(staging)));
   });
 
   test("an artifact whose embedded candidate was changed preserves the canonical sentinel", async () => {
@@ -1379,7 +1379,7 @@ describe("P08-D003 review artifact module (unit)", () => {
     const parsed = parseReviewArtifact(JSON.parse(decode(built.bytes)));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(new TextEncoder().encode(JSON.stringify(parsed.artifact.document, null, 2) + "\n")).toEqual(built.bytes);
+    expect(new TextEncoder().encode(JSON.stringify(parsed.artifact.document, null, 2) + "\n")).toEqual(new Uint8Array(built.bytes));
     expect(parsed.artifact.candidateSha256).toBe(sha256Hex(parsed.artifact.candidateBytes));
     expect(decode(parsed.artifact.candidateBytes)).toBe(JSON.stringify(built.document.candidate, null, 2) + "\n");
   });
@@ -1578,7 +1578,7 @@ describe("P08-D003 atomic write (unit)", () => {
         caught = error;
       }
       expect(caught instanceof OutputWriteError).toBe(true);
-      expect(await tempLitter(dir)).toEqual([collision.split("/").pop()]);
+      expect(await tempLitter(dir)).toEqual([collision.split("/").pop()!]);
     }
   });
 
@@ -1853,7 +1853,7 @@ describe("P08-D005 command-level ingress (negative, recovery, state transition)"
     await writeFile(approvalPath, JSON.stringify({ format: "repjot/curation/approval", schemaVersion: 1, candidateSha256: digest }));
     const recovered = runPromote(["--artifact", join(staging, REVIEW_ARTIFACT_FILE_NAME), "--approval", approvalPath, "--canonical", canonical]);
     expect(recovered.code).toBe(0);
-    expect(await readFile(canonical)).toEqual(candidateBytesFromArtifact(doc));
+    expect(new Uint8Array(await readFile(canonical))).toEqual(candidateBytesFromArtifact(doc));
   });
 
   test("a malformed byte in the approval file fails closed and never writes the canonical target", async () => {

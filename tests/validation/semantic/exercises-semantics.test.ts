@@ -32,10 +32,10 @@ function at(result: StaticSemanticResult, path: string): string[] {
 function setUnits(doc: Record<string, unknown>, exerciseIndex: number, dimension: string, units: string[]): void {
   const exercises = asRecord(doc["exercises"]);
   const exercise = asRecord(exercises[exerciseIndex]);
-  const measurements = asRecord(exercise["measurements"]);
+  const measurements = exercise["measurements"] as Array<Record<string, unknown>>;
   for (const measurement of measurements) {
-    if (asRecord(measurement)["dimension"] === dimension) {
-      asRecord(measurement)["compatibleUnits"] = units;
+    if (measurement["dimension"] === dimension) {
+      measurement["compatibleUnits"] = units;
     }
   }
 }

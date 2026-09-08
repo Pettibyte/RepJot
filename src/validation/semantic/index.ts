@@ -11,7 +11,13 @@
  * It stays a separate entry point: the static pass never reads a shard, and this pass reads no preferences.
  * Phase 5 lifecycle checks and the Phase 6 score module are both pure result semantic stages. The score module
  * uses only stored scores, detail, and recorded `reasonCode: "deprecated"` skips; it never proves omission from
- * a missing result. */
+ * a missing result.
+ *
+ * Preferences pass (P10-D001): validates one `preferences.json` document against the retained exercises
+ * directory (docs/contracts/user-data-contracts.md PF-02, spec §8 invariant 9). It is the only entry point
+ * that reads a user document alongside a static directory; EX-12 still holds for the static pass, which never
+ * reads preferences. Per FF-19 the caller validates the exercises document first; this pass does not
+ * re-report its diagnostics. */
 
 import { buildExercisesModel } from "./exercises";
 import type { ExercisesSemanticModel } from "./exercises";
@@ -24,6 +30,10 @@ export type { ExerciseIndexEntry, ExercisesSemanticModel } from "./exercises";
 export { validateWorkoutsSemantics } from "./workouts";
 export { STATIC_SEMANTIC_MESSAGES } from "./types";
 export type { StaticSemanticCode, StaticSemanticDiagnostic, StaticSemanticResult } from "./types";
+
+// Preferences cross-file pass (P10-D001).
+export { validatePreferencesSemantics, PREFERENCE_SEMANTIC_MESSAGES } from "./preferences";
+export type { PreferenceSemanticCode, PreferenceSemanticDiagnostic, PreferenceSemanticResult } from "./preferences";
 
 // Result lifecycle pass (P5-T01).
 export { validateResultsShard } from "./results";

@@ -1,0 +1,228 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "deep-nested",
+      "name": "Deep Nested Regression",
+      "root": {
+        "id": "deep-c-1",
+        "type": "container",
+        "name": "Level 1",
+        "strategy": "rounds",
+        "strategyConfig": {
+          "rounds": 3
+        },
+        "children": [
+          {
+            "id": "deep-c-2",
+            "type": "container",
+            "name": "Level 2",
+            "strategy": "amrap",
+            "strategyConfig": {
+              "duration": {
+                "value": 5,
+                "unit": "minute"
+              }
+            },
+            "children": [
+              {
+                "id": "deep-c-3",
+                "type": "container",
+                "name": "Level 3",
+                "strategy": "emom",
+                "strategyConfig": {
+                  "cycles": 4,
+                  "interval": {
+                    "value": 1,
+                    "unit": "minute"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "deep-c-4",
+                    "type": "container",
+                    "name": "Level 4",
+                    "strategy": "complex",
+                    "strategyConfig": {
+                      "cycles": 2
+                    },
+                    "children": [
+                      {
+                        "id": "deep-c-5",
+                        "type": "container",
+                        "name": "Level 5",
+                        "strategy": "sequence",
+                        "strategyConfig": {},
+                        "children": [
+                          {
+                            "id": "deep-c-6",
+                            "type": "container",
+                            "name": "Level 6",
+                            "strategy": "rounds",
+                            "strategyConfig": {
+                              "rounds": 3
+                            },
+                            "children": [
+                              {
+                                "id": "deep-c-7",
+                                "type": "container",
+                                "name": "Level 7",
+                                "strategy": "amrap",
+                                "strategyConfig": {
+                                  "duration": {
+                                    "value": 5,
+                                    "unit": "minute"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "id": "deep-c-8",
+                                    "type": "container",
+                                    "name": "Level 8",
+                                    "strategy": "emom",
+                                    "strategyConfig": {
+                                      "cycles": 4,
+                                      "interval": {
+                                        "value": 1,
+                                        "unit": "minute"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "deep-c-9",
+                                        "type": "container",
+                                        "name": "Level 9",
+                                        "strategy": "complex",
+                                        "strategyConfig": {
+                                          "cycles": 2
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "deep-c-10",
+                                            "type": "container",
+                                            "name": "Level 10",
+                                            "strategy": "sequence",
+                                            "strategyConfig": {},
+                                            "children": [
+                                              {
+                                                "id": "deep-c-11",
+                                                "type": "container",
+                                                "name": "Level 11",
+                                                "strategy": "rounds",
+                                                "strategyConfig": {
+                                                  "rounds": 3
+                                                },
+                                                "children": [
+                                                  {
+                                                    "id": "deep-c-12",
+                                                    "type": "container",
+                                                    "name": "Level 12",
+                                                    "strategy": "amrap",
+                                                    "strategyConfig": {
+                                                      "duration": {
+                                                        "value": 5,
+                                                        "unit": "minute"
+                                                      }
+                                                    },
+                                                    "children": [
+                                                      {
+                                                        "id": "deep-c-13",
+                                                        "type": "container",
+                                                        "name": "Level 13",
+                                                        "strategy": "emom",
+                                                        "strategyConfig": {
+                                                          "cycles": 4,
+                                                          "interval": {
+                                                            "value": 1,
+                                                            "unit": "minute"
+                                                          }
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "deep-c-14",
+                                                            "type": "container",
+                                                            "name": "Level 14",
+                                                            "strategy": "complex",
+                                                            "strategyConfig": {
+                                                              "cycles": 2
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "deep-c-15",
+                                                                "type": "container",
+                                                                "name": "Level 15",
+                                                                "strategy": "sequence",
+                                                                "strategyConfig": {},
+                                                                "children": [
+                                                                  {
+                                                                    "id": "deep-c-16",
+                                                                    "type": "container",
+                                                                    "name": "Level 16",
+                                                                    "strategy": "rounds",
+                                                                    "strategyConfig": {
+                                                                      "rounds": 3
+                                                                    },
+                                                                    "children": [
+                                                                      {
+                                                                        "id": "deep-leaf-1",
+                                                                        "type": "exercise",
+                                                                        "exerciseId": "pull-up",
+                                                                        "stimulus": "conditioning",
+                                                                        "prescription": {
+                                                                          "reps": 5,
+                                                                          "weight": {
+                                                                            "value": 105,
+                                                                            "unit": "lb"
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      {
+                                                                        "id": "deep-leaf-2",
+                                                                        "type": "exercise",
+                                                                        "exerciseId": "air-squat",
+                                                                        "stimulus": "power",
+                                                                        "prescription": {
+                                                                          "reps": 5,
+                                                                          "weight": {
+                                                                            "value": 110,
+                                                                            "unit": "lb"
+                                                                          }
+                                                                        },
+                                                                        "setType": "working"
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -203,7 +203,7 @@ describe("diagnostic stability and safety", () => {
 
   test("the input document is never mutated by validation", () => {
     const document = resultsDocument("2026-08-31T23:30:00-07:00");
-    document["sessions"][0]["notes"] = "keep me";
+    (document["sessions"] as Array<Record<string, unknown>>)[0]["notes"] = "keep me";
     const snapshot = JSON.stringify(document);
     validator.validate("results", 1, document);
     validator.validate("results", 1, resultsDocument("2026-09-01T06:30:00Z"));
@@ -217,9 +217,9 @@ describe("diagnostic stability and safety", () => {
 
   test("diagnostics carry only safe fields and never expose raw document values", () => {
     const document = resultsDocument("2026-09-01T06:30:00Z");
-    (document["sessions"][0] as Record<string, unknown>)["status"] = "SECRET-STATUS-VALUE";
-    (document["sessions"][0] as Record<string, unknown>)["notes"] = "SECRET-NOTES-VALUE";
-    (document["sessions"][0] as Record<string, unknown>)["unexpectedKey"] = { deep: "SECRET-DEEP" };
+    (document["sessions"] as Array<Record<string, unknown>>)[0]["status"] = "SECRET-STATUS-VALUE";
+    (document["sessions"] as Array<Record<string, unknown>>)[0]["notes"] = "SECRET-NOTES-VALUE";
+    (document["sessions"] as Array<Record<string, unknown>>)[0]["unexpectedKey"] = { deep: "SECRET-DEEP" };
     const result = validator.validate("results", 1, document);
     expect(result.valid).toBe(false);
     const serialized = JSON.stringify(result);
@@ -234,7 +234,7 @@ describe("diagnostic stability and safety", () => {
 
   test("required failures name the missing property and keep fixed messages", () => {
     const document = resultsDocument("2026-09-01T06:30:00Z");
-    delete (document["sessions"][0] as Record<string, unknown>)["updatedAtUtc"];
+    delete (document["sessions"] as Array<Record<string, unknown>>)[0]["updatedAtUtc"];
     const result = validator.validate("results", 1, document);
     expect(result.valid).toBe(false);
     const required = result.errors.filter(

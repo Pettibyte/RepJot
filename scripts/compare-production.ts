@@ -350,7 +350,7 @@ async function runRecordBaseline(io: CompatibilityIo, options: Options): Promise
     await io.ensureDirectory(dirname(options.baselinePath));
     await io.writeAtomic(options.baselinePath, baselineBytes);
   } catch (error) {
-    const code = error instanceof Error && typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "baseline-write-failed";
+    const code = error instanceof Error && typeof (error as unknown as { code?: unknown }).code === "string" ? (error as unknown as { code: string }).code : "baseline-write-failed";
     return fail(io, code, options.baselinePath, "the baseline manifest could not be written");
   }
 

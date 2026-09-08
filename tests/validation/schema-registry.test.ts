@@ -76,14 +76,14 @@ describe("production registry", () => {
       sessions: [session],
       sessionTombstones: []
     };
-    const validator = registry.getValidator("results", 1);
+    const validator = registry.getValidator("results", 1)!;
     expect(validator(document)).toBe(true);
 
     // A structurally wrong executionPlan fails through the referenced workouts definition.
     const broken = JSON.parse(JSON.stringify(document));
     delete broken.sessions[0].executionPlan.strategyConfig;
     expect(validator(broken)).toBe(false);
-    const paths = (validator.errors as Array<{ instancePath: string }>).map(
+    const paths = (validator.errors as unknown as Array<{ instancePath: string }>).map(
       (error) => error.instancePath
     );
     expect(paths).toContain("/sessions/0/executionPlan");
@@ -94,8 +94,8 @@ describe("production registry", () => {
     const second = createSchemaRegistry();
     expect(first.problems).toEqual(second.problems);
     const document = minimalPreferences();
-    expect(first.getValidator("preferences", 1)(document)).toBe(true);
-    expect(second.getValidator("preferences", 1)(document)).toBe(true);
+    expect(first.getValidator("preferences", 1)!(document)).toBe(true);
+    expect(second.getValidator("preferences", 1)!(document)).toBe(true);
   });
 
   test("the production Ajv asserts date-time as an assertion, not an annotation", () => {
@@ -198,7 +198,7 @@ describe("custom registries", () => {
     const fresh = createSchemaRegistry();
     expect(fresh.problems).toEqual([]);
     expect(fresh.has("workouts", 1)).toBe(true);
-    expect(fresh.getValidator("workouts", 1)({ format: "repjot/workouts", schemaVersion: 1, workouts: [] })).toBe(true);
+    expect(fresh.getValidator("workouts", 1)!({ format: "repjot/workouts", schemaVersion: 1, workouts: [] })).toBe(true);
   });
 
   test("duplicate detection is deterministic across identically built registries", () => {
@@ -242,7 +242,7 @@ describe("custom registries", () => {
     expect(registry.has("exercises", 1)).toBe(false);
     // The sibling schema still compiles and validates in the same registry.
     expect(registry.has("preferences", 1)).toBe(true);
-    expect(registry.getValidator("preferences", 1)(minimalPreferences())).toBe(true);
+    expect(registry.getValidator("preferences", 1)!(minimalPreferences())).toBe(true);
   });
 
   test("an unknown keyword fails under strict mode as invalid-schema", () => {
@@ -304,6 +304,6 @@ describe("custom registries", () => {
 
     const fresh = createSchemaRegistry();
     expect(fresh.problems).toEqual([]);
-    expect(fresh.getValidator("workouts", 1)({ format: "repjot/workouts", schemaVersion: 1, workouts: [] })).toBe(true);
+    expect(fresh.getValidator("workouts", 1)!({ format: "repjot/workouts", schemaVersion: 1, workouts: [] })).toBe(true);
   });
 });

@@ -18,16 +18,19 @@
  * one lazily built module-scoped registry that every default validator acquisition and the
  * `validate:schemas` command reuse, so the repository schemas compile once at startup (ADR-005).
  * The registry uses no clock, locale, randomness, network, or DOM access.
+ *
+ * Schema ingress is exact bytes (GATES.md Section 2): the four repository schema files are read
+ * as raw bytes and parsed with the shared exact JSON parser (`parseExactJson`). Invalid UTF-8,
+ * a leading BOM, duplicate members (including escape-equivalent names), and malformed JSON all
+ * fail closed with a stable `schema-ingress` problem; no engine `JSON.parse` fallback exists.
  */
 import Ajv2020 from "ajv/dist/2020";
 import type { Ajv } from "ajv";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import type { DocumentFamily } from "../domain/families";
-
-import exercisesV1 from "../../schemas/exercises/v1.schema.json";
-import workoutsV1 from "../../schemas/workouts/v1.schema.json";
-import preferencesV1 from "../../schemas/preferences/v1.schema.json";
-import resultsV1 from "../../schemas/results/v1.schema.json";
+import { parseExactJson } from "../curation/exact-json";
 
 /** The single schema draft supported by the registry (FF-17). */
 export const SCHEMA_DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
@@ -84,7 +87,8 @@ export type ProblemCode =
   | "unexpected-schema-id"
   | "duplicate-schema-id"
   | "unsupported-draft"
-  | "unresolved-reference";
+  | "unresolved-reference"
+  | "schema-ingress";
 
 /**
  * A stable registry diagnostic. Only deterministic safe fields: the code, the structural `$id`
@@ -102,8 +106,43 @@ const PROBLEM_DETAILS: Record<ProblemCode, string> = {
   "unexpected-schema-id": "the schema $id is not a supported REP JOT schema id",
   "duplicate-schema-id": "two or more registered schemas declare the same $id",
   "unsupported-draft": "the schema does not declare Draft 2020-12",
-  "unresolved-reference": "a $ref in the schema does not resolve to a registered schema"
+  "unresolved-reference": "a $ref in the schema does not resolve to a registered schema",
+  "schema-ingress": "the schema file bytes are not exact ingress JSON (strict UTF-8, no BOM, no duplicate members, RFC 8259)"
 };
+
+/** The four repository schema files, relative to this module, in dependency-safe order. */
+const REPOSITORY_SCHEMA_FILES: readonly (readonly [string, string])[] = [
+  ["https://repjot.com/schemas/exercises/v1.schema.json", "../../schemas/exercises/v1.schema.json"],
+  ["https://repjot.com/schemas/workouts/v1.schema.json", "../../schemas/workouts/v1.schema.json"],
+  ["https://repjot.com/schemas/preferences/v1.schema.json", "../../schemas/preferences/v1.schema.json"],
+  ["https://repjot.com/schemas/results/v1.schema.json", "../../schemas/results/v1.schema.json"]
+];
+
+/**
+ * Read the four repository schema files as exact bytes and parse them with the exact JSON
+ * parser (GATES.md Section 2). Each unreadable or non-exact file becomes one stable
+ * `schema-ingress` problem; sibling schemas still load. The input files are never mutated.
+ */
+function loadRepositorySchemaDocuments(): { readonly documents: unknown[]; readonly problems: SchemaProblem[] } {
+  const documents: unknown[] = [];
+  const problems: SchemaProblem[] = [];
+  for (const [id, relativePath] of REPOSITORY_SCHEMA_FILES) {
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(readFileSync(fileURLToPath(new URL(relativePath, import.meta.url))));
+    } catch {
+      problems.push({ code: "schema-ingress", id, detail: PROBLEM_DETAILS["schema-ingress"] });
+      continue;
+    }
+    const parsed = parseExactJson(bytes);
+    if (!parsed.ok) {
+      problems.push({ code: "schema-ingress", id, detail: PROBLEM_DETAILS["schema-ingress"] });
+      continue;
+    }
+    documents.push(parsed.value);
+  }
+  return { documents, problems };
+}
 
 /** The safe raw error shape produced by a compiled validator. */
 export interface RawSchemaError {
@@ -120,21 +159,14 @@ export interface CompiledSchema {
 
 /**
  * Registry options. Both fields are injection seams for tests and later pipeline stages:
- * `schemas` replaces the four repository documents, `createAjv` replaces the validator factory.
- * Omitting both keeps the production registry exactly as built from `schemas/`.
+ * `schemas` replaces the four repository documents (already-parsed values; it bypasses the
+ * exact-byte file ingress used by the production default), `createAjv` replaces the validator
+ * factory. Omitting both keeps the production registry built from the `schemas/` files.
  */
 export interface SchemaRegistryOptions {
   readonly schemas?: readonly unknown[];
   readonly createAjv?: () => Ajv;
 }
-
-/** The four repository v1 schema documents, in dependency-safe order (FF-02 positive case). */
-const DEFAULT_SCHEMA_DOCUMENTS: readonly unknown[] = [
-  exercisesV1 as unknown,
-  workoutsV1 as unknown,
-  preferencesV1 as unknown,
-  resultsV1 as unknown
-];
 
 // Strict asserted `date-time` (FF-12): RFC 3339 section 5.6 grammar with T/t and Z/z separators,
 // optional fractional seconds, and a numeric offset that must be the full `+/-HH:MM` pair per
@@ -238,12 +270,16 @@ export function getProductionRegistry(): SchemaRegistry {
  * isolated registry is required (injected test fixtures, custom schema sets).
  */
 export function createSchemaRegistry(options?: SchemaRegistryOptions): SchemaRegistry {
+  const injected = options !== undefined && options.schemas !== undefined;
+  // The production default ingests the repository schema files as exact bytes (GATES.md §2);
+  // an injected `schemas` array is already-parsed test material and skips file ingress.
+  const loaded = injected ? null : loadRepositorySchemaDocuments();
   const documents =
-    options !== undefined && options.schemas !== undefined ? options.schemas : DEFAULT_SCHEMA_DOCUMENTS;
+    options !== undefined && options.schemas !== undefined ? options.schemas : loaded!.documents;
   const createAjv =
     options !== undefined && options.createAjv !== undefined ? options.createAjv : createProductionAjv;
 
-  const problems: SchemaProblem[] = [];
+  const problems: SchemaProblem[] = loaded !== null ? [...loaded.problems] : [];
   const claimedIds = new Set<string>();
   // Insertion-ordered: $id -> accepted schema document. Deterministic iteration.
   const accepted = new Map<string, unknown>();

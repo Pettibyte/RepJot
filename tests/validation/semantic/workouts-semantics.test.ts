@@ -23,6 +23,10 @@ function clone<T>(value: T): T {
 function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
+/** Index one node's children array while keeping the record type for mutation. */
+function childAt(parent: Record<string, unknown>, index: number): Record<string, unknown> {
+  return (parent["children"] as Array<Record<string, unknown>>)[index];
+}
 /** Validate the context exercises document against one (possibly mutated) workouts document. */
 function check(workoutsDoc: Record<string, unknown>): StaticSemanticResult {
   return validateStaticDocuments(exercisesContext, workoutsDoc);
@@ -90,7 +94,7 @@ describe("WK-01 / WK-02 identity uniqueness", () => {
   test("a duplicate node ID within one workout fails at the second occurrence", () => {
     const doc = clone(asRecord(workoutsContext));
     const root = firstWorkoutRoot(doc);
-    const cindy = asRecord(root["children"])[1];
+    const cindy = childAt(root, 1);
     (cindy["children"] as Record<string, unknown>[])[2]["id"] = "cindy-pull-ups";
     const result = check(doc);
     expect(result.valid).toBe(false);
@@ -109,7 +113,7 @@ describe("WK-01 / WK-02 identity uniqueness", () => {
 describe("exercise reference resolution", () => {
   test("an unknown exerciseId fails at its property pointer without cascading", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     (cindy["children"] as Record<string, unknown>[])[0]["exerciseId"] = "ghost-exercise";
     const result = check(doc);
     expect(result.valid).toBe(false);
@@ -122,7 +126,7 @@ describe("exercise reference resolution", () => {
 describe("WK-10 prescription semantics", () => {
   test("a dimension the exercise does not list fails at the field pointer", () => {
     const doc = clone(asRecord(workoutsContext));
-    const kbComplex = asRecord(firstWorkoutRoot(doc)["children"])[3];
+    const kbComplex = childAt(firstWorkoutRoot(doc), 3);
     (kbComplex["children"] as Record<string, unknown>[])[1]["prescription"] = { weight: { value: 5, unit: "kg" } };
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
@@ -160,8 +164,8 @@ describe("WK-10 prescription semantics", () => {
 
   test("a plain top-level reps field on a non-repetition exercise fails at its pointer", () => {
     const doc = clone(asRecord(workoutsContext));
-    const emomBlock = asRecord(firstWorkoutRoot(doc)["children"])[2]; // plank supports duration only
-    (asRecord(emomBlock["children"])[0])["prescription"] = { duration: { value: 30, unit: "second" }, reps: 5 };
+    const emomBlock = childAt(firstWorkoutRoot(doc), 2); // plank supports duration only
+    childAt(emomBlock, 0)["prescription"] = { duration: { value: 30, unit: "second" }, reps: 5 };
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
     expect(result.valid).toBe(false);
@@ -172,7 +176,7 @@ describe("WK-10 prescription semantics", () => {
 
   test("a plain reps field in an iteration override on a non-repetition exercise fails at its pointer", () => {
     const doc = clone(asRecord(workoutsContext));
-    const emomBlock = asRecord(firstWorkoutRoot(doc)["children"])[2];
+    const emomBlock = childAt(firstWorkoutRoot(doc), 2);
     pushChild(
       emomBlock,
       exerciseNode("emom-plank", "plank", { duration: { value: 30, unit: "second" }, iterations: [{ iteration: 2, reps: 3 }] })
@@ -224,7 +228,7 @@ describe("WK-15 iteration rules", () => {
 
   test("an AMRAP has no configured count, so overrides are unbounded there", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, exerciseNode("cindy-rows", "pull-up", { reps: 5, iterations: [{ iteration: 99, reps: 2 }] }));
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
@@ -261,7 +265,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("a duration-only leaf inside the AMRAP fails at the leaf pointer", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, exerciseNode("cindy-plank", "plank", { duration: { value: 30, unit: "second" } }));
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
@@ -271,8 +275,8 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("a reps-capable leaf whose static prescription has no reps fails at the leaf pointer", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
-    (asRecord(cindy["children"])[0])["prescription"] = { addedWeight: { value: 5, unit: "kg" } };
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
+    childAt(cindy, 0)["prescription"] = { addedWeight: { value: 5, unit: "kg" } };
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
     expect(result.valid).toBe(false);
@@ -281,15 +285,15 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("the same leaf with static reps in its prescription stays eligible", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
-    (asRecord(cindy["children"])[0])["prescription"] = { reps: 10, addedWeight: { value: 5, unit: "kg" } };
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
+    childAt(cindy, 0)["prescription"] = { reps: 10, addedWeight: { value: 5, unit: "kg" } };
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     expect(check(doc).valid).toBe(true);
   });
 
   test("a nested EMOM over repetition-based leaves stays eligible (finite cycles, fixed order)", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, containerNode("cindy-emom", "emom", { cycles: 2, interval: { value: 1, unit: "minute" } }, [
       exerciseNode("cindy-emom-leaf", "pull-up", { reps: 5 })
     ]));
@@ -300,7 +304,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("a nested EMOM with a duration-only leaf fails via the existing leaf rule", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, containerNode("cindy-emom", "emom", { cycles: 2, interval: { value: 1, unit: "minute" } }, [
       exerciseNode("cindy-emom-plank", "plank", { duration: { value: 30, unit: "second" } })
     ]));
@@ -312,7 +316,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("an iteration override above an EMOM's cycles fails (finite bound preserved)", () => {
     const doc = clone(asRecord(workoutsContext));
-    const emomBlock = asRecord(firstWorkoutRoot(doc)["children"])[2]; // cycles: 4
+    const emomBlock = childAt(firstWorkoutRoot(doc), 2); // cycles: 4
     pushChild(emomBlock, exerciseNode("emom-rows", "pull-up", { reps: 5, iterations: [{ iteration: 5, reps: 2 }] }));
     expect(schemaValidator.validate("workouts", 1, doc).valid).toBe(true);
     const result = check(doc);
@@ -322,7 +326,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("a nested AMRAP inside the AMRAP is non-deterministic even without capture", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, containerNode("cindy-inner-amrap", "amrap", { duration: { value: 5, unit: "minute" } }, [
       exerciseNode("inner-leaf", "air-squat", { reps: 5 })
     ]));
@@ -333,7 +337,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("a nested fixed-rounds container over repetition-based leaves stays eligible", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, containerNode("cindy-rounds", "rounds", { rounds: 2 }, [
       exerciseNode("cr-pull-ups", "pull-up", { reps: 5 }),
       exerciseNode("cr-air-squats", "air-squat", { reps: 10 })
@@ -345,7 +349,7 @@ describe("WK-06 deterministic rounds_and_reps eligibility", () => {
 
   test("an unresolvable leaf inside the AMRAP reports only the missing reference", () => {
     const doc = clone(asRecord(workoutsContext));
-    const cindy = asRecord(firstWorkoutRoot(doc)["children"])[1];
+    const cindy = childAt(firstWorkoutRoot(doc), 1);
     pushChild(cindy, exerciseNode("cindy-ghost", "ghost-exercise", { reps: 5 }));
     const result = check(doc);
     expect(codes(result)).toContain("exercise-reference-missing");

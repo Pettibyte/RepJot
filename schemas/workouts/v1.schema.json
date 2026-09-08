@@ -84,19 +84,62 @@
       }
     },
     "node": {
-      "oneOf": [
-        { "$ref": "#/$defs/containerNode" },
-        { "$ref": "#/$defs/exerciseNode" }
-      ]
+      "description": "Selected linearly by the `type` constant so nested validation stays proportional to document size (no branch re-walks children).",
+      "if": { "$ref": "#/$defs/isContainerType" },
+      "then": { "$ref": "#/$defs/containerNode" },
+      "else": { "$ref": "#/$defs/exerciseNode" }
+    },
+    "isContainerType": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "const": "container" } }
+    },
+    "isStrategySequence": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": { "strategy": { "const": "sequence" } }
+    },
+    "isStrategyRounds": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": { "strategy": { "const": "rounds" } }
+    },
+    "isStrategyAmrap": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": { "strategy": { "const": "amrap" } }
+    },
+    "isStrategyEmom": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": { "strategy": { "const": "emom" } }
+    },
+    "isStrategyComplex": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": { "strategy": { "const": "complex" } }
     },
     "containerNode": {
-      "oneOf": [
-        { "$ref": "#/$defs/sequenceContainer" },
-        { "$ref": "#/$defs/roundsContainer" },
-        { "$ref": "#/$defs/amrapContainer" },
-        { "$ref": "#/$defs/emomContainer" },
-        { "$ref": "#/$defs/complexContainer" }
-      ]
+      "description": "Selected linearly by the `strategy` constant: exactly one guard can match, and only the matching container schema is evaluated. Any other shape (unknown or missing strategy) falls through to a rejecting branch.",
+      "if": { "$ref": "#/$defs/isStrategySequence" },
+      "then": { "$ref": "#/$defs/sequenceContainer" },
+      "else": {
+        "if": { "$ref": "#/$defs/isStrategyRounds" },
+        "then": { "$ref": "#/$defs/roundsContainer" },
+        "else": {
+          "if": { "$ref": "#/$defs/isStrategyAmrap" },
+          "then": { "$ref": "#/$defs/amrapContainer" },
+          "else": {
+            "if": { "$ref": "#/$defs/isStrategyEmom" },
+            "then": { "$ref": "#/$defs/emomContainer" },
+            "else": {
+              "if": { "$ref": "#/$defs/isStrategyComplex" },
+              "then": { "$ref": "#/$defs/complexContainer" },
+              "else": false
+            }
+          }
+        }
+      }
     },
     "sequenceContainer": {
       "type": "object",

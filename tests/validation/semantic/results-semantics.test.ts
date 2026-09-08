@@ -86,7 +86,7 @@ function resultAtNode(
   return {
     type: "exercise",
     workoutId: workoutId,
-    executionPath: [{ nodeId: "root" }].concat(path),
+    executionPath: [{ nodeId: "root" } as Record<string, unknown>, ...path],
     exerciseId: exerciseId,
     status: "completed",
     values: values

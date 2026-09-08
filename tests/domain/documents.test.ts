@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentFamily } from "../../src/domain/families";
+import type { DocumentFamily, DocumentFormat, EnvelopeRecognition, LogicalNameRecognition } from "../../src/domain/families";
 import {
   CURRENT_VERSION, EXERCISES_FORMAT, EXERCISES_LOGICAL_NAME, PREFERENCES_FORMAT, PREFERENCES_LOGICAL_NAME,
   RESULTS_FORMAT, SUPPORT_FLOOR_VERSION, WORKOUTS_FORMAT, WORKOUTS_LOGICAL_NAME, hasCanonicalUtcTimestampShape,
@@ -19,11 +19,11 @@ import {
 } from "./document-builders";
 
 /** Deep snapshot for proving recognition never mutates its input. */
-function snapshot(value: unknown): unknown {
-  return JSON.parse(JSON.stringify(value));
+function snapshot<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
-const FORMAT_FOR_FAMILY: Record<DocumentFamily, string> = {
+const FORMAT_FOR_FAMILY: Record<DocumentFamily, DocumentFormat> = {
   exercises: EXERCISES_FORMAT,
   workouts: WORKOUTS_FORMAT,
   preferences: PREFERENCES_FORMAT,
@@ -76,7 +76,7 @@ describe("family and version constants", () => {
 });
 
 describe("logical name recognition", () => {
-  const CANONICAL_NAME_CASES: readonly (readonly [unknown, unknown])[] = [
+  const CANONICAL_NAME_CASES: readonly (readonly [string, LogicalNameRecognition])[] = [
     [EXERCISES_LOGICAL_NAME, { status: "static-exercises", name: "exercises.json" }],
     [WORKOUTS_LOGICAL_NAME, { status: "static-workouts", name: "workouts.json" }],
     [PREFERENCES_LOGICAL_NAME, { status: "user-preferences", name: "preferences.json" }],
@@ -110,7 +110,7 @@ describe("logical name recognition", () => {
 });
 
 describe("envelope recognition rejections", () => {
-  const SINGLE_REJECTION_CASES: readonly (readonly [string, () => unknown, DocumentFamily | null, unknown])[] = [
+  const SINGLE_REJECTION_CASES: readonly (readonly [string, () => unknown, DocumentFamily | null, EnvelopeRecognition])[] = [
     ["unknown family format is rejected distinctly", malformedEnvelopeUnknownFamily, null, { status: "unknown-format" }],
     ["missing format is rejected distinctly", malformedEnvelopeMissingFormat, "results", { status: "missing-format" }],
     ["non-object input is rejected distinctly and not thrown away", malformedEnvelopeNotAnObject, "exercises", { status: "not-an-object" }],
@@ -135,12 +135,10 @@ describe("envelope recognition rejections", () => {
     });
   });
 
-  const INHERITED_ENVELOPE_CASES: readonly (readonly [string, () => { readonly input: unknown; readonly prototype: Record<string, unknown> }, string])[] = [
+  for (const [label, build, status] of [
     ["format", inheritedFormatEnvelope, "missing-format"],
     ["schemaVersion", inheritedVersionEnvelope, "missing-version"]
-  ];
-
-  for (const [label, build, status] of INHERITED_ENVELOPE_CASES) {
+  ] as const) {
     test(`inherited ${label} on the prototype is rejected as absent, input and prototype unchanged (FF-10)`, () => {
       const { input, prototype } = build();
       const inputBefore = snapshot(input);
@@ -151,13 +149,13 @@ describe("envelope recognition rejections", () => {
     });
   }
 
-  const VERSION_REJECTION_CASES: readonly (readonly [() => unknown, DocumentFamily, string])[] = [
-    [malformedEnvelopeStringVersion, "results", "non-number-version"],
-    [malformedEnvelopeNullVersion, "results", "non-number-version"],
-    [malformedEnvelopeFractionalVersion, "results", "non-integer-version"],
-    [malformedEnvelopeZeroVersion, "preferences", "non-positive-version"],
-    [malformedEnvelopeNegativeVersion, "workouts", "non-positive-version"]
-  ];
+  const VERSION_REJECTION_CASES = [
+    [malformedEnvelopeStringVersion, "results" as DocumentFamily, "non-number-version"],
+    [malformedEnvelopeNullVersion, "results" as DocumentFamily, "non-number-version"],
+    [malformedEnvelopeFractionalVersion, "results" as DocumentFamily, "non-integer-version"],
+    [malformedEnvelopeZeroVersion, "preferences" as DocumentFamily, "non-positive-version"],
+    [malformedEnvelopeNegativeVersion, "workouts" as DocumentFamily, "non-positive-version"]
+  ] as const;
 
   test("string, fractional, null, zero, and negative versions are distinct rejections", () => {
     for (const [build, family, status] of VERSION_REJECTION_CASES) {

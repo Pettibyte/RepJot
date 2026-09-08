@@ -75,8 +75,12 @@ function memIo(files: Map<string, Uint8Array>, fetched?: Record<string, Uint8Arr
         fetchCalls.push(url);
         return fetched !== undefined && url in fetched ? fetched[url] : null;
       },
-      out: (line: string): void => outLines.push(line),
-      err: (line: string): void => errLines.push(line)
+      out: (line: string): void => {
+        outLines.push(line);
+      },
+      err: (line: string): void => {
+        errLines.push(line);
+      }
     },
     out: () => outLines,
     err: () => errLines,
@@ -572,11 +576,12 @@ describe("baseline document and approval", () => {
     const pair = await loadPair("compatible");
     const identity = extractBundleIdentity(pair.prior[0], pair.prior[1]);
     expect(identity.equipmentIds.has("barbell")).toBe(true);
-    expect(identity.exercises.get("back-squat").measurements.get("weight")).toEqual(["kg", "lb"]);
+    expect(identity.exercises.get("back-squat")!.measurements.get("weight")).toEqual(["kg", "lb"]);
     const strengthDay = identity.workouts.get("strength-day");
-    expect(strengthDay.nodes.get("engine-room").scoreContract).toBe("scored/intervals/optional");
-    expect(strengthDay.nodes.get("engine-room").timed).toBe(true);
-    expect(strengthDay.nodes.get("plank-hold").parentId).toBe("engine-room");
+    expect(strengthDay).toBeDefined();
+    expect(strengthDay!.nodes.get("engine-room")!.scoreContract).toBe("scored/intervals/optional");
+    expect(strengthDay!.nodes.get("engine-room")!.timed).toBe(true);
+    expect(strengthDay!.nodes.get("plank-hold")!.parentId).toBe("engine-room");
   });
 });
 

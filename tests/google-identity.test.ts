@@ -297,7 +297,7 @@ describe('Google authorization continuity', () => {
 
   test('revocation posts a hidden form and confirms token rejection', async () => {
     const browser = installBrowser();
-    globalThis.fetch = (async (): Promise<Response> => new Response(null, { status: 401 })) as typeof fetch;
+    globalThis.fetch = (async (): Promise<Response> => new Response(null, { status: 401 })) as unknown as typeof fetch;
 
     const revocation = revokeDriveAuthorization('test-token', 10);
     expect(browser.submittedForm?.method).toBe('post');
@@ -311,7 +311,7 @@ describe('Google authorization continuity', () => {
 
   test('an unconfirmed revocation keeps the fallback path available', async () => {
     installBrowser();
-    globalThis.fetch = (async (): Promise<Response> => new Response('{}', { status: 200 })) as typeof fetch;
+    globalThis.fetch = (async (): Promise<Response> => new Response('{}', { status: 200 })) as unknown as typeof fetch;
 
     await expect(revokeDriveAuthorization('test-token', 5)).rejects.toThrow(
       'Google did not confirm that it revoked access'

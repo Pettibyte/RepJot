@@ -8,6 +8,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "validate:schemas": "bun scripts/validate-schemas.ts",
+    "validate:static": "bun scripts/validate-static.ts",
+    "validate:static:fixtures": "bun scripts/validate-static.ts --fixtures-root tests/fixtures/static",
     "compare:production": "bun scripts/compare-production.ts",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts"
   },
@@ -16,6 +18,7 @@
     "@types/node": "^26.2.0",
     "@types/sax": "^1.2.7",
     "acorn": "^8.18.0",
+    "bun-types": "^1.4.2",
     "svelte": "latest",
     "svelte-check": "latest",
     "typescript": "~6",
