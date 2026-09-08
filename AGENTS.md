@@ -5,6 +5,7 @@
 REP JOT is a lightweight fitness tracker.
 
 - Exercise library and programs stored as global and user JSON files hosted in the static bundle.
+- Creating workouts is a dev-time activity made in a trusted environment. 
 - User authenticates with Google OAuth.
 - Workout history stored as per-user JSON files in Google Drive appDataFolder.
 - Static site hosted at github pages at `https://repjot.com`

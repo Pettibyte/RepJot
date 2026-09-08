@@ -63,7 +63,7 @@ Every child writes its full report to its report file and returns only a compact
 
 Do not merely tell a child to read its template. The rendered child prompt must be self-contained.
 
-Spawn one subsession at a time, sequentially; we are running in a constrained environment, and child sessions share the same file system, so parallel runs may be slow and have side effects. 
+Important: Spawn one subsession at a time, sequentially, using `yield_subsession` to wait for callback. We are running in a constrained environment, and child sessions share the same file system, so parallel runs may be slow and have side effects. 
 
 MODEL ROUTING
 
