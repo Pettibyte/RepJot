@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read every s
 
 ## 4. Ordered task
 
-- [ ] **P11-T01 — Define pipeline stages and typed errors**
+- [x] **P11-T01 — Define pipeline stages and typed errors**
   - **Objective:** Give every pipeline result an explicit stage, provenance record, and safe error category.
   - **Inspect:** Phases 1-10 diagnostics, Architecture Sections 12 and 16, and schema-versioning Version Handling.
   - **Create or edit:** `src/documents/pipeline-types.ts`, `src/errors/app-error.ts`, and `tests/document-pipeline.test.ts`.
