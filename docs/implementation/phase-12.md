@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read every s
 
 ## 4. Ordered task
 
-- [ ] **P12-T01 — Parse exact bytes without application limits**
+- [x] **P12-T01 — Parse exact bytes without application limits**
   - **Objective:** Reject malformed encoding or JSON while preserving source bytes and accepting documents of all application-level sizes and depths.
   - **Inspect:** Architecture Sections 12, 14, and 15, the resolved unlimited-limit decision, and Kindle memory facts.
   - **Create or edit:** `src/documents/safe-json-parser.ts`, generated parser fixtures, and `tests/document-pipeline.test.ts`.
