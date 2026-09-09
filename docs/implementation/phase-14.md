@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read every s
 
 ## 4. Ordered task
 
-- [ ] **P14-T01 — Build sequential family migration registries**
+- [x] **P14-T01 — Build sequential family migration registries**
   - **Objective:** Represent support floors and ordered transitions without fake legacy migrations.
   - **Inspect:** `schemas/**`, schema-versioning Migration Chains, and current version constants.
   - **Create or edit:** `src/migrations/migration-registry.ts`, `src/migrations/families/*.ts`, and `tests/migration-registry.test.ts`.
