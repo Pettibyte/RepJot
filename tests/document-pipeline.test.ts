@@ -4145,7 +4145,7 @@ describe("envelope stage: module shape, imports, purity, and ES2019 output", () 
       "matchCanonicalLogicalName",
       "selectFamilyRegistry"
     ]);
-    expect(Object.keys(documentPipelineModule).sort()).toEqual(["recognizeDocumentEnvelope"]);
+    expect(Object.keys(documentPipelineModule).sort()).toEqual(["loadDocument", "recognizeDocumentEnvelope"]);
     expect(typeof documentEnvelopeModule.matchCanonicalLogicalName).toBe("function");
     expect(typeof documentEnvelopeModule.selectFamilyRegistry).toBe("function");
     expect(typeof documentEnvelopeModule.envelopeOutcomeForRecognition).toBe("function");
@@ -4159,7 +4159,16 @@ describe("envelope stage: module shape, imports, purity, and ES2019 output", () 
       "./pipeline-types",
       "./pipeline-types"
     ]);
-    expect(envelopeImportSpecifiers(STAGE_MODULE_SOURCE)).toEqual(["./envelope", "./envelope", "./pipeline-types"]);
+    expect(envelopeImportSpecifiers(STAGE_MODULE_SOURCE)).toEqual([
+      "../domain/families",
+      "../migrations/migration-registry",
+      "../migrations/migration-registry",
+      "./envelope",
+      "./envelope",
+      "./pipeline-types",
+      "./pipeline-types",
+      "./safe-json-parser"
+    ]);
     for (const source of [ENVELOPE_MODULE_SOURCE, STAGE_MODULE_SOURCE]) {
       expect(matchesOf(uncommented(source), /\brequire\s*\(/).length).toBe(0);
       expect(matchesOf(uncommented(source), /\bimport\s*\(/).length).toBe(0);
@@ -4171,6 +4180,11 @@ describe("envelope stage: module shape, imports, purity, and ES2019 output", () 
     const codes = [uncommented(ENVELOPE_MODULE_SOURCE), uncommented(STAGE_MODULE_SOURCE)];
     for (const row of FORBIDDEN_ENVELOPE_TEXT) {
       for (const code of codes) {
+        // Scope decision 7b (Amendment): the "migrat" row stays in force for envelope.ts; from
+        // P15-T01 the pipeline module legitimately imports src/migrations (scope decision 1).
+        if (row[0] === "migrat" && code === codes[1]) {
+          continue;
+        }
         expect(row[0] + " (" + row[1] + "): " + String(code.indexOf(row[0]) !== -1)).toBe(row[0] + " (" + row[1] + "): false");
       }
     }
@@ -4193,7 +4207,10 @@ describe("envelope stage: module shape, imports, purity, and ES2019 output", () 
       );
     }
     // The stage module reads no envelope field and builds no error of its own.
-    for (const absent of ["format", "schemaVersion", "makePipelineError", "recognizeEnvelope", "recognizeLogicalName"]) {
+    // Scope decision 7b (Amendment): "schemaVersion" and "makePipelineError" left this list — the
+    // wired pipeline must read the envelope's declared version and build rejections with the accepted
+    // constructor; the P15 group asserts both are used only for those two duties.
+    for (const absent of ["format", "recognizeEnvelope", "recognizeLogicalName"]) {
       expect("document-pipeline.ts never mentions " + absent + ": " + String(stageCode.indexOf(absent) !== -1)).toBe(
         "document-pipeline.ts never mentions " + absent + ": false"
       );
@@ -4281,5 +4298,1673 @@ function envelopeStageTypeProbes(): void {
 describe("envelope stage: compile-time boundaries", () => {
   test("the envelope-stage type probes are present for bun run check", () => {
     expect(typeof envelopeStageTypeProbes).toBe("function");
+  });
+});
+
+// ===========================================================================
+// P15-T01 — the whole-pipeline function `loadDocument`: one call runs parse,
+// envelope, declared-schema, migration, post-migration-schema, semantic, and
+// normalization, in that order, and fails byte-identically. Authority:
+// docs/implementation/phase-15.md (task P15-T01 — objective "Make stage
+// ordering impossible to bypass through normal pipeline use", acceptance "The
+// call trace is parse, recognize, historical schema, migration, next schema,
+// final semantic, normalize. Failed inputs remain byte-identical"), the seven
+// binding Phase 15 scope decisions in .agent-work/phase-15/task.md,
+// docs/ARCHITECTURE.md Section 12, specs/schema-versioning.md §Migration
+// chains loader steps 1-9 and §Result migrations and references,
+// docs/contracts/families-and-files.md FF-05, FF-14, FF-18, FF-19, FF-20, and
+// docs/implementation/GATES.md Section 3 ("Validation-after-migration | Spy
+// and Fixture", "Immutability | Unit | Frozen object, byte snapshot, repeated
+// load"). Every document, registry, step, and context below is synthetic and
+// labelled as such; no historical production document is invented, and no
+// large eager fixture is imported.
+// ===========================================================================
+
+import { loadDocument } from "../src/documents/document-pipeline";
+import type {
+  DocumentPipelineInput,
+  DocumentPipelinePorts,
+  DocumentPipelineResult,
+  LoadedDocument
+} from "../src/documents/document-pipeline";
+import { acceptedVersionRange, createFamilyMigrationRegistry } from "../src/migrations/migration-registry";
+import type {
+  FamilyMigrationRegistry,
+  FamilyMigrationStep,
+  FamilyMigrationStepInput,
+  FamilyMigrationStepResult
+} from "../src/migrations/migration-registry";
+import type { MigrationStepId, SourceIdentity } from "../src/documents/pipeline-types";
+
+// ---------------------------------------------------------------------------
+// Synthetic inputs and spies for the pipeline call
+// ---------------------------------------------------------------------------
+
+/** The canonical results-shard name every pipeline case loads under (FF-06). */
+const P15_NAME = "results-2026-09.json";
+
+/** The results `format` value. */
+const P15_FORMAT = "repjot/results";
+
+/** One synthetic source identity; Phase 15 records nothing from it (scope decision 2). */
+const P15_SOURCE: SourceIdentity = { kind: "drive-app-data-folder", driveFileId: "synthetic-drive-file-1" };
+
+/** The accepted results registry at the accepted bounds: floor 1, current 1, zero steps. */
+function p15AcceptedRegistry(family: DocumentFamily): FamilyMigrationRegistry<unknown> {
+  const built = createFamilyMigrationRegistry<unknown>({
+    family: family,
+    range: acceptedVersionRange(family),
+    steps: []
+  });
+  if (built.status !== "created") {
+    throw new Error("synthetic setup refused: " + built.failure.reason);
+  }
+  return built.registry;
+}
+
+/** One synthetic multi-version registry — the only way a version above the accepted v1 is reached. */
+function p15SyntheticRegistry(
+  family: DocumentFamily,
+  floor: number,
+  current: number,
+  steps: readonly FamilyMigrationStep<unknown>[]
+): FamilyMigrationRegistry<unknown> {
+  const built = createFamilyMigrationRegistry<unknown>({
+    family: family,
+    range: { supportFloorSchemaVersion: floor, currentSchemaVersion: current },
+    steps: steps
+  });
+  if (built.status !== "created") {
+    throw new Error("synthetic setup refused: " + built.failure.reason);
+  }
+  return built.registry;
+}
+
+/** How one synthetic step behaves when the walk applies it. */
+type P15StepBehavior =
+  | "advance"
+  | "fail"
+  | "throw"
+  | "same-reference"
+  | "wrong-version"
+  | "garbage"
+  | "mutate-input"
+  | "require-context";
+
+interface P15StepSpec {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+  readonly log: string[];
+  readonly behavior?: P15StepBehavior;
+  readonly seenInputs?: Record<string, unknown>[];
+  readonly seenContexts?: unknown[];
+  readonly produced?: Record<string, unknown>[];
+}
+
+/**
+ * One synthetic migration step. "advance" copies the document, moves `schemaVersion` to `to`, and
+ * records an `appliedThrough` field — the only document edit any synthetic step makes. Every other
+ * behaviour is one of the defects GATES.md Section 3 requires negative tests for.
+ */
+function p15Step(spec: P15StepSpec): FamilyMigrationStep<unknown> {
+  return {
+    id: spec.id,
+    fromSchemaVersion: spec.from,
+    toSchemaVersion: spec.to,
+    migrate: (stepInput: FamilyMigrationStepInput<unknown>): FamilyMigrationStepResult => {
+      spec.log.push("step:" + spec.id);
+      if (spec.seenContexts !== undefined) {
+        spec.seenContexts.push(stepInput.context);
+      }
+      if (spec.seenInputs !== undefined) {
+        spec.seenInputs.push(stepInput.document as Record<string, unknown>);
+      }
+      const behavior: P15StepBehavior = spec.behavior === undefined ? "advance" : spec.behavior;
+      if (behavior === "fail") {
+        return { status: "failed", detail: "synthetic: required reference workout-9 absent" };
+      }
+      if (behavior === "throw") {
+        throw new Error("synthetic step exception");
+      }
+      if (behavior === "same-reference") {
+        return { status: "migrated", document: stepInput.document };
+      }
+      if (behavior === "garbage") {
+        return { status: "not-a-step-result" } as unknown as FamilyMigrationStepResult;
+      }
+      if (behavior === "require-context") {
+        const reference = stepInput.context as { readonly hasWorkout9?: boolean } | null;
+        if (reference === null || typeof reference !== "object" || reference.hasWorkout9 !== true) {
+          return { status: "failed", detail: "synthetic: required reference workout-9 absent" };
+        }
+      }
+      if (behavior === "mutate-input") {
+        // Writes into the pipeline-owned value the step was given. In strict mode a frozen object
+        // would throw here, so surviving this line is itself the not-deep-frozen evidence.
+        (stepInput.document as Record<string, unknown>)["tampered"] = true;
+      }
+      const input = stepInput.document as Record<string, unknown>;
+      const produced: Record<string, unknown> = {};
+      for (const key of Object.keys(input)) {
+        produced[key] = input[key];
+      }
+      produced["schemaVersion"] = spec.to;
+      produced["appliedThrough"] = spec.id;
+      if (behavior === "wrong-version") {
+        produced["schemaVersion"] = spec.to + 5;
+      }
+      if (spec.produced !== undefined) {
+        spec.produced.push(produced);
+      }
+      return { status: "migrated", document: produced };
+    }
+  };
+}
+
+interface P15HarnessSpec {
+  readonly log: string[];
+  readonly registries?: Partial<Record<DocumentFamily, FamilyMigrationRegistry<unknown>>>;
+  readonly schemaRule?: (family: DocumentFamily, schemaVersion: number, document: unknown) => readonly string[] | null;
+  readonly semanticRule?: (family: DocumentFamily, document: unknown, context: unknown) => readonly string[] | null;
+  readonly normalize?: (document: unknown) => unknown;
+}
+
+/** The four accepted-bound registries, overridden only where a synthetic family is staged. */
+function p15Ports(spec: P15HarnessSpec): DocumentPipelinePorts<unknown, unknown> {
+  const registries: Record<DocumentFamily, FamilyMigrationRegistry<unknown>> = {
+    exercises: p15AcceptedRegistry("exercises"),
+    workouts: p15AcceptedRegistry("workouts"),
+    preferences: p15AcceptedRegistry("preferences"),
+    results: p15AcceptedRegistry("results")
+  };
+  const overrides = spec.registries;
+  if (overrides !== undefined) {
+    const families: DocumentFamily[] = ["exercises", "workouts", "preferences", "results"];
+    for (const family of families) {
+      const one = overrides[family];
+      if (one !== undefined) {
+        registries[family] = one;
+      }
+    }
+  }
+  const innerNormalize = spec.normalize;
+  const ports: DocumentPipelinePorts<unknown, unknown> = {
+    validateSchema: (schemaInput) => {
+      spec.log.push("schema:" + schemaInput.schemaVersion);
+      if (spec.schemaRule === undefined) {
+        return { status: "valid" };
+      }
+      const paths = spec.schemaRule(schemaInput.family, schemaInput.schemaVersion, schemaInput.document);
+      return paths === null ? { status: "valid" } : { status: "invalid", paths: paths };
+    },
+    migrationRegistries: registries,
+    validateSemantic: (semanticInput) => {
+      spec.log.push("semantic");
+      if (spec.semanticRule === undefined) {
+        return { status: "valid" };
+      }
+      const paths = spec.semanticRule(semanticInput.family, semanticInput.document, semanticInput.context);
+      return paths === null ? { status: "valid" } : { status: "invalid", paths: paths };
+    },
+    normalize: innerNormalize === undefined
+      ? undefined
+      : (document: unknown) => {
+          spec.log.push("normalize");
+          return innerNormalize(document);
+        }
+  };
+  return ports;
+}
+
+/** One pipeline call with the defaults this file uses everywhere. */
+function p15Load(
+  ports: DocumentPipelinePorts<unknown, unknown>,
+  bytes: Uint8Array,
+  context?: unknown,
+  logicalName?: unknown
+): DocumentPipelineResult<unknown> {
+  return loadDocument<unknown, unknown>({
+    logicalName: logicalName === undefined ? P15_NAME : logicalName,
+    source: P15_SOURCE,
+    bytes: bytes,
+    context: context === undefined ? null : context,
+    ports: ports
+  });
+}
+
+/** The exact bytes of one minimal synthetic results document at one declared version. */
+function p15Bytes(schemaVersion: number): Uint8Array {
+  return inputEncoder.encode(
+    JSON.stringify({ format: P15_FORMAT, schemaVersion: schemaVersion, yearMonthUtc: "2026-09", sessions: [] })
+  );
+}
+
+/** The rejection arm of one result, or a test failure naming what arrived instead. */
+function p15Rejected(result: DocumentPipelineResult<unknown>): PipelineError {
+  if (result.status !== "rejected") {
+    throw new Error("expected a rejection, observed status " + result.status);
+  }
+  return result.error;
+}
+
+/** Every field an accepted descriptor fixes, proven for the kind and the canonical name. */
+function p15ExpectFromTable(error: PipelineError, kind: PipelineErrorKind, logicalName?: string): void {
+  const descriptor = PIPELINE_ERROR_DESCRIPTORS[kind];
+  expect(error.kind).toBe(kind);
+  expect(error.stage).toBe(descriptor.stage);
+  expect(error.userCategory).toBe(descriptor.userCategory);
+  expect(error.retryable).toBe(descriptor.retryable);
+  expect(error.safeMessage).toBe(descriptor.safeMessage);
+  expect(error.logicalName).toBe(logicalName === undefined ? P15_NAME : logicalName);
+}
+
+/** A count of "normalize" entries in one spy log — the R-05 evidence. */
+function p15NormalizeCalls(log: readonly string[]): number {
+  let count = 0;
+  for (const entry of log) {
+    if (entry === "normalize") {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/** The frozen context every immutability case passes: a write into it would throw. */
+function p15FrozenContext(): unknown {
+  return Object.freeze({
+    label: "synthetic-reference-context",
+    refs: Object.freeze({ workouts: Object.freeze(["workout-1", "workout-2"]) })
+  });
+}
+
+// ---------------------------------------------------------------------------
+// R-01, R-05 — one call, one readable trace of the accepted stage order
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: one call runs the stages in the accepted order", () => {
+  test("a three-version load traces parse, envelope, declared-schema, migration, post-migration-schema, semantic", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      normalize: (document: unknown) => ({ syntheticModel: true, from: document })
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    if (result.status !== "loaded") {
+      return;
+    }
+    const loaded: LoadedDocument<unknown> = result;
+    expect(loaded.stage).toBe("semantic");
+    expect(loaded.trace).toEqual(["parse", "envelope", "declared-schema", "migration", "post-migration-schema", "semantic"]);
+    expect(loaded.appliedStepIds).toEqual(["step-1-2", "step-2-3"]);
+    expect(loaded.model).toEqual({ syntheticModel: true, from: {
+      format: P15_FORMAT, schemaVersion: 3, yearMonthUtc: "2026-09", sessions: [], appliedThrough: "step-2-3"
+    } });
+  });
+
+  test("the spy log is exactly parse through normalize in order", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({ log: log, registries: { results: registry }, normalize: (document) => document });
+
+    p15Load(ports, p15Bytes(1));
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3", "semantic", "normalize"]);
+  });
+
+  test("a current-version load runs zero steps, consults one schema version, and traces five stages", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    if (result.status !== "loaded") {
+      return;
+    }
+    expect(result.trace).toEqual(["parse", "envelope", "declared-schema", "migration", "semantic"]);
+    expect(result.appliedStepIds).toEqual([]);
+    expect(log).toEqual(["schema:1", "semantic"]);
+    expect(result.model).toEqual({ format: P15_FORMAT, schemaVersion: 1, yearMonthUtc: "2026-09", sessions: [] });
+  });
+
+  test("the trace is frozen, uses only accepted stage names, and ends at the last Section 12 stage", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const result = p15Load(ports, p15Bytes(1));
+    if (result.status !== "loaded") {
+      expect("loaded").toBe("observed");
+      return;
+    }
+    expect(Object.isFrozen(result.trace)).toBe(true);
+    for (const entry of result.trace) {
+      expect(PIPELINE_STAGES.indexOf(entry) !== -1).toBe(true);
+    }
+    expect(result.trace[result.trace.length - 1]).toBe("semantic");
+    // Scope decision 2: the outcome carries no provenance, digest, or validation-version value.
+    expect(Object.keys(result).sort()).toEqual(["appliedStepIds", "model", "stage", "status", "trace"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-02 — the declared schema runs before any migration step
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: the declared schema is consulted before any migration step", () => {
+  test("a document failing its declared schema is declared-schema-invalid with paths and zero step calls", () => {
+    const log: string[] = [];
+    const stepsSeen: Record<string, unknown>[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, seenInputs: stepsSeen })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      schemaRule: (family, schemaVersion) => (schemaVersion === 1 ? ["/schemaVersion"] : null),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "declared-schema-invalid");
+    expect(error.safeContext).toEqual({ paths: ["/schemaVersion"] });
+    expect(log).toEqual(["schema:1"]);
+    expect(stepsSeen.length).toBe(0);
+    expect(p15NormalizeCalls(log)).toBe(0);
+  });
+
+  test("the declared consultation names the recognized family and the document's own version", () => {
+    const log: string[] = [];
+    const asked: ([DocumentFamily, number])[] = [];
+    const ports = p15Ports({
+      log: log,
+      schemaRule: (family, schemaVersion) => {
+        asked.push([family, schemaVersion]);
+        return null;
+      }
+    });
+    p15Load(ports, p15Bytes(1));
+    expect(asked).toEqual([["results", 1]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-03 — every next-version output is validated before the next step and before semantic
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: every step output meets the next version schema before anything later runs", () => {
+  test("an invalid intermediate output stops with post-migration-schema-invalid and no second step", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      schemaRule: (family, schemaVersion) => (schemaVersion === 2 ? ["/appliedThrough"] : null),
+      normalize: (document) => document
+    });
+
+    const bytes = p15Bytes(1);
+    const before = byteSnapshot(bytes);
+    const context = p15FrozenContext();
+    const result = p15Load(ports, bytes, context);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "post-migration-schema-invalid");
+    expect(error.safeContext).toEqual({ paths: ["/appliedThrough"] });
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2"]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  test("an invalid final output stops with post-migration-schema-invalid and semantic never runs", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      schemaRule: (family, schemaVersion) => (schemaVersion === 3 ? [""] : null)
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    p15ExpectFromTable(p15Rejected(result), "post-migration-schema-invalid");
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3"]);
+    expect(log.indexOf("semantic")).toBe(-1);
+  });
+
+  test("the current version is validated exactly once for a migrated document", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 2, [p15Step({ id: "step-1-2", from: 1, to: 2, log: log })]);
+    const ports = p15Ports({ log: log, registries: { results: registry } });
+    p15Load(ports, p15Bytes(1));
+    expect(log.filter((entry) => entry === "schema:2").length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D001 — the document the next-version gate certifies is the document the
+// accepted walk adopts: one read of a step's returned result, no accessor
+// standing between the gate and the adoption
+// ---------------------------------------------------------------------------
+
+/**
+ * One synthetic step whose returned result hands out its `document` member from a prepared list, one
+ * value per read, so the gate's read and the adoption read can be told apart. This is the shape the
+ * accepted walk already defends against inside one containment (`src/migrations/migration-registry.ts`
+ * "a raising accessor or a proxy behind one of them is reported as that step having failed"): a legal
+ * returned object may yield a different value on each read, so a wrapper that reads it and then hands
+ * the same object on lets the gate certify one document while the walk adopts another.
+ *
+ * `useProxy` installs the same behaviour behind a Proxy rather than an accessor property;
+ * `throwOnRead` makes every read raise; `reads` counts the reads the pipeline performs.
+ */
+interface P15AccessorSpec {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+  readonly log: string[];
+  /** What the 1st, 2nd, ... read of the returned result's `document` member yields. */
+  readonly valuesFor: (stepInput: FamilyMigrationStepInput<unknown>) => readonly unknown[];
+  readonly seenInputs?: Record<string, unknown>[];
+  readonly reads?: { count: number };
+  readonly throwOnRead?: boolean;
+  readonly useProxy?: boolean;
+}
+
+function p15AccessorStep(spec: P15AccessorSpec): FamilyMigrationStep<unknown> {
+  return {
+    id: spec.id,
+    fromSchemaVersion: spec.from,
+    toSchemaVersion: spec.to,
+    migrate: (stepInput: FamilyMigrationStepInput<unknown>): FamilyMigrationStepResult => {
+      spec.log.push("step:" + spec.id);
+      if (spec.seenInputs !== undefined) {
+        spec.seenInputs.push(stepInput.document as Record<string, unknown>);
+      }
+      const values = spec.valuesFor(stepInput);
+      const state = { reads: 0 };
+      const handOut = (): unknown => {
+        const index = state.reads < values.length ? state.reads : values.length - 1;
+        state.reads += 1;
+        if (spec.reads !== undefined) {
+          spec.reads.count += 1;
+        }
+        if (spec.throwOnRead === true) {
+          throw new Error("synthetic: the document member cannot be read");
+        }
+        return values[index];
+      };
+      if (spec.useProxy === true) {
+        return new Proxy({ status: "migrated" } as Record<string, unknown>, {
+          get: (target: Record<string, unknown>, key: PropertyKey) => (key === "document" ? handOut() : target[key as string])
+        }) as unknown as FamilyMigrationStepResult;
+      }
+      const result = { status: "migrated" } as { status: "migrated"; readonly document: unknown };
+      Object.defineProperty(result, "document", { enumerable: true, get: handOut });
+      return result;
+    }
+  };
+}
+
+/** A synthetic v2 results document carrying one marker, so a test can name the exact object. */
+function p15V2(marker: string): Record<string, unknown> {
+  return {
+    format: P15_FORMAT,
+    schemaVersion: 2,
+    yearMonthUtc: "2026-09",
+    sessions: [],
+    appliedThrough: "step-1-2",
+    marker: marker
+  };
+}
+
+/** The schema rule every D001 case uses: only the marker tells a valid document from an invalid one. */
+function p15MarkerRule(schemaSawTwo: Record<string, unknown>[]): (family: DocumentFamily, schemaVersion: number, document: unknown) => readonly string[] | null {
+  return (family, schemaVersion, document) => {
+    if (schemaVersion === 2) {
+      schemaSawTwo.push(document as Record<string, unknown>);
+    }
+    return (document as Record<string, unknown>)["marker"] === "invalid" ? ["/marker"] : null;
+  };
+}
+
+describe("P15 pipeline: the gated step output is the adopted step output (D001)", () => {
+  test("a varying document member cannot hand the gate one value and the walk another", () => {
+    const log: string[] = [];
+    const certified = p15V2("gate-saw-this");
+    const neverAdopted = p15V2("invalid");
+    const seenInputs: Record<string, unknown>[] = [];
+    const schemaSawTwo: Record<string, unknown>[] = [];
+    const reads = { count: 0 };
+    const steps = [
+      p15AccessorStep({ id: "step-1-2", from: 1, to: 2, log: log, reads: reads, seenInputs: seenInputs, valuesFor: () => [certified, neverAdopted] }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs })
+    ];
+    const ports = p15Ports({
+      log: log,
+      registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+      schemaRule: p15MarkerRule(schemaSawTwo),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+
+    // The gate consulted the version-2 schema once, and the object it consulted is the object the next
+    // step received: the second read of the accessor is never taken, so nothing unvalidated is adopted.
+    expect(schemaSawTwo.length).toBe(1);
+    expect(seenInputs[1]).toBe(schemaSawTwo[0]);
+    expect(seenInputs[1]).toBe(certified);
+    expect(reads.count).toBe(1);
+    expect(result.status).toBe("loaded");
+    if (result.status === "loaded") {
+      // The loaded model descends from the certified document, not from the never-adopted one.
+      expect((result.model as Record<string, unknown>)["marker"]).toBe("gate-saw-this");
+      expect(result.appliedStepIds).toEqual(["step-1-2", "step-2-3"]);
+      expect(result.trace).toEqual(["parse", "envelope", "declared-schema", "migration", "post-migration-schema", "semantic"]);
+    }
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3", "semantic", "normalize"]);
+  });
+
+  test("the same counterexample behind a Proxy instead of an accessor property", () => {
+    const log: string[] = [];
+    const certified = p15V2("gate-saw-this");
+    const neverAdopted = p15V2("invalid");
+    const seenInputs: Record<string, unknown>[] = [];
+    const schemaSawTwo: Record<string, unknown>[] = [];
+    const reads = { count: 0 };
+    const steps = [
+      p15AccessorStep({ id: "step-1-2", from: 1, to: 2, log: log, reads: reads, seenInputs: seenInputs, useProxy: true, valuesFor: () => [certified, neverAdopted] }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs })
+    ];
+    const ports = p15Ports({
+      log: log,
+      registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+      schemaRule: p15MarkerRule(schemaSawTwo),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+
+    expect(schemaSawTwo.length).toBe(1);
+    expect(seenInputs[1]).toBe(schemaSawTwo[0]);
+    expect(reads.count).toBe(1);
+    expect(result.status).toBe("loaded");
+    if (result.status === "loaded") {
+      expect((result.model as Record<string, unknown>)["marker"]).toBe("gate-saw-this");
+    }
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3", "semantic", "normalize"]);
+  });
+
+  test("control: a stable multi-step load still succeeds with the same trace and the same order", () => {
+    const log: string[] = [];
+    const seenInputs: Record<string, unknown>[] = [];
+    const steps = [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, seenInputs: seenInputs }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs })
+    ];
+    const ports = p15Ports({
+      log: log,
+      registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    if (result.status === "loaded") {
+      expect(result.stage).toBe("semantic");
+      expect(result.trace).toEqual(["parse", "envelope", "declared-schema", "migration", "post-migration-schema", "semantic"]);
+      expect(result.appliedStepIds).toEqual(["step-1-2", "step-2-3"]);
+      expect((result.model as Record<string, unknown>)["schemaVersion"]).toBe(3);
+      expect((result.model as Record<string, unknown>)["appliedThrough"]).toBe("step-2-3");
+    }
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3", "semantic", "normalize"]);
+    // Each step still receives the previous step's own output by identity — no rebuild stands between.
+    expect(seenInputs[1]["schemaVersion"]).toBe(2);
+    expect(seenInputs[1]["appliedThrough"]).toBe("step-1-2");
+  });
+
+  test("a later valid read cannot rescue an output the gate already rejected", () => {
+    const log: string[] = [];
+    const neverAdopted = p15V2("invalid");
+    const seenInputs: Record<string, unknown>[] = [];
+    const steps = [
+      p15AccessorStep({ id: "step-1-2", from: 1, to: 2, log: log, seenInputs: seenInputs, valuesFor: () => [neverAdopted, p15V2("valid-on-second-read")] }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs })
+    ];
+    const schemaSawTwo: Record<string, unknown>[] = [];
+    const ports = p15Ports({
+      log: log,
+      registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+      schemaRule: p15MarkerRule(schemaSawTwo),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "post-migration-schema-invalid");
+    expect(error.safeContext).toEqual({ paths: ["/marker"] });
+    expect(schemaSawTwo.length).toBe(1);
+    expect(schemaSawTwo[0]).toBe(neverAdopted);
+    // No later port recorded a call: no second step, no semantic pass, no normalization.
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2"]);
+    expect(log.indexOf("semantic")).toBe(-1);
+    expect(p15NormalizeCalls(log)).toBe(0);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  test("an invalid final current-version output is still post-migration-schema-invalid", () => {
+    const log: string[] = [];
+    const steps = [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ];
+    const ports = p15Ports({
+      log: log,
+      registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+      schemaRule: (family, schemaVersion) => (schemaVersion === 3 ? [""] : null),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "post-migration-schema-invalid");
+    expect(error.safeContext).toEqual({ paths: [""] });
+    // No later port recorded a call.
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2", "step:step-2-3", "schema:3"]);
+    expect(log.indexOf("semantic")).toBe(-1);
+    expect(p15NormalizeCalls(log)).toBe(0);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  // The accepted walk keeps every reason it owns for an output it rejects: the rebuilt result carries the
+  // captured values, so an unchanged output is still reference-equal, a non-object is still invalid, a
+  // wrong version is still the wrong version, and an unreadable member still throws inside the walk.
+  interface AccessorRejectionCase {
+    readonly label: string;
+    readonly expectedReason: "step-output-unchanged" | "step-result-invalid" | "step-output-wrong-version" | "step-threw";
+    readonly valuesFor?: (stepInput: FamilyMigrationStepInput<unknown>) => readonly unknown[];
+    readonly throwOnRead?: boolean;
+  }
+  const ACCESSOR_REJECTIONS: readonly AccessorRejectionCase[] = [
+    { label: "unchanged output", expectedReason: "step-output-unchanged", valuesFor: (stepInput) => [stepInput.document] },
+    { label: "non-object output", expectedReason: "step-result-invalid", valuesFor: () => ["not-a-document"] },
+    { label: "null output", expectedReason: "step-result-invalid", valuesFor: () => [null] },
+    { label: "array output", expectedReason: "step-result-invalid", valuesFor: () => [[{ schemaVersion: 2 }]] },
+    // One version ahead of the step's own target: the walk's wrong-version condition, not a schema gap.
+    { label: "wrong-version output", expectedReason: "step-output-wrong-version", valuesFor: () => [{ format: P15_FORMAT, schemaVersion: 3, yearMonthUtc: "2026-09", sessions: [], marker: "skipped-a-version" }] },
+    { label: "unreadable output member", expectedReason: "step-threw", throwOnRead: true }
+  ];
+
+  for (const oneCase of ACCESSOR_REJECTIONS) {
+    test("an accessor " + oneCase.label + " keeps its own migration-failed reason, never a schema failure", () => {
+      const log: string[] = [];
+      const seenInputs: Record<string, unknown>[] = [];
+      const steps = [
+        p15AccessorStep({
+          id: "step-1-2",
+          from: 1,
+          to: 2,
+          log: log,
+          seenInputs: seenInputs,
+          throwOnRead: oneCase.throwOnRead,
+          valuesFor: oneCase.valuesFor === undefined ? () => [null] : oneCase.valuesFor
+        }),
+        p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs })
+      ];
+      const schemaSawTwo: Record<string, unknown>[] = [];
+      const ports = p15Ports({
+        log: log,
+        registries: { results: p15SyntheticRegistry("results", 1, 3, steps) },
+        schemaRule: p15MarkerRule(schemaSawTwo),
+        normalize: (document) => document
+      });
+
+      const bytes = p15Bytes(1);
+      const before = byteSnapshot(bytes);
+      const result = p15Load(ports, bytes, p15FrozenContext());
+
+      const error = p15Rejected(result);
+      p15ExpectFromTable(error, "migration-failed");
+      expect(error.safeContext).toEqual({ family: "results", fromSchemaVersion: 1, toSchemaVersion: 2 });
+      // The next-version gate never ran, so none of these accepted walk reasons became a schema failure.
+      expect(schemaSawTwo.length).toBe(0);
+      // No later port recorded a call: no second step, no semantic pass, no normalization.
+      expect(log).toEqual(["schema:1", "step:step-1-2"]);
+      expect(log.indexOf("semantic")).toBe(-1);
+      expect(p15NormalizeCalls(log)).toBe(0);
+      expect(result).not.toHaveProperty("model");
+      expect(sameByteValues(bytes, before)).toBe(true);
+
+      // The underlying reason stays visible to a caller that reads the accepted registry directly.
+      const direct = p15SyntheticRegistry("results", 1, 3, [
+        p15AccessorStep({
+          id: "step-1-2",
+          from: 1,
+          to: 2,
+          log: [],
+          throwOnRead: oneCase.throwOnRead,
+          valuesFor: oneCase.valuesFor === undefined ? () => [null] : oneCase.valuesFor
+        }),
+        p15Step({ id: "step-2-3", from: 2, to: 3, log: [] })
+      ]).migrate({ document: { format: P15_FORMAT, schemaVersion: 1 }, context: null });
+      expect(direct.status).toBe("failed");
+      if (direct.status === "failed") {
+        expect(direct.failure.reason).toBe(oneCase.expectedReason);
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// R-04 — semantic validation runs on the final current document, last of six
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: semantic validation is the last stage before normalization", () => {
+  test("an invalid final semantic pass is semantic-invalid with paths and no model", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      semanticRule: (family, document) => (document === null ? null : ["/sessions/0"]),
+      normalize: (document) => document
+    });
+
+    const result = p15Load(ports, p15Bytes(1));
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "semantic-invalid");
+    expect(error.safeContext).toEqual({ paths: ["/sessions/0"] });
+    expect(log[log.length - 1]).toBe("semantic");
+    expect(p15NormalizeCalls(log)).toBe(0);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  test("the semantic port sees the final version-3 document, and only it", () => {
+    const log: string[] = [];
+    const seen: unknown[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      semanticRule: (family, document) => {
+        seen.push(document);
+        return null;
+      }
+    });
+    p15Load(ports, p15Bytes(1));
+    expect(seen.length).toBe(1);
+    const final = seen[0] as Record<string, unknown>;
+    expect(final["schemaVersion"]).toBe(3);
+    expect(final["appliedThrough"]).toBe("step-2-3");
+  });
+
+  test("the semantic port sees the current document of a zero-step load", () => {
+    const log: string[] = [];
+    const seen: unknown[] = [];
+    const ports = p15Ports({
+      log: log,
+      semanticRule: (family, document) => {
+        seen.push(document);
+        return null;
+      }
+    });
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    expect(seen.length).toBe(1);
+    expect((seen[0] as Record<string, unknown>)["schemaVersion"]).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-05 — normalization only after success
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: normalization runs last, once, only after a semantic success", () => {
+  test("the injected normalizer runs exactly once, after semantic, and its value is the model", () => {
+    const log: string[] = [];
+    const sentinel = { syntheticModelFromNormalizer: 1 };
+    const registry = p15SyntheticRegistry("results", 1, 2, [p15Step({ id: "step-1-2", from: 1, to: 2, log: log })]);
+    const ports = p15Ports({ log: log, registries: { results: registry }, normalize: () => sentinel });
+
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    if (result.status !== "loaded") {
+      return;
+    }
+    expect(result.model).toBe(sentinel);
+    expect(p15NormalizeCalls(log)).toBe(1);
+    expect(log.slice(log.length - 2)).toEqual(["semantic", "normalize"]);
+  });
+
+  test("with no normalizer injected the model is the validated final document", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    if (result.status !== "loaded") {
+      return;
+    }
+    expect(result.model).toEqual({ format: P15_FORMAT, schemaVersion: 1, yearMonthUtc: "2026-09", sessions: [] });
+    expect(p15NormalizeCalls(log)).toBe(0);
+  });
+
+  test("no rejection path calls the normalizer, for any of the seven failure arms", () => {
+    const gapRegistry = p15SyntheticRegistry("results", 1, 3, []);
+    const threeStep = (log: string[]) =>
+      p15SyntheticRegistry("results", 1, 3, [
+        p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+        p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+      ]);
+    interface FailureCase {
+      readonly label: string;
+      readonly expectedKind: PipelineErrorKind;
+      readonly ports: (log: string[]) => DocumentPipelinePorts<unknown, unknown>;
+      readonly bytes: Uint8Array;
+      readonly unknownName?: unknown;
+    }
+    const cases: readonly FailureCase[] = [
+      {
+        label: "parse-failed",
+        expectedKind: "parse-failed",
+        ports: (log) => p15Ports({ log: log, normalize: (d) => d }),
+        bytes: new Uint8Array([0xff, 0xfe])
+      },
+      {
+        label: "envelope-missing-version",
+        expectedKind: "envelope-missing-version",
+        ports: (log) => p15Ports({ log: log, normalize: (d) => d }),
+        bytes: inputEncoder.encode(JSON.stringify({ format: P15_FORMAT }))
+      },
+      {
+        label: "declared-schema-invalid",
+        expectedKind: "declared-schema-invalid",
+        ports: (log) => p15Ports({ log: log, schemaRule: (f, v) => (v === 1 ? [""] : null), normalize: (d) => d }),
+        bytes: p15Bytes(1)
+      },
+      {
+        label: "migration-failed",
+        expectedKind: "migration-failed",
+        ports: (log) => p15Ports({ log: log, registries: { results: gapRegistry }, normalize: (d) => d }),
+        bytes: p15Bytes(1)
+      },
+      {
+        label: "post-migration-schema-invalid",
+        expectedKind: "post-migration-schema-invalid",
+        ports: (log) =>
+          p15Ports({
+            log: log,
+            registries: { results: threeStep(log) },
+            schemaRule: (f, v) => (v === 2 ? [""] : null),
+            normalize: (d) => d
+          }),
+        bytes: p15Bytes(1)
+      },
+      {
+        label: "semantic-invalid",
+        expectedKind: "semantic-invalid",
+        ports: (log) => p15Ports({ log: log, semanticRule: () => ["/sessions"], normalize: (d) => d }),
+        bytes: p15Bytes(1)
+      },
+      {
+        label: "unknown-file",
+        expectedKind: "parse-failed",
+        ports: (log) => p15Ports({ log: log, normalize: (d) => d }),
+        bytes: p15Bytes(1),
+        unknownName: "notes.txt"
+      }
+    ];
+    for (const oneCase of cases) {
+      const log: string[] = [];
+      if (oneCase.unknownName === undefined) {
+        const result = p15Load(oneCase.ports(log), oneCase.bytes);
+        const error = p15Rejected(result);
+        expect(error.kind).toBe(oneCase.expectedKind);
+      } else {
+        const result = p15Load(oneCase.ports(log), oneCase.bytes, null, oneCase.unknownName);
+        expect(result.status).toBe("unknown-file");
+      }
+      expect(p15NormalizeCalls(log)).toBe(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-06 — caller bytes and context are byte-identical on every path
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: the caller keeps its exact bytes and its context on every path", () => {
+  interface PathCase {
+    readonly label: string;
+    readonly ports: (log: string[]) => DocumentPipelinePorts<unknown, unknown>;
+    readonly bytes: () => Uint8Array;
+    readonly expected: "loaded" | "rejected" | "unknown-file";
+  }
+  const gapRegistry = p15SyntheticRegistry("results", 1, 3, []);
+  const twoSteps = (log: string[]) =>
+    p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+  const PATH_CASES: readonly PathCase[] = [
+    { label: "loaded", ports: (log) => p15Ports({ log: log }), bytes: () => p15Bytes(1), expected: "loaded" },
+    {
+      label: "loaded through a byte-order mark",
+      ports: (log) => p15Ports({ log: log }),
+      bytes: () => inputBytes(MARK, JSON.stringify({ format: P15_FORMAT, schemaVersion: 1, yearMonthUtc: "2026-09", sessions: [] })),
+      expected: "loaded"
+    },
+    {
+      label: "parse-failed",
+      ports: (log) => p15Ports({ log: log }),
+      bytes: () => new Uint8Array([0xff, 0x22, 0x22]),
+      expected: "rejected"
+    },
+    {
+      label: "envelope rejection",
+      ports: (log) => p15Ports({ log: log }),
+      bytes: () => inputEncoder.encode(JSON.stringify({ format: P15_FORMAT })),
+      expected: "rejected"
+    },
+    {
+      label: "declared-schema-invalid",
+      ports: (log) => p15Ports({ log: log, schemaRule: (f, v) => (v === 1 ? ["/"] : null) }),
+      bytes: () => p15Bytes(1),
+      expected: "rejected"
+    },
+    {
+      label: "migration-failed",
+      ports: (log) => p15Ports({ log: log, registries: { results: gapRegistry } }),
+      bytes: () => p15Bytes(1),
+      expected: "rejected"
+    },
+    {
+      label: "post-migration-schema-invalid",
+      ports: (log) => p15Ports({ log: log, registries: { results: twoSteps(log) }, schemaRule: (f, v) => (v === 2 ? ["/"] : null) }),
+      bytes: () => p15Bytes(1),
+      expected: "rejected"
+    },
+    {
+      label: "semantic-invalid",
+      ports: (log) => p15Ports({ log: log, semanticRule: () => ["/"] }),
+      bytes: () => p15Bytes(1),
+      expected: "rejected"
+    },
+    {
+      label: "unknown-file",
+      ports: (log) => p15Ports({ log: log }),
+      bytes: () => new Uint8Array([0xff, 0xfe, 0xfd]),
+      expected: "unknown-file"
+    }
+  ];
+
+  for (const oneCase of PATH_CASES) {
+    test("path " + oneCase.label + ": bytes identical, writable, context untouched, frozen context accepted", () => {
+      const log: string[] = [];
+      const bytes = oneCase.bytes();
+      const before = byteSnapshot(bytes);
+      const context = p15FrozenContext();
+      const contextBefore = JSON.stringify(context);
+
+      const result = p15Load(oneCase.ports(log), bytes, context, oneCase.label === "unknown-file" ? "notes.txt" : undefined);
+      expect(result.status).toBe(oneCase.expected);
+
+      // Same length, same bytes, same identity, and still writable by the caller (FF-14, FF-20).
+      expect(sameByteValues(bytes, before)).toBe(true);
+      expect(bytes.length).toBe(before.length);
+      const last = bytes.length - 1;
+      bytes[last] = bytes[last];
+      expect(sameByteValues(bytes, before)).toBe(true);
+      // The frozen context was accepted and never written: it is a frozen object, so any write
+      // anywhere in this call would already have thrown in strict mode.
+      expect(JSON.stringify(context)).toBe(contextBefore);
+    });
+  }
+
+  test("a byte-order-mark input keeps its mark and still loads", () => {
+    const log: string[] = [];
+    const bytes = inputBytes(MARK, JSON.stringify({ format: P15_FORMAT, schemaVersion: 1, yearMonthUtc: "2026-09", sessions: [] }));
+    const result = p15Load(p15Ports({ log: log }), bytes);
+    expect(result.status).toBe("loaded");
+    expect(bytes[0]).toBe(0xef);
+    expect(bytes[1]).toBe(0xbb);
+    expect(bytes[2]).toBe(0xbf);
+  });
+
+  test("no port received a copy of the context: steps and semantic see the caller's own value", () => {
+    const log: string[] = [];
+    const seenContexts: unknown[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 2, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, seenContexts: seenContexts })
+    ]);
+    let semanticContext: unknown = undefined;
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      semanticRule: (family, document, context) => {
+        semanticContext = context;
+        return null;
+      }
+    });
+    const context = p15FrozenContext();
+    p15Load(ports, p15Bytes(1), context);
+    expect(seenContexts.length).toBe(1);
+    expect(seenContexts[0]).toBe(context);
+    expect(semanticContext).toBe(context);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-07, R-08 — a step that mutates its input corrupts nothing caller-owned;
+// each step receives the previous output, one read-only validated value
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: a mutating step corrupts nothing the caller owns", () => {
+  test("a tampered document is rejected by the schema stage and no later port runs", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: "mutate-input" }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+    ]);
+    const ports = p15Ports({
+      log: log,
+      registries: { results: registry },
+      // The synthetic schema rejects any document carrying the tampering marker.
+      schemaRule: (family, schemaVersion, document) =>
+        (document as Record<string, unknown>)["tampered"] === true ? ["/tampered"] : null,
+      normalize: (document) => document
+    });
+
+    const bytes = p15Bytes(1);
+    const before = byteSnapshot(bytes);
+    const context = p15FrozenContext();
+    const contextBefore = JSON.stringify(context);
+
+    const result = p15Load(ports, bytes, context);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "post-migration-schema-invalid");
+    expect(log).toEqual(["schema:1", "step:step-1-2", "schema:2"]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+    expect(JSON.stringify(context)).toBe(contextBefore);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  test("the step input is not deep-frozen: a write into the pipeline-owned value does not throw", () => {
+    const log: string[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 2, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: "mutate-input" })
+    ]);
+    const ports = p15Ports({ log: log, registries: { results: registry } });
+    // The mutation itself is the probe: this load only succeeds if the write above did not throw,
+    // and no deep-frozen value was involved. Scope decision 3 adds neither freeze nor clone.
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+  });
+
+  test("one value per step: each step receives the previous step's output, never the parsed root twice", () => {
+    const log: string[] = [];
+    const seenInputs: Record<string, unknown>[] = [];
+    const produced: Record<string, unknown>[] = [];
+    const registry = p15SyntheticRegistry("results", 1, 3, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: log, seenInputs: seenInputs, produced: produced }),
+      p15Step({ id: "step-2-3", from: 2, to: 3, log: log, seenInputs: seenInputs, produced: produced })
+    ]);
+    const ports = p15Ports({ log: log, registries: { results: registry } });
+
+    const result = p15Load(ports, p15Bytes(1));
+    expect(result.status).toBe("loaded");
+    expect(seenInputs.length).toBe(2);
+    expect(produced.length).toBe(2);
+    // Step two received exactly what step one produced — the identity proves no clone stands between
+    // steps — and neither step received the same value twice.
+    expect(seenInputs[1]).toBe(produced[0]);
+    expect(seenInputs[0]).not.toBe(seenInputs[1]);
+    expect(seenInputs[0]["schemaVersion"]).toBe(1);
+    expect(seenInputs[1]["schemaVersion"]).toBe(2);
+    // The applied identifiers appear in application order (R-08).
+    if (result.status === "loaded") {
+      expect(result.appliedStepIds).toEqual(["step-1-2", "step-2-3"]);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-09 — every accepted registry failure arm is one typed migration-failed
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: each registry failure is one typed migration-failed carrying family and versions", () => {
+  interface MigrationCase {
+    readonly label: string;
+    readonly behavior: P15StepBehavior;
+    readonly expectedReason:
+      | "step-reported-failure"
+      | "step-threw"
+      | "step-output-unchanged"
+      | "step-output-wrong-version"
+      | "step-result-invalid";
+  }
+  const MIGRATION_CASES: readonly MigrationCase[] = [
+    { label: "step-reported-failure", behavior: "fail", expectedReason: "step-reported-failure" },
+    { label: "step-threw", behavior: "throw", expectedReason: "step-threw" },
+    { label: "step-output-unchanged", behavior: "same-reference", expectedReason: "step-output-unchanged" },
+    { label: "step-output-wrong-version", behavior: "wrong-version", expectedReason: "step-output-wrong-version" },
+    { label: "step-result-invalid", behavior: "garbage", expectedReason: "step-result-invalid" }
+  ];
+
+  for (const oneCase of MIGRATION_CASES) {
+    test("a " + oneCase.label + " step stops with migration-failed 1->2 and no second step", () => {
+      const log: string[] = [];
+      const steps = [
+        p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: oneCase.behavior }),
+        p15Step({ id: "step-2-3", from: 2, to: 3, log: log })
+      ];
+      const ports = p15Ports({ log: log, registries: { results: p15SyntheticRegistry("results", 1, 3, steps) } });
+
+      const bytes = p15Bytes(1);
+      const before = byteSnapshot(bytes);
+      const context = p15FrozenContext();
+      const result = p15Load(ports, bytes, context);
+
+      const error = p15Rejected(result);
+      p15ExpectFromTable(error, "migration-failed");
+      expect(error.safeContext).toEqual({ family: "results", fromSchemaVersion: 1, toSchemaVersion: 2 });
+      // The step detail never reaches the pipeline error: only the three declared fields exist.
+      expect(Object.keys(error.safeContext).sort()).toEqual(["family", "fromSchemaVersion", "toSchemaVersion"]);
+      expect(log).toEqual(["schema:1", "step:step-1-2"]);
+      expect(sameByteValues(bytes, before)).toBe(true);
+      expect(result).not.toHaveProperty("model");
+
+      // The distinct underlying reason stays visible to a caller that reads the accepted registry.
+      const direct = p15SyntheticRegistry("results", 1, 3, [
+        p15Step({ id: "step-1-2", from: 1, to: 2, log: [], behavior: oneCase.behavior }),
+        p15Step({ id: "step-2-3", from: 2, to: 3, log: [] })
+      ]).migrate({ document: { format: P15_FORMAT, schemaVersion: 1 }, context: null });
+      expect(direct.status).toBe("failed");
+      if (direct.status === "failed") {
+        expect(direct.failure.reason).toBe(oneCase.expectedReason);
+      }
+    });
+  }
+
+  test("a chain gap stops with migration-failed naming the version that has no step", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log, registries: { results: p15SyntheticRegistry("results", 1, 3, []) } });
+    const result = p15Load(ports, p15Bytes(1));
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "migration-failed");
+    // The two integers are reads of the failure's own fields: the gap at version 1 and the walk's
+    // target, the current version 3 — the module performs no version arithmetic at all.
+    expect(error.safeContext).toEqual({ family: "results", fromSchemaVersion: 1, toSchemaVersion: 3 });
+    expect(log).toEqual(["schema:1"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-10 — missing reference context is one typed failure that invents nothing
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: reference context is passed through, never fabricated", () => {
+  function requireContextPorts(log: string[]): DocumentPipelinePorts<unknown, unknown> {
+    return p15Ports({
+      log: log,
+      registries: {
+        results: p15SyntheticRegistry("results", 1, 2, [
+          p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: "require-context" })
+        ])
+      }
+    });
+  }
+
+  test("a document needing a reference with context null is one typed failure naming no invented identity", () => {
+    const log: string[] = [];
+    const bytes = p15Bytes(1);
+    const before = byteSnapshot(bytes);
+    const result = p15Load(requireContextPorts(log), bytes, null);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "migration-failed");
+    // Nothing was invented: the safe context holds only the closed family and the two integers.
+    expect(Object.keys(error.safeContext).sort()).toEqual(["family", "fromSchemaVersion", "toSchemaVersion"]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+    expect(result).not.toHaveProperty("model");
+  });
+
+  test("a context lacking the required reference fails the same way", () => {
+    const log: string[] = [];
+    const result = p15Load(requireContextPorts(log), p15Bytes(1), { hasWorkout9: false });
+    p15ExpectFromTable(p15Rejected(result), "migration-failed");
+  });
+
+  test("a document that needs no reference loads with a context of null", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const result = p15Load(ports, p15Bytes(1), null);
+    expect(result.status).toBe("loaded");
+  });
+
+  test("the supplied context reaches the step and the semantic port unchanged and by identity", () => {
+    const log: string[] = [];
+    const seenContexts: unknown[] = [];
+    const ports = p15Ports({
+      log: log,
+      registries: {
+        results: p15SyntheticRegistry("results", 1, 2, [
+          p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: "require-context", seenContexts: seenContexts })
+        ])
+      }
+    });
+    const context = Object.freeze({ hasWorkout9: true });
+    const result = p15Load(ports, p15Bytes(1), context);
+    expect(result.status).toBe("loaded");
+    expect(seenContexts).toEqual([context]);
+    expect(seenContexts[0]).toBe(context);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-11 — an unknown name is refused before any byte is read or any port runs
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: an unknown name is refused before parsing and before every port", () => {
+  test("a non-canonical name on unparseable bytes is still the accepted unknown-file outcome", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const bytes = new Uint8Array([0xff, 0xfe, 0xfd, 0xfc]);
+    const before = byteSnapshot(bytes);
+
+    const result = p15Load(ports, bytes, null, "notes.txt");
+    expect(result).toEqual({ status: "unknown-file", name: "notes.txt" });
+    // Nothing ran: no schema, no step, no semantic, no normalizer — and the parse failure that a
+    // later stage would have reported never happened, because the name match came first.
+    expect(log).toEqual([]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+    expect(Object.keys(result).sort()).toEqual(["name", "status"]);
+  });
+
+  test("a non-string candidate returns the accepted null name", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const result = p15Load(ports, p15Bytes(1), null, 42);
+    expect(result).toEqual({ status: "unknown-file", name: null });
+    expect(log).toEqual([]);
+  });
+
+  test("the refusal selects no family, no version, and no registry, and no error kind is invented", () => {
+    const log: string[] = [];
+    const ports = p15Ports({ log: log });
+    const result = p15Load(ports, p15Bytes(1), null, "results-2026-99.json");
+    expect(result.status).toBe("unknown-file");
+    expect(result).not.toHaveProperty("error");
+    expect(result).not.toHaveProperty("family");
+    expect(log).toEqual([]);
+  });
+
+  test("the module matches the name before it parses inside loadDocument", () => {
+    const source = uncommented(PIPELINE_MODULE_SOURCE);
+    const start = source.indexOf("export function loadDocument");
+    expect(start !== -1).toBe(true);
+    const body = source.slice(start);
+    const nameAt = body.indexOf("matchCanonicalLogicalName(");
+    const parseAt = body.indexOf("parseDocumentBytes(");
+    expect(nameAt !== -1).toBe(true);
+    expect(parseAt !== -1).toBe(true);
+    expect(nameAt < parseAt).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-12 — parse failures keep the accepted reasons and stop the run
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: parse failures stop before every other stage", () => {
+  test("ill-formed UTF-8 is parse-failed invalid-utf8 with every later port uncalled", () => {
+    const log: string[] = [];
+    const bytes = new Uint8Array([0xff, 0xfe]);
+    const before = byteSnapshot(bytes);
+    const result = p15Load(p15Ports({ log: log }), bytes);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "parse-failed");
+    expect(error.safeContext).toEqual({ reason: "invalid-utf8" });
+    expect(log).toEqual([]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+  });
+
+  test("text that is not one JSON value is parse-failed malformed-json", () => {
+    const log: string[] = [];
+    const bytes = inputEncoder.encode("{not json");
+    const result = p15Load(p15Ports({ log: log }), bytes);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "parse-failed");
+    expect(error.safeContext).toEqual({ reason: "malformed-json" });
+    expect(log).toEqual([]);
+  });
+
+  test("a second byte-order mark is parse-failed byte-order-mark and both marks stay in the caller's bytes", () => {
+    const log: string[] = [];
+    const bytes = inputBytes(MARK, MARK, "{}");
+    const before = byteSnapshot(bytes);
+    const result = p15Load(p15Ports({ log: log }), bytes);
+    const error = p15Rejected(result);
+    p15ExpectFromTable(error, "parse-failed");
+    expect(error.safeContext).toEqual({ reason: "byte-order-mark" });
+    expect(log).toEqual([]);
+    expect(sameByteValues(bytes, before)).toBe(true);
+  });
+
+  test("exactly one leading mark is stripped for the parsed view while the caller keeps it", () => {
+    const log: string[] = [];
+    const body = JSON.stringify({ format: P15_FORMAT, schemaVersion: 1, yearMonthUtc: "2026-09", sessions: [] });
+    const bytes = inputBytes(MARK, body);
+    const before = byteSnapshot(bytes);
+    const result = p15Load(p15Ports({ log: log }), bytes);
+    expect(result.status).toBe("loaded");
+    if (result.status !== "loaded") {
+      return;
+    }
+    // The parsed view excludes the mark (the load succeeded), while the caller still owns every
+    // original byte, mark included (FF-14, D-02 Option BOM-2).
+    expect((result.model as Record<string, unknown>)["schemaVersion"]).toBe(1);
+    expect(sameByteValues(bytes, before)).toBe(true);
+    expect(bytes.length).toBe(MARK.length + inputEncoder.encode(body).length);
+    expect(bytes[0]).toBe(MARK[0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-13 — envelope rejections keep their own kinds and precede every port
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: each envelope rejection keeps its kind and precedes schema and migration", () => {
+  interface EnvelopeCase {
+    readonly label: string;
+    readonly document: unknown;
+    readonly name?: string;
+    readonly expectedKind: PipelineErrorKind;
+    readonly expectedContext?: Record<string, unknown>;
+  }
+  const ENVELOPE_CASES: readonly EnvelopeCase[] = [
+    { label: "primitive root", document: 42, expectedKind: "envelope-not-object" },
+    { label: "null root", document: null, expectedKind: "envelope-not-object" },
+    { label: "array root", document: [1, 2], expectedKind: "envelope-not-object" },
+    { label: "missing format", document: {}, expectedKind: "envelope-missing-format" },
+    { label: "unknown format", document: { format: "repjot/unknown", schemaVersion: 1 }, expectedKind: "envelope-unknown-format" },
+    {
+      label: "wrong family",
+      document: { format: P15_FORMAT, schemaVersion: 1 },
+      name: "exercises.json",
+      expectedKind: "envelope-wrong-family",
+      expectedContext: { family: "results", expectedFamily: "exercises" }
+    },
+    { label: "missing version", document: { format: P15_FORMAT }, expectedKind: "envelope-missing-version" },
+    { label: "string version", document: { format: P15_FORMAT, schemaVersion: "1" }, expectedKind: "envelope-non-number-version" },
+    { label: "fractional version", document: { format: P15_FORMAT, schemaVersion: 1.5 }, expectedKind: "envelope-non-integer-version" },
+    { label: "zero version", document: { format: P15_FORMAT, schemaVersion: 0 }, expectedKind: "envelope-non-positive-version" },
+    {
+      label: "future version",
+      document: { format: P15_FORMAT, schemaVersion: 2 },
+      expectedKind: "envelope-future-version",
+      expectedContext: { schemaVersion: 2, currentSchemaVersion: 1 }
+    }
+  ];
+
+  for (const oneCase of ENVELOPE_CASES) {
+    test("envelope case " + oneCase.label + " keeps its kind and calls no later port", () => {
+      const log: string[] = [];
+      const bytes = inputEncoder.encode(JSON.stringify(oneCase.document));
+      const before = byteSnapshot(bytes);
+      const result = p15Load(p15Ports({ log: log }), bytes, null, oneCase.name);
+      const error = p15Rejected(result);
+      p15ExpectFromTable(error, oneCase.expectedKind, oneCase.name);
+      if (oneCase.expectedContext !== undefined) {
+        expect(error.safeContext as unknown as Record<string, unknown>).toEqual(oneCase.expectedContext);
+      }
+      expect(log).toEqual([]);
+      expect(sameByteValues(bytes, before)).toBe(true);
+      expect(result).not.toHaveProperty("model");
+    });
+  }
+
+  // The unsupported-old arm is unreachable through a pipeline call for a documented reason: with the
+  // accepted CURRENT_VERSION and SUPPORT_FLOOR_VERSION both 1, no positive version is below the
+  // floor, and the accepted envelope-stage group above proves that table case unchanged. It therefore
+  // reaches no migration call here — because no input can reach one as unsupported-old at all.
+});
+
+// ---------------------------------------------------------------------------
+// R-16 — no state: repeated loads agree, documents are independent
+// ---------------------------------------------------------------------------
+
+describe("P15 pipeline: the pipeline holds no state across calls", () => {
+  test("the same bytes, ports, and context load twice to deep-equal outcomes and traces", () => {
+    const registry = p15SyntheticRegistry("results", 1, 2, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: [] })
+    ]);
+    const first = p15Load(p15Ports({ log: [], registries: { results: registry } }), p15Bytes(1));
+    const second = p15Load(p15Ports({ log: [], registries: { results: registry } }), p15Bytes(1));
+    expect(second).toEqual(first);
+    if (first.status === "loaded" && second.status === "loaded") {
+      expect(second.trace).toEqual(first.trace);
+    }
+  });
+
+  // "Every shard migrates independently" (FF-08): two shards of one family load through one port set
+  // in sequence without influencing each other. Both declare v1 because the accepted
+  // CURRENT_VERSION of every family is 1, so the envelope stage refuses a v2 document today; the
+  // version difference that a migration chain will carry lives in the injected registry, not in a
+  // document the accepted version bounds would admit.
+  test("two documents of one family load independently in sequence", () => {
+    const registry = p15SyntheticRegistry("results", 1, 2, [
+      p15Step({ id: "step-1-2", from: 1, to: 2, log: [] })
+    ]);
+    const ports = p15Ports({ log: [], registries: { results: registry } });
+    const september = p15Load(ports, p15Bytes(1), null, "results-2026-09.json");
+    const october = p15Load(ports, p15Bytes(1), null, "results-2026-10.json");
+    expect(september.status).toBe("loaded");
+    expect(october.status).toBe("loaded");
+    if (september.status === "loaded" && october.status === "loaded") {
+      expect(september.appliedStepIds).toEqual(["step-1-2"]);
+      expect(october.appliedStepIds).toEqual(["step-1-2"]);
+      expect(september.trace).toEqual(october.trace);
+      expect(september.model).toEqual(october.model);
+    }
+  });
+
+  test("a failed load consumes nothing and a corrected load still succeeds through the same ports", () => {
+    const log: string[] = [];
+    const ports = p15Ports({
+      log: log,
+      registries: {
+        results: p15SyntheticRegistry("results", 1, 2, [
+          p15Step({ id: "step-1-2", from: 1, to: 2, log: log, behavior: "require-context" })
+        ])
+      }
+    });
+    const failed = p15Load(ports, p15Bytes(1), null);
+    p15ExpectFromTable(p15Rejected(failed), "migration-failed");
+    const fixed = p15Load(ports, p15Bytes(1), { hasWorkout9: true });
+    expect(fixed.status).toBe("loaded");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R-14, R-15, R-17 — module shape, imports, purity, ES2019, closed kind set
+// ---------------------------------------------------------------------------
+
+/** The pipeline module's own text, scanned for mechanisms GATES.md Section 3 forbids on this path. */
+const PIPELINE_MODULE_SOURCE = readFileSync(new URL("../src/documents/document-pipeline.ts", import.meta.url), "utf8");
+
+/** Names and shapes that would put a second mechanism or a forbidden capability on this path. */
+const P15_FORBIDDEN_SHAPES: readonly (readonly [string, RegExp])[] = [
+  ["node module", /node:/],
+  ["bun module", /bun:/],
+  ["validation implementation import", /\.\.\/validation/],
+  ["fetch", /\bfetch\s*\(/],
+  ["XMLHttpRequest", /XMLHttpRequest/],
+  ["indexedDB", /indexedDB/i],
+  ["browser storage", /localStorage|sessionStorage/],
+  ["window", /\bwindow\b/],
+  ["navigator", /\bnavigator\b/],
+  ["clock", /\bDate\b/],
+  ["locale", /\bIntl\b/],
+  ["arithmetic budget", /\bMath\b/],
+  ["digest", /\bcrypto\b/],
+  ["UI", /svelte/i],
+  ["decoding here", /\bTextDecoder\b/],
+  ["encoding here", /\bTextEncoder\b/],
+  ["second parse", /\bJSON\b/],
+  ["deep clone", /structuredClone|Object\.assign/],
+  ["execution of content", /\beval\b|new Function/],
+  ["CommonJS", /\brequire\b/],
+  ["write path", /\bwrite[A-Z(]/],
+  ["schema document", /\$id/],
+  ["second envelope reader", /recognizeEnvelope\(|recognizeLogicalName\(/],
+  ["second name matcher", /2026|\.json["']/]
+];
+
+describe("P15 pipeline: module shape, imports, purity, ES2019, and the closed kind set", () => {
+  test("the module value-exports exactly the accepted P13 stage and the P15 pipeline call", () => {
+    expect(Object.keys(documentPipelineModule).sort()).toEqual(["loadDocument", "recognizeDocumentEnvelope"]);
+  });
+
+  test("the module imports the accepted siblings and nothing else — the positive census that replaces the P14 'not yet' fact", () => {
+    // Scope decision 7 moved the replaced Phase 14 expectation here as a positive closed-world
+    // census: document-pipeline.ts may import exactly these specifiers and no other, and the
+    // migration import is now required (scope decision 1) while src/main.ts still reaches none of it.
+    const code = uncommented(PIPELINE_MODULE_SOURCE);
+    const specifiers: string[] = [];
+    for (const hit of matchesOf(code, /from\s+"[^"]*"/)) {
+      specifiers.push(hit.replace(/^from\s+"/, "").replace(/"$/, ""));
+    }
+    specifiers.sort();
+    expect(specifiers).toEqual([
+      "../domain/families",
+      "../migrations/migration-registry",
+      "../migrations/migration-registry",
+      "./envelope",
+      "./envelope",
+      "./pipeline-types",
+      "./pipeline-types",
+      "./safe-json-parser"
+    ]);
+    // The one-way direction the same accepted census keeps: nothing under src/migrations imports
+    // src/documents, and the shipped entry point still reaches neither module.
+    const migrationsSource = uncommented(readFileSync(new URL("../src/migrations/migration-registry.ts", import.meta.url), "utf8"));
+    expect(migrationsSource.indexOf("documents/")).toBe(-1);
+  });
+
+  for (const forbidden of P15_FORBIDDEN_SHAPES) {
+    test("the module contains no " + forbidden[0], () => {
+      expect(forbidden[1].test(uncommented(PIPELINE_MODULE_SOURCE))).toBe(false);
+    });
+  }
+
+  test("the module holds no syntax newer than ES2019", () => {
+    const code = codeOnly(PIPELINE_MODULE_SOURCE);
+    for (const token of FORBIDDEN_ES2020_TOKENS) {
+      expect(code.indexOf(token)).toBe(-1);
+    }
+  });
+
+  test("the module freezes exactly one value it owns and copies no caller value", () => {
+    // The single Object.freeze is the success trace. There is no clone, no copy helper, and no freeze
+    // of any caller value (scope decision 3: no deep copy, no deep freeze).
+    expect(matchesOf(uncommented(PIPELINE_MODULE_SOURCE), /Object\.freeze\(/).length).toBe(1);
+  });
+
+  test("schemaVersion is only read and makePipelineError only builds rejections (decision 7b)", () => {
+    const code = uncommented(PIPELINE_MODULE_SOURCE);
+    // makePipelineError appears exactly once in the module, and only as the error field of the one
+    // rejection arm — it builds rejections and nothing else.
+    expect(matchesOf(code, /makePipelineError\(/).length).toBe(1);
+    expect(matchesOf(code, /error: makePipelineError\(/).length).toBe(1);
+    // No write to any schemaVersion: every mention is a read of an accepted value or a declared
+    // field name. The only property writes in the module would match these scans; both are empty.
+    expect(matchesOf(code, /schemaVersion\s*=[^=>]/).length).toBe(0);
+    expect(matchesOf(code, /"schemaVersion"\s*=[^=]/).length).toBe(0);
+    // The reads are exactly the envelope's declared version and the accepted result's version facts.
+    expect(code.indexOf("selection.schemaVersion") !== -1).toBe(true);
+    expect(code.indexOf("walked.currentSchemaVersion") !== -1).toBe(true);
+    expect(code.indexOf("selection.currentSchemaVersion") !== -1).toBe(true);
+    // And the accepted no-numeric-literal duty that stays in force for this module has its module-side
+    // half here: the migration-failed mapping performs no version arithmetic, so the wired module
+    // still holds no digit outside comments and strings.
+    expect(matchesOf(codeOnly(PIPELINE_MODULE_SOURCE), /(?<![\w.])\d+(?:\.\d+)?(?![\w])/).length).toBe(0);
+  });
+
+  test("every pipeline kind the module rejects with is an accepted member and none is new", () => {
+    const code = uncommented(PIPELINE_MODULE_SOURCE);
+    const used: string[] = [];
+    for (const hit of matchesOf(code, /rejectStage\("[a-z-]+"/)) {
+      used.push(hit.slice('rejectStage("'.length, hit.length - 1));
+    }
+    expect(used.sort()).toEqual([
+      "declared-schema-invalid",
+      "migration-failed",
+      "migration-failed",
+      "post-migration-schema-invalid",
+      "post-migration-schema-invalid",
+      "semantic-invalid"
+    ]);
+    for (const kindText of used) {
+      expect(PIPELINE_ERROR_KINDS.indexOf(kindText as PipelineErrorKind) !== -1).toBe(true);
+    }
+    expect(PIPELINE_ERROR_KINDS.length).toBe(15);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Compile-time boundaries for the pipeline call
+// ---------------------------------------------------------------------------
+
+function p15TypeProbes(): void {
+  const ports = p15Ports({ log: [] });
+  const bytes = p15Bytes(1);
+  const ok: DocumentPipelineResult<unknown> = loadDocument<unknown, unknown>({
+    logicalName: P15_NAME,
+    source: P15_SOURCE,
+    bytes: bytes,
+    context: null,
+    ports: ports
+  });
+  // @ts-expect-error the input carries no Drive change-indicator field (FF-11)
+  loadDocument<unknown, unknown>({ logicalName: P15_NAME, source: P15_SOURCE, bytes: bytes, context: null, ports: ports, modifiedTime: "synthetic" });
+  // @ts-expect-error the ports are required, so a load without them does not compile
+  loadDocument<unknown, unknown>({ logicalName: P15_NAME, source: P15_SOURCE, bytes: bytes, context: null });
+  // @ts-expect-error the accepted kind set is closed, so no normalize-stage error kind exists
+  const inventedKind: PipelineErrorKind = "normalize-failed";
+  // @ts-expect-error a trace holds Section 12 stage names only, and normalize is not one
+  const traceEntry: PipelineStage = "normalize";
+  if (ok.status === "loaded") {
+    // @ts-expect-error the loaded outcome is read-only
+    ok.stage = "parse";
+    const stageOfLoad: PipelineStage = ok.stage;
+    const stepsOfLoad: readonly MigrationStepId[] = ok.appliedStepIds;
+    void stageOfLoad;
+    void stepsOfLoad;
+  }
+  void ok;
+  void inventedKind;
+  void traceEntry;
+}
+
+describe("P15 pipeline: compile-time boundaries", () => {
+  test("the P15 type probes are present for bun run check", () => {
+    expect(typeof p15TypeProbes).toBe("function");
   });
 });

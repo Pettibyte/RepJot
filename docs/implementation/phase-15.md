@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read every s
 
 ## 4. Ordered task
 
-- [ ] **P15-T01 — Enforce validation before and after every migration**
+- [x] **P15-T01 — Enforce validation before and after every migration**
   - **Objective:** Make stage ordering impossible to bypass through normal pipeline use.
   - **Inspect:** Phases 1-10 schema/semantic APIs and Architecture Section 12 stage table.
   - **Create or edit:** `src/documents/document-pipeline.ts`, `tests/document-pipeline.test.ts`, and migration fixtures.

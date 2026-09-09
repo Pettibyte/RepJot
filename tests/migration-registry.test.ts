@@ -1711,7 +1711,6 @@ describe("migration modules: shape, imports, purity, and ES2019 output", () => {
   test("nothing imports src/migrations yet, so no shipped bundle changes", () => {
     const consumers = [
       "../src/main.ts",
-      "../src/documents/document-pipeline.ts",
       "../src/documents/envelope.ts",
       "../src/documents/pipeline-types.ts",
       "../src/documents/safe-json-parser.ts",
