@@ -2592,3 +2592,1694 @@ describe("parse stage: compile-time boundaries", () => {
     expect(typeof parseStageTypeProbes).toBe("function");
   });
 });
+// ===========================================================================
+// P13-T01 — the envelope stage: exact envelopes and exact logical names.
+//
+// Authority for every expectation below, written by hand from the sources rather than read back from
+// the modules under test:
+// - docs/implementation/phase-13.md: the objective "Select a family registry only from validated
+//   envelope fields and the expected logical name", the Steps line "Read only own `format` and
+//   `schemaVersion` fields from a plain object. Require a positive integer. Match static names and
+//   result-name patterns to exact families", the seven edge cases, and the acceptance line "No shape
+//   heuristic or Drive metadata influences family/version selection".
+// - docs/ARCHITECTURE.md Section 12 stage 2 with its failure column, and the Section 7 module-table row
+//   for src/documents/document-pipeline.ts.
+// - docs/contracts/families-and-files.md FF-01..FF-11 and FF-20, and specs/schema-versioning.md
+//   "Document envelope" and "Independent family versions".
+// - The accepted Phase 11 kind set and `PIPELINE_ERROR_DESCRIPTORS`, and the accepted constants
+//   CURRENT_VERSION and SUPPORT_FLOOR_VERSION.
+//
+// Every expectation names a kind, a safe-context field set, or a selection fact. No test decides an
+// outcome by reading an error message; the one message comparison asserts that `safeMessage` equals the
+// accepted fixed descriptor text, which is a table fact and not a branch. Inputs are fixed literals, the
+// small fixtures under tests/fixtures/envelopes/, or values built by the helpers below: no clock, no
+// random, no locale, no network, and no fixture outside that one new directory. Every rejected shape sits
+// next to a passing valid control, and each of the seven phase edge cases has a named test.
+// ===========================================================================
+
+import { readdirSync } from "node:fs";
+
+import * as documentEnvelopeModule from "../src/documents/envelope";
+import * as documentPipelineModule from "../src/documents/document-pipeline";
+import {
+  envelopeOutcomeForRecognition,
+  matchCanonicalLogicalName,
+  selectFamilyRegistry
+} from "../src/documents/envelope";
+import type { FamilyRegistryOutcome, FamilyRegistrySelection } from "../src/documents/envelope";
+import { recognizeDocumentEnvelope } from "../src/documents/document-pipeline";
+import type { DocumentEnvelopeInput, DocumentEnvelopeResult } from "../src/documents/document-pipeline";
+import { CURRENT_VERSION, SUPPORT_FLOOR_VERSION } from "../src/domain/families";
+import type { DocumentFamily, EnvelopeRecognition } from "../src/domain/families";
+
+// ---------------------------------------------------------------------------
+// Fixed inputs for the envelope stage, written from the contract rows by hand
+// ---------------------------------------------------------------------------
+
+/** The canonical filename of each family (FF-01..FF-04). */
+const ENVELOPE_NAME_BY_FAMILY: Readonly<Record<DocumentFamily, string>> = {
+  exercises: "exercises.json",
+  workouts: "workouts.json",
+  preferences: "preferences.json",
+  results: "results-2026-09.json"
+};
+
+/** The `format` value of each family (FF-01..FF-04). */
+const ENVELOPE_FORMAT_BY_FAMILY: Readonly<Record<DocumentFamily, string>> = {
+  exercises: "repjot/exercises",
+  workouts: "repjot/workouts",
+  preferences: "repjot/preferences",
+  results: "repjot/results"
+};
+
+/** The accepted version facts of each family, written from src/domain/families.ts by hand. */
+const ENVELOPE_EXPECTED_VERSIONS: Readonly<Record<DocumentFamily, { current: number; floor: number }>> = {
+  exercises: { current: 1, floor: 1 },
+  workouts: { current: 1, floor: 1 },
+  preferences: { current: 1, floor: 1 },
+  results: { current: 1, floor: 1 }
+};
+
+/** The four families, in the loading order of FF-19. */
+const ENVELOPE_FAMILIES: readonly DocumentFamily[] = ["exercises", "workouts", "preferences", "results"];
+
+/**
+ * The kinds whose accepted descriptor stage is `"envelope"`, read from the accepted table so that a kind
+ * added or renamed there shows up here rather than drifting from a hand-copied list.
+ */
+const envelopeStageKindList: PipelineErrorKind[] = [];
+for (const kindOfTable of PIPELINE_ERROR_KINDS) {
+  if (PIPELINE_ERROR_DESCRIPTORS[kindOfTable].stage === "envelope") {
+    envelopeStageKindList.push(kindOfTable);
+  }
+}
+const ENVELOPE_STAGE_KINDS: readonly PipelineErrorKind[] = envelopeStageKindList;
+
+/**
+ * The Section 16 category expected for each envelope kind, written from docs/ARCHITECTURE.md Section 16
+ * ("Unsupported schema: Name file and supported version range", "Invalid document: Name file and safe
+ * JSON path details") rather than from the descriptor table, so the assertion below compares the stage
+ * with the authority instead of with itself.
+ */
+const ENVELOPE_EXPECTED_CATEGORY: Readonly<Record<string, PipelineUserCategory>> = {
+  "envelope-not-object": "invalid_document",
+  "envelope-missing-format": "invalid_document",
+  "envelope-unknown-format": "invalid_document",
+  "envelope-wrong-family": "invalid_document",
+  "envelope-missing-version": "invalid_document",
+  "envelope-non-number-version": "invalid_document",
+  "envelope-non-integer-version": "invalid_document",
+  "envelope-non-positive-version": "invalid_document",
+  "envelope-unsupported-old-version": "unsupported_schema",
+  "envelope-future-version": "unsupported_schema"
+};
+
+/** The five and only five fields of a family registry selection. */
+const SELECTION_FIELD_NAMES: readonly string[] = [
+  "currentSchemaVersion",
+  "family",
+  "format",
+  "schemaVersion",
+  "supportFloorSchemaVersion"
+];
+
+/** One valid results envelope, reused where only the envelope matters. */
+function resultsEnvelope(version: number): Record<string, unknown> {
+  return { format: "repjot/results", schemaVersion: version };
+}
+
+/** One envelope of one family, as a fresh mutable record. */
+function familyEnvelope(family: DocumentFamily, version: number): Record<string, unknown> {
+  return { format: ENVELOPE_FORMAT_BY_FAMILY[family], schemaVersion: version };
+}
+
+/**
+ * One document that carries every forbidden value class plus a given envelope, with the named envelope
+ * fields removed: the retention probe, where a leak of body text must show up in the error.
+ */
+function envelopeSentinelValue(envelope: Record<string, unknown>, omit?: readonly string[]): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  const sentinel = sentinelDocument();
+  for (const key of Object.keys(sentinel)) {
+    merged[key] = sentinel[key];
+  }
+  for (const key of Object.keys(envelope)) {
+    merged[key] = envelope[key];
+  }
+  if (omit !== undefined) {
+    for (const key of omit) {
+      delete merged[key];
+    }
+  }
+  return merged;
+}
+
+/**
+ * The body field names of the four families. A value built by `envelopeReadProbe` reports every read of
+ * any of them, which is how the tests below show that the stage reads two fields and nothing else.
+ */
+const ENVELOPE_BODY_FIELDS: readonly string[] = [
+  "yearMonthUtc",
+  "sessions",
+  "sessionTombstones",
+  "exercises",
+  "workouts",
+  "preferences",
+  "nodes",
+  "id",
+  "note"
+];
+
+/** A results-shaped document that records every body-field read made through a getter. */
+function envelopeReadProbe(): { readonly value: unknown; readonly reads: readonly string[] } {
+  const reads: string[] = [];
+  const target: Record<string, unknown> = { format: "repjot/results", schemaVersion: 1 };
+  for (const field of ENVELOPE_BODY_FIELDS) {
+    Object.defineProperty(target, field, {
+      enumerable: true,
+      get: (): unknown => {
+        reads.push(field);
+        return [];
+      }
+    });
+  }
+  return { value: target, reads: reads };
+}
+
+/** A document whose every property read throws: used to prove that no document is read at all. */
+function envelopeUnreadableDocument(): unknown {
+  const target: Record<string, unknown> = {};
+  for (const field of ["format", "schemaVersion", "yearMonthUtc", "sessions"]) {
+    Object.defineProperty(target, field, {
+      enumerable: true,
+      get: (): never => {
+        throw new Error("the envelope stage must not read the document");
+      }
+    });
+  }
+  return target;
+}
+
+/** One deterministic structural description of a caller's value: identity-free, clock-free, total. */
+function envelopeSnapshot(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return typeof value + ":" + String(value);
+  }
+  const parts: string[] = [
+    Array.isArray(value) ? "array" : "object",
+    "frozen:" + String(Object.isFrozen(value)),
+    "extensible:" + String(Object.isExtensible(value)),
+    "proto:" + (Object.getPrototypeOf(value) === Object.prototype ? "Object.prototype" : "other")
+  ];
+  for (const name of Object.getOwnPropertyNames(value).sort()) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, name);
+    if (descriptor === undefined) {
+      parts.push(name + ":missing");
+      continue;
+    }
+    const flags =
+      (descriptor.enumerable === true ? "e" : "") +
+      (descriptor.configurable === true ? "c" : "") +
+      (descriptor.writable === true ? "w" : "");
+    parts.push(name + "{" + flags + "}=" + envelopeDescribeValue(descriptor.value));
+  }
+  return parts.join("|");
+}
+
+function envelopeDescribeValue(value: unknown): string {
+  if (typeof value === "number" && Object.is(value, -0)) {
+    return "number:-0";
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return "nonfinite:" + String(value);
+  }
+  if (value !== null && typeof value === "object") {
+    return "ref(" + (Array.isArray(value) ? "array" : "object") + ":" + Object.getOwnPropertyNames(value).length + ")";
+  }
+  return typeof value + ":" + String(value);
+}
+
+/** Run the stage. Every test hands it a value the way Phase 15 will: name plus parsed value. */
+function runEnvelopeStage(logicalName: unknown, value: unknown): DocumentEnvelopeResult {
+  return recognizeDocumentEnvelope({ logicalName: logicalName, value: value });
+}
+
+/** Assert the shape shared by every rejection, and return the error for the caller's own assertions. */
+function expectRejected(result: DocumentEnvelopeResult, label: string): PipelineError {
+  if (result.status !== "rejected") {
+    throw new Error(label + ": expected a rejection, observed status " + result.status);
+  }
+  expect(label + " result fields: " + Object.keys(result).sort().join(",")).toBe(label + " result fields: error,status");
+  const error = result.error;
+  expect(label + " error fields: " + Object.keys(error).sort().join(",")).toBe(
+    label + " error fields: " + PIPELINE_ERROR_FIELD_NAMES.join(",")
+  );
+  expect(label + " stage: " + error.stage).toBe(label + " stage: envelope");
+  expect(label + " frozen: " + String(Object.isFrozen(error))).toBe(label + " frozen: true");
+  expect(label + " context frozen: " + String(Object.isFrozen(error.safeContext))).toBe(label + " context frozen: true");
+  return error;
+}
+
+/**
+ * Read the two version integers a version-bound envelope error declares. The switch is the whole
+ * decision: the kind discriminant selects the arm, and the arm alone reads its own declared context
+ * fields, which is the accepted way to consume a pipeline error without parsing a message
+ * (docs/implementation/phase-11.md acceptance "Callers can branch on error kind without parsing
+ * messages"). An error of another kind reports `no-version-bound` instead of reading a field it does not
+ * declare.
+ */
+function versionBoundFacts(error: PipelineError): { readonly kind: string; readonly declared: number; readonly bound: number } {
+  switch (error.kind) {
+    case "envelope-future-version":
+      return { kind: error.kind, declared: error.safeContext.schemaVersion, bound: error.safeContext.currentSchemaVersion };
+    case "envelope-unsupported-old-version":
+      return { kind: error.kind, declared: error.safeContext.schemaVersion, bound: error.safeContext.supportFloor };
+    default:
+      return { kind: "no-version-bound", declared: -1, bound: -1 };
+  }
+}
+
+/** Assert the shape shared by every acceptance, and return the selection. */
+function expectRecognized(result: DocumentEnvelopeResult, label: string): FamilyRegistrySelection {
+  if (result.status !== "recognized") {
+    throw new Error(label + ": expected an acceptance, observed status " + result.status);
+  }
+  expect(label + " result fields: " + Object.keys(result).sort().join(",")).toBe(label + " result fields: selection,status");
+  expect(label + " selection fields: " + Object.keys(result.selection).sort().join(",")).toBe(
+    label + " selection fields: " + SELECTION_FIELD_NAMES.join(",")
+  );
+  expect(label + " selection frozen: " + String(Object.isFrozen(result.selection))).toBe(label + " selection frozen: true");
+  return result.selection;
+}
+
+// ---------------------------------------------------------------------------
+// Group 1: the exact logical-name match
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: the exact name match selects a family or nothing", () => {
+  test("each of the four canonical names matches exactly one family", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const name = ENVELOPE_NAME_BY_FAMILY[family];
+      const match = matchCanonicalLogicalName(name);
+      expect(family + " status: " + match.status).toBe(family + " status: canonical");
+      if (match.status !== "canonical") {
+        continue;
+      }
+      expect(family + " family: " + match.family).toBe(family + " family: " + family);
+      expect(family + " name: " + match.name).toBe(family + " name: " + name);
+      // Only the family and the name: no version, no format, and no shard month is carried forward.
+      expect(family + " fields: " + Object.keys(match).sort().join(",")).toBe(family + " fields: family,name,status");
+    }
+  });
+
+  test("every monthly results shard name matches the results family and no other family", () => {
+    for (const name of ["results-2026-09.json", "results-1999-01.json", "results-2026-12.json", "results-0000-01.json"]) {
+      const match = matchCanonicalLogicalName(name);
+      expect(name + " status: " + match.status).toBe(name + " status: canonical");
+      expect(name + " family: " + (match.status === "canonical" ? match.family : "none")).toBe(name + " family: results");
+    }
+  });
+
+  test("edge case results-2026-00.json: a near-miss name gets the distinct unrecognized outcome", () => {
+    const rejectedNames = [
+      "results-2026-00.json",
+      "results-2026-13.json",
+      "results-2026-9.json",
+      "results-2026-09.JSON",
+      "Results-2026-09.json",
+      "results-2026-09.json5",
+      "index.json",
+      "preferences.JSON",
+      "exercises.json5",
+      "workouts.json ",
+      ""
+    ];
+    for (const name of rejectedNames) {
+      const match = matchCanonicalLogicalName(name);
+      expect(name + " status: " + match.status).toBe(name + " status: unknown-file");
+      expect(name + " name: " + String(match.name)).toBe(name + " name: " + name);
+      expect(name + " fields: " + Object.keys(match).sort().join(",")).toBe(name + " fields: name,status");
+    }
+  });
+
+  test("a name that is not a string is unrecognized with a null name and raises nothing", () => {
+    for (const candidate of [null, undefined, 7, {}, [], true, Symbol("name"), function named() {}]) {
+      const match = matchCanonicalLogicalName(candidate);
+      expect("non-string status: " + match.status).toBe("non-string status: unknown-file");
+      expect("non-string name: " + String(match.name)).toBe("non-string name: null");
+      expect("non-string fields: " + Object.keys(match).sort().join(",")).toBe("non-string fields: name,status");
+    }
+  });
+
+  test("the unrecognized outcome invents no pipeline error kind and fabricates no family value", () => {
+    for (const name of ["results-2026-00.json", "results-2026-13.json", "index.json", "preferences.JSON"]) {
+      const match = matchCanonicalLogicalName(name);
+      const values: string[] = [];
+      for (const key of Object.keys(match)) {
+        const value = (match as Record<string, unknown>)[key];
+        values.push(String(value));
+        expect(name + " has no family field: " + key).not.toBe(name + " has no family field: family");
+        expect(name + " has no version field: " + key).not.toBe(name + " has no version field: schemaVersion");
+      }
+      for (const kind of ENVELOPE_STAGE_KINDS) {
+        expect(name + " value equals no error kind: " + String(values.indexOf(kind) !== -1)).toBe(
+          name + " value equals no error kind: false"
+        );
+      }
+      for (const family of ENVELOPE_FAMILIES) {
+        expect(name + " value equals no family: " + String(values.indexOf(family) !== -1)).toBe(
+          name + " value equals no family: false"
+        );
+      }
+    }
+  });
+
+  test("the name match reads no document: its body names no envelope field", () => {
+    const body = functionBody(uncommented(ENVELOPE_MODULE_SOURCE), "matchCanonicalLogicalName");
+    expect("matcher has a body: " + String(body.length > 0)).toBe("matcher has a body: true");
+    for (const field of ["format", "schemaVersion", "yearMonthUtc", "sessions"]) {
+      expect("matcher never reads " + field + ": " + String(body.indexOf(field) !== -1)).toBe(
+        "matcher never reads " + field + ": false"
+      );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 2: one family registry selection per recognized document
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: one family registry selection per recognized document", () => {
+  test("the current version of each family selects that family's registry", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const selection = expectRecognized(
+        runEnvelopeStage(ENVELOPE_NAME_BY_FAMILY[family], familyEnvelope(family, 1)),
+        family
+      );
+      expect(family + " family: " + selection.family).toBe(family + " family: " + family);
+      expect(family + " format: " + selection.format).toBe(family + " format: " + ENVELOPE_FORMAT_BY_FAMILY[family]);
+      expect(family + " declared version: " + String(selection.schemaVersion)).toBe(family + " declared version: 1");
+      expect(family + " current: " + String(selection.currentSchemaVersion)).toBe(
+        family + " current: " + String(ENVELOPE_EXPECTED_VERSIONS[family].current)
+      );
+      expect(family + " floor: " + String(selection.supportFloorSchemaVersion)).toBe(
+        family + " floor: " + String(ENVELOPE_EXPECTED_VERSIONS[family].floor)
+      );
+    }
+  });
+
+  test("a selection never carries another family's format or version constants", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const selection = expectRecognized(
+        runEnvelopeStage(ENVELOPE_NAME_BY_FAMILY[family], familyEnvelope(family, 1)),
+        family
+      );
+      expect(family + " current is the accepted constant: " + String(selection.currentSchemaVersion)).toBe(
+        family + " current is the accepted constant: " + String(CURRENT_VERSION[family])
+      );
+      expect(family + " floor is the accepted constant: " + String(selection.supportFloorSchemaVersion)).toBe(
+        family + " floor is the accepted constant: " + String(SUPPORT_FLOOR_VERSION[family])
+      );
+      for (const other of ENVELOPE_FAMILIES) {
+        if (other === family) {
+          continue;
+        }
+        expect(family + " is not " + other + ": " + String(selection.family === other)).toBe(family + " is not " + other + ": false");
+        expect(family + " format is not " + other + ": " + String(selection.format === ENVELOPE_FORMAT_BY_FAMILY[other])).toBe(
+          family + " format is not " + other + ": false"
+        );
+      }
+    }
+  });
+
+  test("two result shards of the same family select the same registry", () => {
+    const first = expectRecognized(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1)), "shard 2026-09");
+    const second = expectRecognized(runEnvelopeStage("results-1999-01.json", resultsEnvelope(1)), "shard 1999-01");
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    expect(first.family).toBe("results");
+    expect(second.family).toBe("results");
+    // The filename is not part of a selection: only the five family-scoped facts are.
+    expect(Object.keys(first).sort()).toEqual(SELECTION_FIELD_NAMES.slice());
+  });
+
+  test("the declared version is the document's own value while the range stays the family's", () => {
+    // Table case, not a changed constant: `CURRENT_VERSION.results` is 1 today, so a declared v2 cannot
+    // arrive as a document value. Handed to the accepted-status mapping directly it shows that a shard at
+    // a newer declared version keeps its own declared version while the family's current version and
+    // support floor stay the family's (FF-08 "Different monthly shards may hold different supported
+    // versions").
+    const atOne = envelopeOutcomeForRecognition(
+      { status: "recognized", family: "results", format: "repjot/results", schemaVersion: 1 },
+      "results-2026-09.json"
+    );
+    const atTwo = envelopeOutcomeForRecognition(
+      { status: "recognized", family: "results", format: "repjot/results", schemaVersion: 2 },
+      "results-2026-10.json"
+    );
+    if (atOne.status !== "selected" || atTwo.status !== "selected") {
+      throw new Error("both table recognitions must select a registry");
+    }
+    expect(String(atOne.selection.schemaVersion)).toBe("1");
+    expect(String(atTwo.selection.schemaVersion)).toBe("2");
+    expect(String(atTwo.selection.family)).toBe("results");
+    expect(String(atTwo.selection.format)).toBe("repjot/results");
+    expect(String(atTwo.selection.currentSchemaVersion)).toBe(String(atOne.selection.currentSchemaVersion));
+    expect(String(atTwo.selection.supportFloorSchemaVersion)).toBe(String(atOne.selection.supportFloorSchemaVersion));
+  });
+
+  test("a selection references nothing from the caller's document", () => {
+    const doc = resultsEnvelope(1);
+    doc.sessions = [];
+    const selection = expectRecognized(runEnvelopeStage("results-2026-09.json", doc), "alias probe");
+    const before = JSON.stringify(selection);
+    doc.schemaVersion = 99;
+    doc.sessions = [{ id: "created-after-the-call" }];
+    doc.addedAfterTheCall = true;
+    delete doc.sessions;
+    expect(JSON.stringify(selection)).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One shared table of rejected shapes, used by the shape groups and again by the
+// typed-error, retention, and purity groups.
+// ---------------------------------------------------------------------------
+
+interface EnvelopeStageCase {
+  readonly label: string;
+  readonly logicalName: string;
+  readonly build: () => unknown;
+  readonly expectedKind: PipelineErrorKind;
+  readonly expectedContextJson: string;
+}
+
+/** An array that carries own `format` and `schemaVersion` properties: still not a plain object. */
+function arrayWithEnvelopeFields(): unknown {
+  const list: unknown[] = [{ format: "repjot/results", schemaVersion: 1 }];
+  Object.defineProperty(list, "format", { enumerable: true, value: "repjot/results" });
+  Object.defineProperty(list, "schemaVersion", { enumerable: true, value: 1 });
+  return list;
+}
+
+/** An object whose only envelope fields live on the prototype chain. */
+function inheritedEnvelopeOnly(): unknown {
+  return Object.create({ format: "repjot/results", schemaVersion: 1 });
+}
+
+/** An object with own `format` and an inherited `schemaVersion` only. */
+function inheritedVersionOnly(): unknown {
+  const target: Record<string, unknown> = { format: "repjot/results" };
+  return Object.setPrototypeOf(target, { schemaVersion: 1 });
+}
+
+/** An object with own `format` and an inherited `format` shadowed by nothing else. */
+function ownFormatInheritedNothing(): unknown {
+  return { format: "repjot/results" };
+}
+
+/** One rejected shape per envelope condition, each with the kind and context it must produce. */
+const ENVELOPE_STAGE_CASES: readonly EnvelopeStageCase[] = [
+  { label: "root: empty array", logicalName: "results-2026-09.json", build: (): unknown => [], expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: array of documents", logicalName: "results-2026-09.json", build: (): unknown => [{ format: "repjot/results", schemaVersion: 1 }], expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: array with own envelope fields", logicalName: "exercises.json", build: arrayWithEnvelopeFields, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: null", logicalName: "results-2026-09.json", build: (): unknown => null, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: number", logicalName: "results-2026-09.json", build: (): unknown => 7, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: string", logicalName: "results-2026-09.json", build: (): unknown => "repjot/results", expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: boolean", logicalName: "results-2026-09.json", build: (): unknown => true, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: undefined", logicalName: "results-2026-09.json", build: (): unknown => undefined, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "root: function", logicalName: "results-2026-09.json", build: (): unknown => function root() {}, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "format: inherited only", logicalName: "results-2026-09.json", build: inheritedEnvelopeOnly, expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "format: own number", logicalName: "results-2026-09.json", build: (): unknown => ({ format: 5, schemaVersion: 1 }), expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "format: own null", logicalName: "preferences.json", build: (): unknown => ({ format: null, schemaVersion: 1 }), expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "format: own object", logicalName: "workouts.json", build: (): unknown => ({ format: {}, schemaVersion: 1 }), expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "format: own array", logicalName: "workouts.json", build: (): unknown => ({ format: [], schemaVersion: 1 }), expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "format: unknown nano", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/nano", schemaVersion: 1 }), expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "format: empty string", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "", schemaVersion: 1 }), expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "format: wrong case", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "RepJot/Results", schemaVersion: 1 }), expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "format: trailing space", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results ", schemaVersion: 1 }), expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "format: newline suffix", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results\n", schemaVersion: 1 }), expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "family: preferences in a result name", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/preferences", schemaVersion: 1 }), expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"preferences","expectedFamily":"results"}' },
+  { label: "family: results in a preference name", logicalName: "preferences.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: 1 }), expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"results","expectedFamily":"preferences"}' },
+  { label: "family: exercises in a workout name", logicalName: "workouts.json", build: (): unknown => ({ format: "repjot/exercises", schemaVersion: 1 }), expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"exercises","expectedFamily":"workouts"}' },
+  { label: "family: workouts in a result name", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/workouts", schemaVersion: 1 }), expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"workouts","expectedFamily":"results"}' },
+  { label: "version: absent", logicalName: "results-2026-09.json", build: ownFormatInheritedNothing, expectedKind: "envelope-missing-version", expectedContextJson: "{}" },
+  { label: "version: inherited only", logicalName: "results-2026-09.json", build: inheritedVersionOnly, expectedKind: "envelope-missing-version", expectedContextJson: "{}" },
+  { label: "version: string one", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: "1" }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: true", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: true }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: false", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: false }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: null", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: null }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: object", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: {} }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: array", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: [] }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: own undefined", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: undefined }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: boxed number", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: Object(1) }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: bigint one", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: BigInt(1) }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: symbol", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: Symbol("1") }), expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "version: decimal 1.5", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: 1.5 }), expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "version: decimal -0.5", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: -0.5 }), expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "version: NaN", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: NaN }), expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "version: Infinity", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: Infinity }), expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "version: -Infinity", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: -Infinity }), expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "version: zero", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: 0 }), expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { label: "version: negative one", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: -1 }), expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { label: "version: negative zero", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: -0 }), expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { label: "version: large negative", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: -1000000 }), expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { label: "version: future two", logicalName: "results-2026-09.json", build: (): unknown => ({ format: "repjot/results", schemaVersion: 2 }), expectedKind: "envelope-future-version", expectedContextJson: '{"schemaVersion":2,"currentSchemaVersion":1}' },
+  { label: "version: future large", logicalName: "preferences.json", build: (): unknown => ({ format: "repjot/preferences", schemaVersion: 9001 }), expectedKind: "envelope-future-version", expectedContextJson: '{"schemaVersion":9001,"currentSchemaVersion":1}' },
+  { label: "version: future at floor edge", logicalName: "exercises.json", build: (): unknown => ({ format: "repjot/exercises", schemaVersion: 2 }), expectedKind: "envelope-future-version", expectedContextJson: '{"schemaVersion":2,"currentSchemaVersion":1}' }
+];
+
+// ---------------------------------------------------------------------------
+// Group 3: only a plain object root is a document
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: only a plain object root is a document", () => {
+  test("edge case arrays: an array root rejects as envelope-not-object whatever it holds", () => {
+    for (const root of [[], [1, 2, 3], [{ format: "repjot/results", schemaVersion: 1 }], arrayWithEnvelopeFields()]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", root), "array root");
+      expect(error.kind).toBe("envelope-not-object");
+      expect(Object.keys(error.safeContext)).toEqual([]);
+      expect(JSON.stringify(error.safeContext)).toBe("{}");
+    }
+  });
+
+  test("edge case arrays: the array rule holds for every family name, not only results", () => {
+    for (const name of [ENVELOPE_NAME_BY_FAMILY.exercises, ENVELOPE_NAME_BY_FAMILY.workouts, ENVELOPE_NAME_BY_FAMILY.preferences, ENVELOPE_NAME_BY_FAMILY.results]) {
+      const error = expectRejected(runEnvelopeStage(name, arrayWithEnvelopeFields()), name + " array root");
+      expect(error.kind).toBe("envelope-not-object");
+      expect(error.logicalName).toBe(name);
+    }
+  });
+
+  test("a primitive root, null, and undefined each reject as envelope-not-object", () => {
+    for (const root of [null, undefined, 0, 7, "repjot/results", "", true, false, function root() {}]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", root), "primitive root " + String(root));
+      expect(error.kind).toBe("envelope-not-object");
+    }
+  });
+
+  test("an array root produces no selection and reaches no version decision", () => {
+    const result = runEnvelopeStage("results-2026-09.json", [{ format: "repjot/results", schemaVersion: 99 }]);
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") {
+      return;
+    }
+    expect(result.error.kind).toBe("envelope-not-object");
+    expect(String(ENVELOPE_STAGE_KINDS.indexOf(result.error.kind) !== -1)).toBe("true");
+    // No version of the document body is named, because no version decision was reached.
+    expect(JSON.stringify(result).indexOf("99")).toBe(-1);
+  });
+
+  test("valid control: the same fields on a plain object root are accepted", () => {
+    expectRecognized(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1)), "plain object control");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 4: own properties only
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: only own format and schemaVersion are read", () => {
+  test("edge case inherited fields: a document that inherits both envelope fields has neither", () => {
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", inheritedEnvelopeOnly()), "inherited both");
+    expect(error.kind).toBe("envelope-missing-format");
+    expect(Object.keys(error.safeContext)).toEqual([]);
+  });
+
+  test("edge case inherited fields: an inherited schemaVersion is a missing version, not a malformed one", () => {
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", inheritedVersionOnly()), "inherited version");
+    expect(error.kind).toBe("envelope-missing-version");
+    for (const malformed of [
+      "envelope-non-number-version",
+      "envelope-non-integer-version",
+      "envelope-non-positive-version",
+      "envelope-future-version"
+    ] as readonly PipelineErrorKind[]) {
+      expect("missing differs from " + malformed + ": " + String(error.kind === malformed)).toBe(
+        "missing differs from " + malformed + ": false"
+      );
+    }
+  });
+
+  test("edge case inherited fields: an inherited format stays missing beside a valid own version", () => {
+    const target: Record<string, unknown> = { schemaVersion: 1 };
+    Object.setPrototypeOf(target, { format: "repjot/results" });
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", target), "inherited format own version");
+    expect(error.kind).toBe("envelope-missing-format");
+  });
+
+  test("edge case inherited fields: the prototype chain cannot supply a family either", () => {
+    const target: Record<string, unknown> = { format: "repjot/results", body: true };
+    Object.setPrototypeOf(target, { format: "repjot/preferences", schemaVersion: 1 });
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", target), "shadowed prototype");
+    // The own format is read and the own version is absent; the inherited pair changes nothing.
+    expect(error.kind).toBe("envelope-missing-version");
+  });
+
+  test("a present but non-string own format is a missing format, never an unknown family", () => {
+    for (const value of [5, null, {}, [], true, undefined]) {
+      const error = expectRejected(
+        runEnvelopeStage("results-2026-09.json", { format: value, schemaVersion: 1 }),
+        "non-string format " + String(value)
+      );
+      expect(error.kind).toBe("envelope-missing-format");
+    }
+  });
+
+  test("valid control: own envelope fields are read whatever else the object owns", () => {
+    const doc = resultsEnvelope(1);
+    doc.sessions = [];
+    doc.yearMonthUtc = "2026-09";
+    doc.notes = "extra own member";
+    const selection = expectRecognized(runEnvelopeStage("results-2026-09.json", doc), "extra members control");
+    expect(selection.family).toBe("results");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 5: unknown format and wrong family stay distinct
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: unknown format and wrong family stay distinct", () => {
+  test("an unrecognized format string rejects as envelope-unknown-format with an empty context", () => {
+    for (const format of ["repjot/nano", "", "RepJot/Results", "repjot/results ", "repjot/results\n", "repjot/Results", "results"]) {
+      const error = expectRejected(
+        runEnvelopeStage("results-2026-09.json", { format: format, schemaVersion: 1 }),
+        "unknown format " + format
+      );
+      expect(error.kind).toBe("envelope-unknown-format");
+      expect(Object.keys(error.safeContext)).toEqual([]);
+      expect(JSON.stringify(error.safeContext)).toBe("{}");
+      if (format.length > 0) {
+        // The canonical filename is a legitimate field of an error; the document's own format text is not.
+        const echoed = JSON.stringify(error).replace(error.logicalName, "the-logical-name");
+        expect("format text is never echoed: " + String(echoed.indexOf(format) !== -1)).toBe(
+          "format text is never echoed: false"
+        );
+      }
+    }
+  });
+
+  test("edge case a preferences envelope in a result filename: wrong-family carries exactly two names", () => {
+    const forward = expectRejected(
+      runEnvelopeStage("results-2026-09.json", { format: "repjot/preferences", schemaVersion: 1 }),
+      "preferences in results"
+    );
+    expect(forward.kind).toBe("envelope-wrong-family");
+    expect(Object.keys(forward.safeContext).sort()).toEqual(["expectedFamily", "family"]);
+    expect(JSON.stringify(forward.safeContext)).toBe('{"family":"preferences","expectedFamily":"results"}');
+
+    const reverse = expectRejected(
+      runEnvelopeStage("preferences.json", { format: "repjot/results", schemaVersion: 1 }),
+      "results in preferences"
+    );
+    expect(reverse.kind).toBe("envelope-wrong-family");
+    expect(JSON.stringify(reverse.safeContext)).toBe('{"family":"results","expectedFamily":"preferences"}');
+  });
+
+  test("a family mismatch is not an unknown family, and the same string keeps its own outcome", () => {
+    const mismatch = expectRejected(
+      runEnvelopeStage("results-2026-09.json", { format: "repjot/preferences", schemaVersion: 1 }),
+      "mismatch"
+    );
+    const unknown = expectRejected(
+      runEnvelopeStage("results-2026-09.json", { format: "repjot/nano", schemaVersion: 1 }),
+      "unknown"
+    );
+    expect(mismatch.kind).toBe("envelope-wrong-family");
+    expect(unknown.kind).toBe("envelope-unknown-format");
+    expect(String(mismatch.kind === unknown.kind)).toBe("false");
+    expect(Object.keys(mismatch.safeContext).length).toBe(2);
+    expect(Object.keys(unknown.safeContext).length).toBe(0);
+    // The same recognized format string is a family, not an unknown, when the name agrees with it.
+    expectRecognized(runEnvelopeStage("preferences.json", { format: "repjot/preferences", schemaVersion: 1 }), "agrees");
+  });
+
+  test("a wrong-family document is refused before its version is judged", () => {
+    const error = expectRejected(
+      runEnvelopeStage("results-2026-09.json", { format: "repjot/preferences", schemaVersion: 99 }),
+      "wrong family and future version"
+    );
+    expect(error.kind).toBe("envelope-wrong-family");
+    expect(JSON.stringify(error.safeContext).indexOf("99")).toBe(-1);
+  });
+
+  test("valid control: each family's own format under its own name is accepted", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const selection = expectRecognized(
+        runEnvelopeStage(ENVELOPE_NAME_BY_FAMILY[family], familyEnvelope(family, 1)),
+        family + " pairing control"
+      );
+      expect(selection.family).toBe(family);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 6: the version conditions keep their own kinds
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: the three malformed version kinds stay distinct", () => {
+  test("a version that is not a number rejects as envelope-non-number-version", () => {
+    for (const value of ["1", "one", "", true, false, null, {}, [], Object(1), BigInt(1), Symbol("1")]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: value }), "non-number " + String(value));
+      expect(error.kind).toBe("envelope-non-number-version");
+      expect(Object.keys(error.safeContext)).toEqual([]);
+    }
+  });
+
+  test("edge case NaN-like values and decimal versions reject as envelope-non-integer-version", () => {
+    for (const value of [1.5, -0.5, 0.0000001, NaN, Infinity, -Infinity, 1e-300]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: value }), "non-integer " + String(value));
+      expect(error.kind).toBe("envelope-non-integer-version");
+    }
+  });
+
+  test("a whole number below one rejects as envelope-non-positive-version, -0 included", () => {
+    for (const value of [0, -1, -2, -0, -1000000]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: value }), "non-positive " + String(value));
+      expect(error.kind).toBe("envelope-non-positive-version");
+    }
+    // -0 is a whole number that is not below one in magnitude but is below 1 in the accepted order, so it
+    // is the non-positive kind and not the non-integer kind.
+    const negativeZero = expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(-0)), "negative zero");
+    expect(negativeZero.kind).toBe("envelope-non-positive-version");
+  });
+
+  test("an absent version keeps its own kind apart from all three malformed kinds", () => {
+    const absent = expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results" }), "absent version");
+    expect(absent.kind).toBe("envelope-missing-version");
+    const observed = [
+      expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: "1" }), "string version").kind,
+      expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1.5)), "decimal version").kind,
+      expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(0)), "zero version").kind
+    ];
+    expect(observed).toEqual(["envelope-non-number-version", "envelope-non-integer-version", "envelope-non-positive-version"]);
+    for (const kind of observed) {
+      expect("absent is not " + kind + ": " + String(absent.kind === kind)).toBe("absent is not " + kind + ": false");
+    }
+  });
+
+  test("the three malformed kinds are three different kinds", () => {
+    const kinds = [
+      expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: "1" }), "a").kind,
+      expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: 1.5 }), "b").kind,
+      expectRejected(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: 0 }), "c").kind
+    ];
+    expect(new Set<string>(kinds).size).toBe(3);
+    expect(kinds).toEqual([
+      "envelope-non-number-version",
+      "envelope-non-integer-version",
+      "envelope-non-positive-version"
+    ]);
+  });
+
+  test("valid control: version 1 is accepted for every family and reaches a selection", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const selection = expectRecognized(
+        runEnvelopeStage(ENVELOPE_NAME_BY_FAMILY[family], familyEnvelope(family, 1)),
+        family + " version control"
+      );
+      expect(selection.schemaVersion).toBe(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 7: the version bounds are the accepted per-family constants
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: version bounds come from the accepted family constants", () => {
+  test("the accepted constant pair that makes the unsupported-old arm unreachable is stated", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      expect(family + " current: " + String(CURRENT_VERSION[family])).toBe(family + " current: 1");
+      expect(family + " floor: " + String(SUPPORT_FLOOR_VERSION[family])).toBe(family + " floor: 1");
+      expect(family + " floor equals current: " + String(SUPPORT_FLOOR_VERSION[family] === CURRENT_VERSION[family])).toBe(
+        family + " floor equals current: true"
+      );
+    }
+  });
+
+  test("a version above the family's current version rejects as envelope-future-version", () => {
+    for (const version of [2, 3, 9001, Number.MAX_SAFE_INTEGER]) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(version)), "future " + String(version));
+      expect(error.kind).toBe("envelope-future-version");
+      expect(Object.keys(error.safeContext).sort()).toEqual(["currentSchemaVersion", "schemaVersion"]);
+      const facts = versionBoundFacts(error);
+      expect(facts.kind).toBe("envelope-future-version");
+      expect(facts.declared).toBe(version);
+      expect(facts.bound).toBe(CURRENT_VERSION.results);
+      expect(error.userCategory).toBe("unsupported_schema");
+      expect(error.retryable).toBe(false);
+    }
+  });
+
+  test("the unsupported-old arm is stated as a table case, with no constant changed", () => {
+    // No document value can be both positive and below the floor while floor and current are both 1, so
+    // FF-10's "unsupported-old" condition has no fixture. Its mapping is still required by FF-10 and
+    // FF-20 ("Unsupported-old data reports the support floor and is never overwritten"), so it is proven
+    // here as a table case over the accepted recognition status, with a synthetic floor and with
+    // SUPPORT_FLOOR_VERSION left untouched.
+    const outcome = envelopeOutcomeForRecognition(
+      { status: "unsupported-old-version", schemaVersion: 1, supportFloor: 2 },
+      "results-2026-09.json"
+    );
+    if (outcome.status !== "rejected") {
+      throw new Error("an unsupported-old recognition must reject");
+    }
+    expect(outcome.error.kind).toBe("envelope-unsupported-old-version");
+    expect(outcome.error.stage).toBe("envelope");
+    expect(outcome.error.userCategory).toBe("unsupported_schema");
+    expect(outcome.error.retryable).toBe(false);
+    expect(Object.keys(outcome.error.safeContext).sort()).toEqual(["schemaVersion", "supportFloor"]);
+    expect(JSON.stringify(outcome.error.safeContext)).toBe('{"schemaVersion":1,"supportFloor":2}');
+    expect(String(SUPPORT_FLOOR_VERSION.results)).toBe("1");
+  });
+
+  test("future and unsupported-old are distinct kinds and both name a version range", () => {
+    const future = expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(2)), "future");
+    const old = envelopeOutcomeForRecognition(
+      { status: "unsupported-old-version", schemaVersion: 1, supportFloor: 2 },
+      "results-2026-09.json"
+    );
+    if (old.status !== "rejected") {
+      throw new Error("an unsupported-old recognition must reject");
+    }
+    expect(future.kind).toBe("envelope-future-version");
+    expect(old.error.kind).toBe("envelope-unsupported-old-version");
+    expect(String(future.kind === old.error.kind)).toBe("false");
+    expect(Object.keys(future.safeContext).length).toBe(2);
+    expect(Object.keys(old.error.safeContext).length).toBe(2);
+    expect(future.userCategory).toBe(old.error.userCategory);
+    expect(future.userCategory).toBe("unsupported_schema");
+  });
+
+  test("a future document keeps its own version in the safe context and nothing else", () => {
+    const doc = envelopeSentinelValue({ format: "repjot/results", schemaVersion: 7 });
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", doc), "future with body");
+    expect(error.kind).toBe("envelope-future-version");
+    expect(versionBoundFacts(error).declared).toBe(7);
+    expect(versionBoundFacts(error).bound).toBe(CURRENT_VERSION.results);
+    const serialized = JSON.stringify(error);
+    for (const sentinel of SENTINELS) {
+      expect("no sentinel in a future error: " + String(serialized.indexOf(sentinel) !== -1)).toBe("no sentinel in a future error: false");
+    }
+  });
+
+  test("valid control: version 1 is accepted today for every family at the stated floor", () => {
+    for (const family of ENVELOPE_FAMILIES) {
+      const selection = expectRecognized(
+        runEnvelopeStage(ENVELOPE_NAME_BY_FAMILY[family], familyEnvelope(family, CURRENT_VERSION[family])),
+        family + " current-version control"
+      );
+      expect(selection.currentSchemaVersion).toBe(CURRENT_VERSION[family]);
+      expect(selection.supportFloorSchemaVersion).toBe(SUPPORT_FLOOR_VERSION[family]);
+      expect(selection.schemaVersion).toBe(CURRENT_VERSION[family]);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures: one small file per distinct rejection, one valid control per family
+// ---------------------------------------------------------------------------
+
+/** The one fixture directory this phase adds. No other fixture path is read here. */
+const ENVELOPE_FIXTURE_ROOT = "./fixtures/envelopes/";
+
+const envelopeEncoder = new TextEncoder();
+
+interface EnvelopeFixtureCase {
+  readonly file: string;
+  readonly logicalName: string;
+  readonly expectedKind: PipelineErrorKind;
+  readonly expectedContextJson: string;
+}
+
+interface EnvelopeControlFixture {
+  readonly file: string;
+  readonly logicalName: string;
+  readonly family: DocumentFamily;
+  readonly format: string;
+}
+
+/** One fixture per rejection that a document value can produce, named for what it proves. */
+const ENVELOPE_REJECTION_FIXTURES: readonly EnvelopeFixtureCase[] = [
+  { file: "envelope-not-object.json", logicalName: "results-2026-09.json", expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { file: "envelope-missing-format.json", logicalName: "results-2026-09.json", expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { file: "envelope-unknown-format.json", logicalName: "results-2026-09.json", expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { file: "envelope-wrong-family.json", logicalName: "results-2026-09.json", expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"preferences","expectedFamily":"results"}' },
+  { file: "envelope-missing-version.json", logicalName: "results-2026-09.json", expectedKind: "envelope-missing-version", expectedContextJson: "{}" },
+  { file: "envelope-non-number-version.json", logicalName: "results-2026-09.json", expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { file: "envelope-non-integer-version.json", logicalName: "results-2026-09.json", expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { file: "envelope-non-positive-version.json", logicalName: "results-2026-09.json", expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { file: "envelope-future-version.json", logicalName: "results-2026-09.json", expectedKind: "envelope-future-version", expectedContextJson: '{"schemaVersion":2,"currentSchemaVersion":1}' }
+];
+
+/** One accepted document per family, exactly as its own canonical name would deliver it. */
+const ENVELOPE_CONTROL_FIXTURES: readonly EnvelopeControlFixture[] = [
+  { file: "control-exercises.json", logicalName: "exercises.json", family: "exercises", format: "repjot/exercises" },
+  { file: "control-workouts.json", logicalName: "workouts.json", family: "workouts", format: "repjot/workouts" },
+  { file: "control-preferences.json", logicalName: "preferences.json", family: "preferences", format: "repjot/preferences" },
+  { file: "control-results.json", logicalName: "results-2026-09.json", family: "results", format: "repjot/results" }
+];
+
+/**
+ * Read one fixture and hand its value on through the accepted parse stage, which is how the pipeline
+ * produces the `unknown` this stage consumes (FF-14 "Valid UTF-8 JSON parses to `unknown` and proceeds to
+ * envelope recognition"). A fixture that failed to parse would be a broken fixture, so this throws.
+ */
+function envelopeFixtureValue(file: string): unknown {
+  const text = readFileSync(new URL(ENVELOPE_FIXTURE_ROOT + file, import.meta.url), "utf8");
+  const parsed = parseDocumentBytes({ logicalName: file, bytes: envelopeEncoder.encode(text) });
+  if (parsed.status !== "parsed") {
+    throw new Error("an envelope fixture must reach the envelope stage: " + file);
+  }
+  return parsed.value;
+}
+
+/** The names of every file in the fixture directory, sorted, for the census test. */
+function envelopeFixtureFiles(): string[] {
+  const names: string[] = [];
+  for (const entry of readdirSync(new URL(ENVELOPE_FIXTURE_ROOT, import.meta.url))) {
+    const name = String(entry);
+    if (name.indexOf(".json") === name.length - 5) {
+      names.push(name);
+    }
+  }
+  return names.sort();
+}
+
+// ---------------------------------------------------------------------------
+// Group 8: the fixture set
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: one fixture per distinct rejection and one control per family", () => {
+  test("each rejection fixture produces exactly its declared kind and safe context", () => {
+    for (const fixture of ENVELOPE_REJECTION_FIXTURES) {
+      const value = envelopeFixtureValue(fixture.file);
+      const error = expectRejected(runEnvelopeStage(fixture.logicalName, value), fixture.file);
+      expect(fixture.file + " kind: " + error.kind).toBe(fixture.file + " kind: " + fixture.expectedKind);
+      expect(fixture.file + " context: " + JSON.stringify(error.safeContext)).toBe(fixture.file + " context: " + fixture.expectedContextJson);
+      expect(fixture.file + " logicalName: " + error.logicalName).toBe(fixture.file + " logicalName: " + fixture.logicalName);
+      expect(fixture.file + " category: " + error.userCategory).toBe(
+        fixture.file + " category: " + ENVELOPE_EXPECTED_CATEGORY[fixture.expectedKind]
+      );
+    }
+  });
+
+  test("each control fixture is accepted into its own family registry", () => {
+    for (const fixture of ENVELOPE_CONTROL_FIXTURES) {
+      const selection = expectRecognized(runEnvelopeStage(fixture.logicalName, envelopeFixtureValue(fixture.file)), fixture.file);
+      expect(fixture.file + " family: " + selection.family).toBe(fixture.file + " family: " + fixture.family);
+      expect(fixture.file + " format: " + selection.format).toBe(fixture.file + " format: " + fixture.format);
+      expect(fixture.file + " declared: " + selection.schemaVersion).toBe(fixture.file + " declared: 1");
+    }
+  });
+
+  test("the fixture and table set covers every envelope kind the accepted table declares", () => {
+    const fixtureKinds: string[] = [];
+    for (const fixture of ENVELOPE_REJECTION_FIXTURES) {
+      fixtureKinds.push(fixture.expectedKind);
+    }
+    expect(new Set<string>(fixtureKinds).size).toBe(fixtureKinds.length);
+    // One kind has no fixture because no document value can produce it while the floor equals current;
+    // it is stated as a table case instead, so the union of the two still covers the whole set.
+    const covered = new Set<string>(fixtureKinds);
+    covered.add("envelope-unsupported-old-version");
+    for (const kind of ENVELOPE_STAGE_KINDS) {
+      expect(kind + " is covered: " + String(covered.has(kind))).toBe(kind + " is covered: true");
+    }
+    expect(covered.size).toBe(ENVELOPE_STAGE_KINDS.length);
+  });
+
+  test("every fixture file is used and no fixture is a full-size document", () => {
+    const used: string[] = [];
+    for (const fixture of ENVELOPE_REJECTION_FIXTURES) {
+      used.push(fixture.file);
+    }
+    for (const fixture of ENVELOPE_CONTROL_FIXTURES) {
+      used.push(fixture.file);
+    }
+    expect(new Set<string>(used).size).toBe(used.length);
+    expect(envelopeFixtureFiles()).toEqual(used.slice().sort());
+    for (const name of envelopeFixtureFiles()) {
+      const bytes = envelopeEncoder.encode(readFileSync(new URL(ENVELOPE_FIXTURE_ROOT + name, import.meta.url), "utf8")).length;
+      expect(name + " is small: " + String(bytes < 200)).toBe(name + " is small: true");
+    }
+  });
+
+  test("a fixture rejected once is accepted after its envelope is corrected", () => {
+    const value = envelopeFixtureValue("envelope-future-version.json");
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", value), "future fixture");
+    expect(error.kind).toBe("envelope-future-version");
+    const corrected = value as Record<string, unknown>;
+    corrected.schemaVersion = 1;
+    expectRecognized(runEnvelopeStage("results-2026-09.json", corrected), "corrected fixture");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 9: a name that is not canonical selects no registry
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: a name that is not canonical selects no registry", () => {
+  test("edge case results-2026-00.json: a valid envelope under a near-miss name selects nothing", () => {
+    const nearMisses = [
+      "results-2026-00.json",
+      "results-2026-13.json",
+      "results-2026-9.json",
+      "results-2026-09.JSON",
+      "Results-2026-09.json",
+      "results-2026-09.json5",
+      "index.json",
+      "preferences.JSON"
+    ];
+    for (const name of nearMisses) {
+      for (const family of ENVELOPE_FAMILIES) {
+        const result = runEnvelopeStage(name, familyEnvelope(family, 1));
+        expect(name + " status: " + result.status).toBe(name + " status: unknown-file");
+        expect(name + " fields: " + Object.keys(result).sort().join(",")).toBe(name + " fields: name,status");
+      }
+    }
+  });
+
+  test("the refusal carries no kind, no family, no version, and no registry handle", () => {
+    const result = runEnvelopeStage("results-2026-00.json", resultsEnvelope(1));
+    if (result.status !== "unknown-file") {
+      throw new Error("expected the refusal outcome");
+    }
+    expect(String(result.name)).toBe("results-2026-00.json");
+    // The candidate name is the one fact the refusal may carry, so it is removed before the search.
+    const serialized = JSON.stringify(result).replace(String(result.name), "the-candidate-name");
+    for (const kind of ENVELOPE_STAGE_KINDS) {
+      expect("no kind text: " + String(serialized.indexOf(kind) !== -1)).toBe("no kind text: false");
+    }
+    for (const family of ENVELOPE_FAMILIES) {
+      expect("no family text: " + String(serialized.indexOf(family) !== -1)).toBe("no family text: false");
+    }
+    expect("no version field: " + String(serialized.indexOf("schemaVersion") !== -1)).toBe("no version field: false");
+    expect("no format text: " + String(serialized.indexOf("repjot/") !== -1)).toBe("no format text: false");
+    expect("no selection field: " + String(serialized.indexOf("selection") !== -1)).toBe("no selection field: false");
+    expect("no error field: " + String(serialized.indexOf("error") !== -1)).toBe("no error field: false");
+  });
+
+  test("the refusal reads no document: a document whose every read throws is never read", () => {
+    const unreadable = envelopeUnreadableDocument();
+    for (const name of ["results-2026-00.json", "index.json", "preferences.JSON", "", 7, null]) {
+      const result = runEnvelopeStage(name, unreadable);
+      expect("refusal for " + String(name) + ": " + result.status).toBe("refusal for " + String(name) + ": unknown-file");
+    }
+  });
+
+  test("the refusal does not touch the document and leaves it intact", () => {
+    const doc = resultsEnvelope(1);
+    const before = envelopeSnapshot(doc);
+    expect(runEnvelopeStage("results-2026-00.json", doc).status).toBe("unknown-file");
+    expect(envelopeSnapshot(doc)).toBe(before);
+  });
+
+  test("valid control: the identical value under its canonical name is recognized", () => {
+    const doc = resultsEnvelope(1);
+    expect(runEnvelopeStage("results-2026-00.json", doc).status).toBe("unknown-file");
+    expectRecognized(runEnvelopeStage("results-2026-09.json", doc), "canonical control");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 10: no shape heuristic, no metadata, no semantic rule
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: no shape heuristic and no metadata influence a selection", () => {
+  test("two documents with the same envelope and different bodies select the same registry", () => {
+    const minimal = { format: "repjot/results", schemaVersion: 1 };
+    const full = {
+      format: "repjot/results",
+      schemaVersion: 1,
+      yearMonthUtc: "2026-09",
+      sessions: [{ id: "session-1", startedAtUtc: "2026-09-01T06:30:00Z" }],
+      sessionTombstones: []
+    };
+    const first = expectRecognized(runEnvelopeStage("results-2026-09.json", minimal), "minimal body");
+    const second = expectRecognized(runEnvelopeStage("results-2026-09.json", full), "full body");
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+
+  test("a document body can neither rescue nor corrupt its own envelope", () => {
+    const shaped = {
+      format: "repjot/preferences",
+      schemaVersion: 1,
+      yearMonthUtc: "2026-09",
+      sessions: [{ id: "session-1" }]
+    };
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", shaped), "results body, preferences envelope");
+    expect(error.kind).toBe("envelope-wrong-family");
+    expect(JSON.stringify(error.safeContext)).toBe('{"family":"preferences","expectedFamily":"results"}');
+
+    const workoutsBody = { format: "repjot/workouts", schemaVersion: 1, sessions: [], yearMonthUtc: "2026-09" };
+    const selection = expectRecognized(runEnvelopeStage("workouts.json", workoutsBody), "workouts envelope, results body");
+    expect(selection.family).toBe("workouts");
+  });
+
+  test("a document needs no results shape at all to enter the results registry", () => {
+    const selection = expectRecognized(runEnvelopeStage("results-2026-09.json", { format: "repjot/results", schemaVersion: 1 }), "no body");
+    expect(selection.family).toBe("results");
+  });
+
+  test("Drive change indicators carried as document fields cannot change a selection", () => {
+    const plain = { format: "repjot/results", schemaVersion: 1 };
+    const withMetadata = {
+      format: "repjot/results",
+      schemaVersion: 1,
+      md5Checksum: "1234567890abcdef",
+      version: 99,
+      modifiedTime: "2026-01-01T00:00:00Z",
+      size: 4096,
+      fileId: "drive-file-id-never-a-logical-name",
+      mimeType: "application/json"
+    };
+    const first = expectRecognized(runEnvelopeStage("results-2026-09.json", plain), "plain");
+    const second = expectRecognized(runEnvelopeStage("results-2026-09.json", withMetadata), "with metadata fields");
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+
+  test("the stage input has no field for a change indicator, a family, or a byte", () => {
+    const expected = JSON.stringify(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1)));
+    const widened: DocumentEnvelopeInput = Object.assign(
+      { logicalName: "results-2026-09.json", value: resultsEnvelope(1) },
+      { md5Checksum: "abc", modifiedTime: "2026-01-01T00:00:00Z", expectedFamily: "preferences", bytes: new Uint8Array([]) }
+    );
+    expect(JSON.stringify(recognizeDocumentEnvelope(widened))).toBe(expected);
+  });
+
+  test("edge case yearMonthUtc: a shard body that disagrees with its name is accepted here", () => {
+    const mismatch = { format: "repjot/results", schemaVersion: 1, yearMonthUtc: "2026-01" };
+    const selection = expectRecognized(runEnvelopeStage("results-2026-09.json", mismatch), "month mismatch");
+    expect(selection.family).toBe("results");
+    const match = { format: "repjot/results", schemaVersion: 1, yearMonthUtc: "2026-09" };
+    expectRecognized(runEnvelopeStage("results-2026-09.json", match), "month match");
+  });
+
+  test("the stage never reads a body field, on an acceptance or on a rejection", () => {
+    const accepted = envelopeReadProbe();
+    expectRecognized(runEnvelopeStage("results-2026-09.json", accepted.value), "probe accepted");
+    expect(accepted.reads.join(",")).toBe("");
+
+    const rejected = envelopeReadProbe();
+    const error = expectRejected(runEnvelopeStage("preferences.json", rejected.value), "probe rejected");
+    expect(error.kind).toBe("envelope-wrong-family");
+    expect(rejected.reads.join(",")).toBe("");
+  });
+
+  test("a rejection leaves nothing cached: the same value is judged the same way twice", () => {
+    const doc = resultsEnvelope(2);
+    const first = JSON.stringify(runEnvelopeStage("results-2026-09.json", doc));
+    const second = JSON.stringify(runEnvelopeStage("results-2026-09.json", doc));
+    expect(second).toBe(first);
+    doc.schemaVersion = 1;
+    expectRecognized(runEnvelopeStage("results-2026-09.json", doc), "recovered after two rejections");
+  });
+
+  test("after forty rejections the accepted case still selects the same registry", () => {
+    const before = JSON.stringify(expectRecognized(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1)), "before"));
+    let index = 0;
+    while (index < 40) {
+      const oneCase = ENVELOPE_STAGE_CASES[index % ENVELOPE_STAGE_CASES.length];
+      runEnvelopeStage(oneCase.logicalName, oneCase.build());
+      runEnvelopeStage("results-2026-00.json", resultsEnvelope(1));
+      index += 1;
+    }
+    const after = JSON.stringify(expectRecognized(runEnvelopeStage("results-2026-09.json", resultsEnvelope(1)), "after"));
+    expect(after).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 11: every rejection is one frozen typed error, and every kind is reached
+// ---------------------------------------------------------------------------
+
+/** One accepted recognition status and the one outcome the stage must map it to. */
+interface EnvelopeMappingCase {
+  readonly label: string;
+  readonly recognition: EnvelopeRecognition;
+  readonly expectedKind: PipelineErrorKind | null;
+  readonly expectedContextJson: string;
+}
+
+const ENVELOPE_MAPPING_CASES: readonly EnvelopeMappingCase[] = [
+  { label: "recognized", recognition: { status: "recognized", family: "results", format: "repjot/results", schemaVersion: 1 }, expectedKind: null, expectedContextJson: "" },
+  { label: "not-an-object", recognition: { status: "not-an-object" }, expectedKind: "envelope-not-object", expectedContextJson: "{}" },
+  { label: "missing-format", recognition: { status: "missing-format" }, expectedKind: "envelope-missing-format", expectedContextJson: "{}" },
+  { label: "unknown-format", recognition: { status: "unknown-format" }, expectedKind: "envelope-unknown-format", expectedContextJson: "{}" },
+  { label: "wrong-family", recognition: { status: "wrong-family", family: "workouts", expectedFamily: "results" }, expectedKind: "envelope-wrong-family", expectedContextJson: '{"family":"workouts","expectedFamily":"results"}' },
+  { label: "missing-version", recognition: { status: "missing-version" }, expectedKind: "envelope-missing-version", expectedContextJson: "{}" },
+  { label: "non-number-version", recognition: { status: "non-number-version" }, expectedKind: "envelope-non-number-version", expectedContextJson: "{}" },
+  { label: "non-integer-version", recognition: { status: "non-integer-version" }, expectedKind: "envelope-non-integer-version", expectedContextJson: "{}" },
+  { label: "non-positive-version", recognition: { status: "non-positive-version" }, expectedKind: "envelope-non-positive-version", expectedContextJson: "{}" },
+  { label: "unsupported-old-version", recognition: { status: "unsupported-old-version", schemaVersion: 1, supportFloor: 2 }, expectedKind: "envelope-unsupported-old-version", expectedContextJson: '{"schemaVersion":1,"supportFloor":2}' },
+  { label: "future-version", recognition: { status: "future-version", schemaVersion: 4, currentVersion: 1 }, expectedKind: "envelope-future-version", expectedContextJson: '{"schemaVersion":4,"currentSchemaVersion":1}' }
+];
+
+/** The branch a caller takes per envelope kind. No case reads a message. */
+function branchForEnvelopeKind(error: PipelineError): string {
+  switch (error.kind) {
+    case "envelope-not-object":
+      return "report-invalid-document-root";
+    case "envelope-missing-format":
+      return "report-missing-format";
+    case "envelope-unknown-format":
+      return "report-unknown-format";
+    case "envelope-wrong-family":
+      return "report-family-mismatch";
+    case "envelope-missing-version":
+      return "report-missing-version";
+    case "envelope-non-number-version":
+      return "report-non-number-version";
+    case "envelope-non-integer-version":
+      return "report-non-integer-version";
+    case "envelope-non-positive-version":
+      return "report-non-positive-version";
+    case "envelope-unsupported-old-version":
+      return "report-support-floor";
+    case "envelope-future-version":
+      return "report-current-version";
+    default:
+      return "other-stage";
+  }
+}
+
+/** The branch expected of each kind, written beside the Section 12 failure column by hand. */
+const ENVELOPE_EXPECTED_BRANCH: Readonly<Record<string, string>> = {
+  "envelope-not-object": "report-invalid-document-root",
+  "envelope-missing-format": "report-missing-format",
+  "envelope-unknown-format": "report-unknown-format",
+  "envelope-wrong-family": "report-family-mismatch",
+  "envelope-missing-version": "report-missing-version",
+  "envelope-non-number-version": "report-non-number-version",
+  "envelope-non-integer-version": "report-non-integer-version",
+  "envelope-non-positive-version": "report-non-positive-version",
+  "envelope-unsupported-old-version": "report-support-floor",
+  "envelope-future-version": "report-current-version"
+};
+
+describe("envelope stage: every rejection is one frozen typed error", () => {
+  test("every rejected shape yields the declared kind, context, stage, category, and message", () => {
+    for (const oneCase of ENVELOPE_STAGE_CASES) {
+      const error = expectRejected(runEnvelopeStage(oneCase.logicalName, oneCase.build()), oneCase.label);
+      expect(oneCase.label + " kind: " + error.kind).toBe(oneCase.label + " kind: " + oneCase.expectedKind);
+      expect(oneCase.label + " context: " + JSON.stringify(error.safeContext)).toBe(
+        oneCase.label + " context: " + oneCase.expectedContextJson
+      );
+      expect(oneCase.label + " logicalName: " + error.logicalName).toBe(oneCase.label + " logicalName: " + oneCase.logicalName);
+      expect(oneCase.label + " category: " + error.userCategory).toBe(
+        oneCase.label + " category: " + ENVELOPE_EXPECTED_CATEGORY[oneCase.expectedKind]
+      );
+      expect(oneCase.label + " retryable: " + String(error.retryable)).toBe(oneCase.label + " retryable: false");
+      // The fixed text of the accepted descriptor, asserted as a table fact rather than branched on.
+      expect(oneCase.label + " message: " + error.safeMessage).toBe(
+        oneCase.label + " message: " + PIPELINE_ERROR_DESCRIPTORS[oneCase.expectedKind].safeMessage
+      );
+    }
+  });
+
+  test("every accepted recognition status maps to exactly one outcome", () => {
+    for (const oneCase of ENVELOPE_MAPPING_CASES) {
+      const outcome = envelopeOutcomeForRecognition(oneCase.recognition, "results-2026-09.json");
+      if (oneCase.expectedKind === null) {
+        if (outcome.status !== "selected") {
+          throw new Error(oneCase.label + ": expected a selection");
+        }
+        expect(oneCase.label + " family: " + outcome.selection.family).toBe(oneCase.label + " family: results");
+        continue;
+      }
+      if (outcome.status !== "rejected") {
+        throw new Error(oneCase.label + ": expected a rejection");
+      }
+      expect(oneCase.label + " kind: " + outcome.error.kind).toBe(oneCase.label + " kind: " + oneCase.expectedKind);
+      expect(oneCase.label + " context: " + JSON.stringify(outcome.error.safeContext)).toBe(
+        oneCase.label + " context: " + oneCase.expectedContextJson
+      );
+      expect(oneCase.label + " stage: " + outcome.error.stage).toBe(oneCase.label + " stage: envelope");
+      expect(oneCase.label + " category: " + outcome.error.userCategory).toBe(
+        oneCase.label + " category: " + ENVELOPE_EXPECTED_CATEGORY[oneCase.expectedKind]
+      );
+      expect(oneCase.label + " frozen: " + String(Object.isFrozen(outcome.error))).toBe(oneCase.label + " frozen: true");
+    }
+  });
+
+  test("the mapping table covers all eleven statuses and the ten envelope kinds once each", () => {
+    expect(ENVELOPE_MAPPING_CASES.length).toBe(11);
+    const kinds: string[] = [];
+    for (const oneCase of ENVELOPE_MAPPING_CASES) {
+      if (oneCase.expectedKind !== null) {
+        kinds.push(oneCase.expectedKind);
+      }
+    }
+    expect(kinds.length).toBe(ENVELOPE_STAGE_KINDS.length);
+    expect(kinds.slice().sort()).toEqual(ENVELOPE_STAGE_KINDS.slice().sort());
+  });
+
+  test("a caller branches on the kind alone, whatever the document was", () => {
+    for (const oneCase of ENVELOPE_STAGE_CASES) {
+      const error = expectRejected(runEnvelopeStage(oneCase.logicalName, oneCase.build()), oneCase.label + " branch");
+      const decision = branchForEnvelopeKind(error);
+      expect(oneCase.label + " branch: " + decision).toBe(oneCase.label + " branch: " + ENVELOPE_EXPECTED_BRANCH[oneCase.expectedKind]);
+      expect(oneCase.label + " branch is not another stage's: " + String(decision === "other-stage")).toBe(
+        oneCase.label + " branch is not another stage's: false"
+      );
+    }
+  });
+
+  test("no error carries a format string, document text, or a document value", () => {
+    // Each row is one kind plus the envelope of a document that carries every forbidden value class in its
+    // body, so a leak of body text, a token, a session id, or a measurement would show up here.
+    const envelopes: readonly (readonly [string, Record<string, unknown>, readonly string[]])[] = [
+      ["envelope-missing-format", {}, ["format"]],
+      ["envelope-missing-version", {}, ["schemaVersion"]],
+      ["envelope-unknown-format", { format: "repjot/nano", schemaVersion: 1 }, []],
+      ["envelope-wrong-family", { format: "repjot/preferences", schemaVersion: 1 }, []],
+      ["envelope-non-number-version", { format: "repjot/results", schemaVersion: "1" }, []],
+      ["envelope-non-integer-version", { format: "repjot/results", schemaVersion: 1.5 }, []],
+      ["envelope-non-positive-version", { format: "repjot/results", schemaVersion: 0 }, []],
+      ["envelope-future-version", { format: "repjot/results", schemaVersion: 2 }, []]
+    ];
+    for (const row of envelopes) {
+      const error = expectRejected(runEnvelopeStage("results-2026-09.json", envelopeSentinelValue(row[1], row[2])), row[0] + " retention");
+      expect(String(error.kind)).toBe(row[0]);
+      const serialized = JSON.stringify(error);
+      for (const sentinel of SENTINELS) {
+        expect(row[0] + " leaks no sentinel: " + String(serialized.indexOf(sentinel) !== -1)).toBe(row[0] + " leaks no sentinel: false");
+      }
+      // The `format` value is document text: it is named by kind and never echoed.
+      expect(row[0] + " echoes no format: " + String(serialized.indexOf("repjot/") !== -1)).toBe(row[0] + " echoes no format: false");
+    }
+  });
+
+  test("every logicalName this stage emits is a name it recognized as canonical", () => {
+    const names: string[] = [];
+    for (const oneCase of ENVELOPE_STAGE_CASES) {
+      const error = expectRejected(runEnvelopeStage(oneCase.logicalName, oneCase.build()), oneCase.label + " name");
+      names.push(error.logicalName);
+      const match = matchCanonicalLogicalName(error.logicalName);
+      expect(oneCase.label + " name is canonical: " + match.status).toBe(oneCase.label + " name is canonical: canonical");
+      expect(oneCase.label + " name is the request: " + error.logicalName).toBe(oneCase.label + " name is the request: " + oneCase.logicalName);
+    }
+    expect(new Set<string>(names).size > 1).toBe(true);
+  });
+
+  test("a version integer in a safe context is the declared value or an accepted constant", () => {
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(2)), "version provenance");
+    const future = versionBoundFacts(error);
+    expect(future.kind).toBe("envelope-future-version");
+    expect(future.declared).toBe(2);
+    expect(future.bound).toBe(CURRENT_VERSION.results);
+    const old = envelopeOutcomeForRecognition(
+      { status: "unsupported-old-version", schemaVersion: 1, supportFloor: 2 },
+      "results-2026-09.json"
+    );
+    if (old.status !== "rejected") {
+      throw new Error("expected the unsupported-old rejection");
+    }
+    const oldFacts = versionBoundFacts(old.error);
+    expect(oldFacts.kind).toBe("envelope-unsupported-old-version");
+    expect(oldFacts.declared).toBe(1);
+    expect(oldFacts.bound).toBe(2);
+    // A malformed version names no range at all: nothing is invented for a caller to read.
+    const malformed = expectRejected(runEnvelopeStage("results-2026-09.json", resultsEnvelope(0)), "malformed version");
+    expect(versionBoundFacts(malformed).kind).toBe("no-version-bound");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 12: the stage never touches the caller's value
+// ---------------------------------------------------------------------------
+
+describe("envelope stage: the caller keeps its own value on every path", () => {
+  test("no call writes to, freezes, or replaces the input value", () => {
+    for (const oneCase of ENVELOPE_STAGE_CASES) {
+      const value = oneCase.build();
+      const before = envelopeSnapshot(value);
+      runEnvelopeStage(oneCase.logicalName, value);
+      expect(oneCase.label + " input unchanged: " + envelopeSnapshot(value)).toBe(oneCase.label + " input unchanged: " + before);
+    }
+  });
+
+  test("a frozen caller object survives every rejection and every acceptance", () => {
+    const frozenBroken = Object.freeze(envelopeSentinelValue({ format: "repjot/nano", schemaVersion: 1 }));
+    const frozenValid = Object.freeze(resultsEnvelope(1));
+    const beforeBroken = envelopeSnapshot(frozenBroken);
+    const beforeValid = envelopeSnapshot(frozenValid);
+    expectRejected(runEnvelopeStage("results-2026-09.json", frozenBroken), "frozen broken");
+    expectRecognized(runEnvelopeStage("results-2026-09.json", frozenValid), "frozen valid");
+    expect("frozen broken snapshot: " + envelopeSnapshot(frozenBroken)).toBe("frozen broken snapshot: " + beforeBroken);
+    expect("frozen valid snapshot: " + envelopeSnapshot(frozenValid)).toBe("frozen valid snapshot: " + beforeValid);
+    expect(String(Object.isFrozen(frozenBroken))).toBe("true");
+    expect(String(Object.isFrozen(frozenValid))).toBe("true");
+  });
+
+  test("the caller can still write to its own object after a rejection and after an acceptance", () => {
+    const rejectedValue = resultsEnvelope(0);
+    expectRejected(runEnvelopeStage("results-2026-09.json", rejectedValue), "writable after rejection");
+    rejectedValue.written = "the stage froze nothing";
+    expect(String(rejectedValue.written)).toBe("the stage froze nothing");
+    expect(String(Object.isFrozen(rejectedValue))).toBe("false");
+
+    const acceptedValue = resultsEnvelope(1);
+    expectRecognized(runEnvelopeStage("results-2026-09.json", acceptedValue), "writable after acceptance");
+    acceptedValue.written = "still writable";
+    expect(String(acceptedValue.written)).toBe("still writable");
+    expect(String(Object.isFrozen(acceptedValue))).toBe("false");
+  });
+
+  test("an accepted selection and a rejected error reference no caller value", () => {
+    const doc = resultsEnvelope(1);
+    doc.sessions = [{ id: "before" }];
+    const selection = expectRecognized(runEnvelopeStage("results-2026-09.json", doc), "selection alias");
+    const selectionJson = JSON.stringify(selection);
+    doc.sessions = [{ id: "after" }];
+    expect(JSON.stringify(selection)).toBe(selectionJson);
+
+    const broken = resultsEnvelope(0);
+    broken.sessions = [{ id: "before" }];
+    const error = expectRejected(runEnvelopeStage("results-2026-09.json", broken), "error alias");
+    const errorJson = JSON.stringify(error);
+    broken.sessions = [{ id: "after" }];
+    broken.schemaVersion = 77;
+    expect(JSON.stringify(error)).toBe(errorJson);
+    expect(errorJson.indexOf("77")).toBe(-1);
+  });
+
+  test("a non-object root is left exactly as it arrived", () => {
+    const list = [{ format: "repjot/results", schemaVersion: 1 }];
+    const before = envelopeSnapshot(list);
+    expectRejected(runEnvelopeStage("results-2026-09.json", list), "array purity");
+    expect(envelopeSnapshot(list)).toBe(before);
+    expect(list.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 13: module shape, imports, purity, and ES2019 output (static evidence)
+// ---------------------------------------------------------------------------
+
+/** The two new modules, read as text. Rows in this group close "no such mechanism exists", which no
+ * single call can show; GATES.md Section 3 has the parent inspect the same diff. */
+const ENVELOPE_MODULE_SOURCE = readFileSync(new URL("../src/documents/envelope.ts", import.meta.url), "utf8");
+const STAGE_MODULE_SOURCE = readFileSync(new URL("../src/documents/document-pipeline.ts", import.meta.url), "utf8");
+
+/**
+ * Substrings that would put a second mechanism or a forbidden capability on this path. They are tested
+ * against the module text with its comments removed, so a comment may still name the rule it follows.
+ */
+const FORBIDDEN_ENVELOPE_TEXT: readonly (readonly [string, string])[] = [
+  ["fetch", "no network: the fetch adapter is Phase 17"],
+  ["XMLHttpRequest", "no network"],
+  ["indexedDB", "no IndexedDB (Phases 19-26)"],
+  ["IDBKeyRange", "no IndexedDB"],
+  ["localStorage", "no browser storage"],
+  ["sessionStorage", "no browser storage"],
+  ["document.", "no DOM"],
+  ["window.", "no DOM"],
+  ["navigator.", "no DOM"],
+  ["Blob", "no download path"],
+  ["URL", "no download path"],
+  ["Date", "no clock"],
+  ["performance", "no clock"],
+  ["setTimeout", "no timer"],
+  ["Math", "no arithmetic that could become a rule"],
+  ["random", "no random input"],
+  ["crypto", "no digest (Phase 16)"],
+  ["Intl", "no locale"],
+  ["toLocaleString", "no locale"],
+  ["svelte", "no UI"],
+  ["Drive", "no Drive adapter and no FF-11 change indicator on this path"],
+  ["eval", "no execution of content"],
+  ["Function", "no execution of content"],
+  ["require", "no CommonJS dependency"],
+  ["node:", "no filesystem and no node:url"],
+  ["bun:", "no test or runtime API"],
+  ["JSON", "no parse and no stringify: the parse stage produced this value (FF-14)"],
+  ["TextDecoder", "no byte handling in this stage"],
+  ["TextEncoder", "no byte handling in this stage"],
+  ["schema-registry", "no schema-validator handle (scope decision 3)"],
+  ["validation", "no schema or semantic validation on this stage"],
+  ["migrat", "no migration (Phase 14)"],
+  ["hasOwnProperty", "no second envelope reader: src/domain/families.ts owns the two-field read"],
+  ["yearMonthUtc", "no shard-month read here (RS-01 belongs to semantic validation)"],
+  ["shardNameAgreesWithDocument", "the month comparison is never called from this stage"],
+  ["sessionStartAgreesWithShard", "the month comparison is never called from this stage"],
+  ["RegExp", "no second filename pattern"],
+  [".json", "no second filename pattern"],
+  ["repjot/", "no second format table"],
+  ["v0", "no invented legacy importer (FF-10)"]
+];
+
+function envelopeImportSpecifiers(source: string): string[] {
+  return matchesOf(uncommented(source), /from\s+"([^"]*)"/)
+    .map((hit) => hit.replace(/^from\s+"/, "").replace(/"$/, ""))
+    .sort();
+}
+
+describe("envelope stage: module shape, imports, purity, and ES2019 output", () => {
+  test("each module exports only its own seam", () => {
+    expect(Object.keys(documentEnvelopeModule).sort()).toEqual([
+      "envelopeOutcomeForRecognition",
+      "matchCanonicalLogicalName",
+      "selectFamilyRegistry"
+    ]);
+    expect(Object.keys(documentPipelineModule).sort()).toEqual(["recognizeDocumentEnvelope"]);
+    expect(typeof documentEnvelopeModule.matchCanonicalLogicalName).toBe("function");
+    expect(typeof documentEnvelopeModule.selectFamilyRegistry).toBe("function");
+    expect(typeof documentEnvelopeModule.envelopeOutcomeForRecognition).toBe("function");
+    expect(typeof documentPipelineModule.recognizeDocumentEnvelope).toBe("function");
+  });
+
+  test("each module imports the accepted recognizer and the accepted error layer and nothing else", () => {
+    expect(envelopeImportSpecifiers(ENVELOPE_MODULE_SOURCE)).toEqual([
+      "../domain/families",
+      "../domain/families",
+      "./pipeline-types",
+      "./pipeline-types"
+    ]);
+    expect(envelopeImportSpecifiers(STAGE_MODULE_SOURCE)).toEqual(["./envelope", "./envelope", "./pipeline-types"]);
+    for (const source of [ENVELOPE_MODULE_SOURCE, STAGE_MODULE_SOURCE]) {
+      expect(matchesOf(uncommented(source), /\brequire\s*\(/).length).toBe(0);
+      expect(matchesOf(uncommented(source), /\bimport\s*\(/).length).toBe(0);
+      expect(matchesOf(uncommented(source), /export\s+\*/).length).toBe(0);
+    }
+  });
+
+  test("neither module contains a second recognizer, pattern, version rule, or forbidden capability", () => {
+    const codes = [uncommented(ENVELOPE_MODULE_SOURCE), uncommented(STAGE_MODULE_SOURCE)];
+    for (const row of FORBIDDEN_ENVELOPE_TEXT) {
+      for (const code of codes) {
+        expect(row[0] + " (" + row[1] + "): " + String(code.indexOf(row[0]) !== -1)).toBe(row[0] + " (" + row[1] + "): false");
+      }
+    }
+    // No numeric literal at all: a version comparison needs a number, and there is none (R-11).
+    expect(matchesOf(codeOnly(ENVELOPE_MODULE_SOURCE), /(?<![\w.])\d+(?:\.\d+)?(?![\w])/).length).toBe(0);
+    expect(matchesOf(codeOnly(STAGE_MODULE_SOURCE), /(?<![\w.])\d+(?:\.\d+)?(?![\w])/).length).toBe(0);
+  });
+
+  test("the accepted recognizer is reused rather than re-implemented", () => {
+    const envelopeCode = uncommented(ENVELOPE_MODULE_SOURCE);
+    for (const reused of ["recognizeEnvelope", "recognizeLogicalName", "CURRENT_VERSION", "SUPPORT_FLOOR_VERSION", "makePipelineError"]) {
+      expect("envelope.ts reuses " + reused + ": " + String(envelopeCode.indexOf(reused) !== -1)).toBe(
+        "envelope.ts reuses " + reused + ": true"
+      );
+    }
+    const stageCode = uncommented(STAGE_MODULE_SOURCE);
+    for (const composed of ["matchCanonicalLogicalName", "selectFamilyRegistry"]) {
+      expect("document-pipeline.ts composes " + composed + ": " + String(stageCode.indexOf(composed) !== -1)).toBe(
+        "document-pipeline.ts composes " + composed + ": true"
+      );
+    }
+    // The stage module reads no envelope field and builds no error of its own.
+    for (const absent of ["format", "schemaVersion", "makePipelineError", "recognizeEnvelope", "recognizeLogicalName"]) {
+      expect("document-pipeline.ts never mentions " + absent + ": " + String(stageCode.indexOf(absent) !== -1)).toBe(
+        "document-pipeline.ts never mentions " + absent + ": false"
+      );
+    }
+  });
+
+  test("neither module uses syntax newer than ES2019", () => {
+    // Scanned on the raw source, comments included, so no such token can reach a reader's eye.
+    for (const source of [ENVELOPE_MODULE_SOURCE, STAGE_MODULE_SOURCE]) {
+      for (const token of FORBIDDEN_ES2020_TOKENS) {
+        expect(token + ": " + String(source.indexOf(token) !== -1)).toBe(token + ": false");
+      }
+    }
+  });
+
+  test("neither module is reachable from the shipped entry point yet", () => {
+    const entry = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(String(entry.indexOf("documents/envelope") !== -1)).toBe("false");
+    expect(String(entry.indexOf("documents/document-pipeline") !== -1)).toBe("false");
+    for (const source of [ENVELOPE_MODULE_SOURCE, STAGE_MODULE_SOURCE]) {
+      expect(String(source.indexOf("tests/") !== -1)).toBe("false");
+      expect(String(source.indexOf("fixtures") !== -1)).toBe("false");
+    }
+  });
+
+  test("selectFamilyRegistry is the array guard plus the accepted recognizer and nothing more", () => {
+    const body = functionBody(uncommented(ENVELOPE_MODULE_SOURCE), "selectFamilyRegistry");
+    expect("body present: " + String(body.length > 0)).toBe("body present: true");
+    expect(String(body.indexOf("Array.isArray") !== -1)).toBe("true");
+    expect(String(body.indexOf("recognizeEnvelope") !== -1)).toBe("true");
+    expect(String(body.indexOf("envelopeOutcomeForRecognition") !== -1)).toBe("true");
+    // One array test and one recognizer call: no second read of the value.
+    expect(String(body.indexOf("hasOwnProperty") !== -1)).toBe("false");
+    expect(String(body.indexOf("Object.keys") !== -1)).toBe("false");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 14: compile-time probes. Never called: `bun run check` runs their evidence,
+// because an expect-error directive is itself an error when the line below it compiles.
+// ---------------------------------------------------------------------------
+
+function envelopeStageTypeProbes(): void {
+  const result = recognizeDocumentEnvelope({ logicalName: "results-2026-09.json", value: null });
+  // @ts-expect-error the union carries no selection before its status is narrowed
+  const beforeNarrowing: unknown = result.selection;
+  // @ts-expect-error the refusal arm carries no family
+  const familyOnRefusal: unknown = result.status === "unknown-file" ? result.family : null;
+  // @ts-expect-error the refusal arm carries no error
+  const errorOnRefusal: unknown = result.status === "unknown-file" ? result.error : null;
+  // @ts-expect-error a rejection arm carries no selection
+  const selectionOnRejection: unknown = result.status === "rejected" ? result.selection : null;
+  // @ts-expect-error the refusal has no pipeline error kind of its own
+  const kindOnRefusal: unknown = result.status === "unknown-file" ? result.kind : null;
+  // @ts-expect-error the stage input has no field for a Drive change indicator (FF-11)
+  const withChecksum: DocumentEnvelopeInput = { logicalName: "results-2026-09.json", value: null, md5Checksum: "abc" };
+  // @ts-expect-error the expected family is derived from the name, never supplied
+  const withFamily: DocumentEnvelopeInput = { logicalName: "results-2026-09.json", value: null, expectedFamily: "results" };
+  // @ts-expect-error the stage takes the parsed value, not bytes (the parse stage produced this)
+  const withBytes: DocumentEnvelopeInput = { logicalName: "results-2026-09.json", value: null, bytes: new Uint8Array([]) };
+  // @ts-expect-error the stage takes no schema-validator handle (scope decision 3)
+  const withRegistry: DocumentEnvelopeInput = { logicalName: "results-2026-09.json", value: null, registry: {} };
+  // @ts-expect-error the stage takes no byte-order-mark field: the parse stage owns that rule (FF-14)
+  const withMark: DocumentEnvelopeInput = { logicalName: "results-2026-09.json", value: null, byteOrderMark: true };
+  if (result.status === "recognized") {
+    // @ts-expect-error a selection has no validator handle and no registry of its own
+    const registryHandle: unknown = result.selection.registry;
+    // @ts-expect-error a selection carries no shard month (R-15)
+    const month: unknown = result.selection.yearMonthUtc;
+    // @ts-expect-error a selection carries no logical filename
+    const name: unknown = result.selection.logicalName;
+    // @ts-expect-error a selection carries no migration path (Phase 14)
+    const path: unknown = result.selection.migrationPath;
+    // @ts-expect-error a selection is read-only
+    result.selection.schemaVersion = 2;
+  }
+  // @ts-expect-error the accepted kind set is closed, so no twelfth envelope kind exists
+  const inventedKind: PipelineErrorKind = "envelope-name-not-canonical";
+  // @ts-expect-error an unsupported-old recognition must name its floor
+  const oldWithoutFloor: EnvelopeRecognition = { status: "unsupported-old-version", schemaVersion: 1 };
+  // @ts-expect-error a selection needs the expected family implied by the canonical name
+  const missingExpected: FamilyRegistryOutcome = selectFamilyRegistry({ value: null, logicalName: "results-2026-09.json" });
+}
+
+describe("envelope stage: compile-time boundaries", () => {
+  test("the envelope-stage type probes are present for bun run check", () => {
+    expect(typeof envelopeStageTypeProbes).toBe("function");
+  });
+});

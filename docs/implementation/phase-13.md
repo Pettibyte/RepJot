@@ -18,7 +18,7 @@ Read `docs/implementation/README.md` and its common authority list. Read every s
 
 ## 4. Ordered task
 
-- [ ] **P13-T01 — Recognize exact envelopes and logical names**
+- [x] **P13-T01 — Recognize exact envelopes and logical names**
   - **Objective:** Select a family registry only from validated envelope fields and the expected logical name.
   - **Inspect:** Phases 1-10 family constants, canonical-name rules, and schema-versioning Document Envelope.
   - **Create or edit:** `src/documents/envelope.ts`, `src/documents/document-pipeline.ts`, and envelope fixtures.
