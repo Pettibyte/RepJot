@@ -71,14 +71,14 @@ Important: Check the dispatch ledger row for the target session before every dis
 
 ## MODEL ROUTING
 
-For all BUILDER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
+For all BUILDER tasks use halogen/halogen-qwen3.8-flash-next  .
 
-For all FIXER tasks use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
+For all FIXER tasks use halogen/halogen-qwen3.8-flash-next  .
 
 For JUDGE use openai-codex/gpt-5.6-sol.
 
 For ADVERSARIAL REVIEW use openai-codex/gpt-5.6-sol.
 
-For everything else, use llama/unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS .
+For everything else, use halogen/halogen-qwen3.8-flash-next  .
 
 Do not silently substitute a model. Ask the user for one replacement decision if a required model is unavailable. If a model fails, STOP, `ask_user` what to do next. 
