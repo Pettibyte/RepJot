@@ -6,7 +6,7 @@ This document defines the persistent JSON data model for REP JOT.
 
 The application uses these files:
 
-1. `exercises.json` stores exercise and equipment reference data.
+1. `exercises.json` stores exercise reference data, including each exercise's required equipment.
 2. `workouts.json` stores workout definitions and prescriptions.
 3. `preferences.json` stores versioned user preferences.
 4. `results-YYYY-MM.json` stores workout sessions for one UTC calendar month.
@@ -14,6 +14,10 @@ The application uses these files:
 There is no database in this revision. Each file must load independently as JSON in a browser.
 
 All files contain `format` and `schemaVersion`. References use stable IDs instead of copies of referenced entities.
+
+This specification follows `../docs/REQUIREMENTS.md` (v4). Where the two differ, `REQUIREMENTS.md` wins. Removed from the earlier revision: frozen execution plans, session tombstones, sync copies, the `deprecated` flag, and the prior-production-bundle comparison. See `../docs/REQUIREMENTS.md` Section 22.0.
+
+See [Exercise Seeding](./exercise-seeding.md) for the process that generates `exercises.json`.
 
 ---
 
@@ -46,21 +50,64 @@ select a result shard.
 Drive-owned metadata such as `modifiedTime` is external data. It retains the field name
 and timestamp representation defined by the Drive API.
 
-## Stable IDs and Deprecation
+## Stable IDs and Static Data Change
 
-Published equipment, exercise, workout, and workout-node IDs must never be deleted or reused. Corrections to labels, instructions, and prescriptions can retain the same ID and apply to historical views.
+An exercise ID is the `id` string from `free-exercise-db`. REP JOT does not mint, register, reserve, or renumber exercise IDs. A workout ID and a workout-node ID are short strings that the author writes by hand in `workouts.json`.
 
-An ID must not represent a different entity or node role later. A published workout node must keep its parent because historical execution paths include its ancestry.
+IDs are plain strings. REP JOT stores no content hash, checksum, digest, provenance record, or snapshot reference for any static entity.
 
-An optional `deprecated: true` flag marks an exercise or workout as unavailable for new use. Deprecated items remain resolvable for historical results.
+REP JOT treats published exercise and workout data as editable facts. It is not an immutable ledger. Any release may add, rename, re-parent, re-spec, or remove an exercise, a workout, or a workout node. The build does not download a prior production bundle. It does not diff IDs. It enforces no immutability rule and no backwards-compatibility rule.
 
-A deprecated exercise cannot appear in a new workout. A new session from an existing workout omits exercises deprecated at its start. Each scored ancestor affected by an omission becomes detail-only in the effective plan. It requires remaining child detail and uses `nonstandard` instead of an aggregate score. If no executable child remains, the container is skipped with `reasonCode: "deprecated"`. An in-progress session keeps its frozen plan. A deprecated workout is hidden from the chooser and cannot start.
+REP JOT has no `deprecated` flag on any entity. An exercise appears in selection when the seed allowlist lists it. A workout appears in the chooser when `workouts.json` lists it.
 
-The build compares the current bundle with the prior production bundle. It fails when a published ID disappears or is reused in another namespace.
+### ID character rule
 
-The comparison also preserves each node's type, parent, exercise reference, container strategy, and result-capture contract. Previously published measurement dimensions and compatible units cannot be removed. New dimensions and units can be added.
+An ID segment must not contain `/`, `|`, or `:`. These characters carry structure in the composite result key. The JSON Schemas enforce this rule on every exercise, workout, node, and non-null equipment value.
 
-The build does not compare complete content hashes, labels, instructions, notes, or prescriptions. A workout and node found in the prior production bundle are existing. A node added to an existing workout is new and cannot reference a deprecated exercise.
+A `Record` key must never be integer-like. JavaScript iterates integer-like keys first, in ascending numeric order, ahead of string keys. REP JOT IDs carry a non-numeric prefix or a descriptive slug for this reason.
+
+### Unresolved references
+
+When a stored result references static data that no longer resolves, the loader marks that result unresolved. The UI shows an error card with a **View Raw JSON** action. This covers an unknown exercise ID, an unknown workout ID, a broken execution path, and a path that resolves to a node whose exercise differs from the recorded `exerciseId`.
+
+REP JOT never auto-migrates a result, never substitutes a similar exercise, and never rewrites a stored result to repair a reference. One unresolved reference must not break its page, its list, the sync loop, or any other result.
+
+Recorded work still renders from the result's stored values and units. The error card identifies the unresolved reference and provides the raw JSON; it does not replace or hide those recorded values. When the current workout tree cannot order the result, the UI sorts it by the encoded `executionPath` string.
+
+## Keyed Maps
+
+Every collection that two devices can change uses a keyed map, not an array. `jsondiffpatch` diffs arrays by index. A concurrent insert or delete shifts indexes, so an index-based delta can land on the wrong element after a merge. Keyed maps produce deltas that are independent of position.
+
+| Collection | Shape |
+| --- | --- |
+| Shard sessions | `Record<sessionId, Session>` |
+| Session exercise results | `Record<compositeKey, ExerciseResult>` |
+| Session container results | `Record<compositeKey, ContainerResult>` |
+| Preference unit map | `Record<exerciseId, Record<dimension, unit>>` |
+
+Do not add array `matchBy` workarounds. Keyed maps remove the problem instead of patching it.
+
+Arrays remain correct in `workouts.json`. Prescriptive sequence is a property of the workout definition, and only the author changes it, at build time. A session stores no sequence. Result order comes from `executionPath` resolved against the workout tree.
+
+### Composite result key
+
+A session stores its results in two maps, one per result kind.
+
+```text
+exerciseResults  key = <path>|<side>|<attempt>
+containerResults key = <path>|<attempt>
+```
+
+Path encoding inside a key joins segments with `/`. A repeated-container segment carries `:<iteration>`, one-based. The field separator is `|`. `side` defaults to `both` and `attempt` defaults to `1`. The application always writes both fields into the key, even at their defaults, so a key never changes shape later.
+
+```text
+root/squat-sets:3/back-squat-set|both|1
+root/cindy|1
+```
+
+The result value keeps its structured `executionPath` array. The key is derived from that array. Loader and build validation reject a key that does not match the value it maps to. The structured path stays in the document because the user reads raw JSON to debug.
+
+See `../docs/REQUIREMENTS.md` Section 22.4 for the merge rationale.
 
 ## Icon
 
@@ -92,28 +139,9 @@ Remote icon URLs and inline SVG source are not permitted.
 {
   "format": "repjot/exercises",
   "schemaVersion": 1,
-  "equipment": [],
   "exercises": []
 }
 ```
-
-## Equipment
-
-Equipment is a reference entity. An empty `equipmentIds` array means that an exercise needs no equipment. Unknown source equipment must be curated before publication.
-
-```json
-{
-  "id": "barbell",
-  "name": "Barbell",
-  "icon": { "type": "material_symbol", "name": "fitness_center" }
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---:|---|
-| `id` | string | yes | Stable equipment ID. |
-| `name` | string | yes | Display name. |
-| `icon` | icon | no | Material Symbol or local SVG. |
 
 ## Exercise
 
@@ -121,25 +149,24 @@ An exercise contains classification, instructions, and supported measurements.
 
 ```json
 {
-  "id": "back-squat",
-  "name": "Back Squat",
+  "id": "Balance_Board",
+  "name": "Balance Board",
   "instructions": [
-    "Position the bar across the upper back.",
-    "Descend until the hip crease is below the top of the knee.",
-    "Stand and fully extend the hips and knees."
+    "Place a balance board in front of you.",
+    "Stand up on it and try to balance yourself.",
+    "Hold the balance for as long as desired."
   ],
-  "icon": { "type": "local_svg", "path": "icons/exercises/back-squat.svg" },
-  "equipmentIds": ["barbell", "squat-rack"],
-  "force": "push",
+  "equipment": "other",
+  "force": null,
   "mechanic": "compound",
   "category": "strength",
-  "movementPattern": "squat",
-  "primaryMuscles": ["quadriceps", "glutes"],
-  "secondaryMuscles": ["hamstrings", "lower back"],
+  "level": "beginner",
+  "movementPattern": "none",
+  "primaryMuscles": ["calves"],
+  "secondaryMuscles": ["hamstrings", "quadriceps"],
   "laterality": "bilateral",
   "measurements": [
-    { "dimension": "reps", "compatibleUnits": ["rep"] },
-    { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
+    { "dimension": "reps", "compatibleUnits": ["reps"] }
   ],
   "loadSemantics": "total"
 }
@@ -147,23 +174,23 @@ An exercise contains classification, instructions, and supported measurements.
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Stable exercise ID. |
+| `id` | string | yes | Stable exercise ID. The ID is the free-exercise-db source ID. See Requirement 6.1. |
 | `name` | string | yes | Display name. |
 | `instructions` | string[] | yes | Ordered execution instructions. The array can be empty. |
 | `icon` | icon | no | Material Symbol or local SVG. |
-| `equipmentIds` | string[] | yes | References to equipment. An empty array means no equipment. |
+| `equipment` | string or null | yes | Required equipment copied from the source or replaced by the allowlist override. `null` means no equipment. |
 | `force` | enum or null | yes | General force direction. |
 | `mechanic` | enum or null | yes | Compound or isolation classification. |
 | `category` | enum | yes | General free-exercise-db category. |
+| `level` | enum | yes | Difficulty copied from the source. One of `beginner`, `intermediate`, `expert`. The seed copies it verbatim. See Requirement 13.4. |
 | `movementPattern` | enum | yes | REP JOT movement pattern. |
 | `primaryMuscles` | enum[] | yes | Primary muscles. |
 | `secondaryMuscles` | enum[] | yes | Secondary muscles. The array can be empty. |
 | `laterality` | enum | yes | Normal bilateral or unilateral execution. |
-| `measurements` | measurement support[] | yes | Dimensions that prescriptions and results can use. |
-| `loadSemantics` | enum | conditional | Meaning of recorded load. Required when a load dimension exists. |
-| `deprecated` | boolean | no | Prevents use in new workouts while preserving existing references. |
+| `measurements` | nonempty measurement support[] | yes | One or more unique dimensions that prescriptions and results can use. Each entry has at least one compatible unit. |
+| `loadSemantics` | enum | yes | Meaning of recorded load. A bare allowlist entry defaults to `total`. |
 
-An exercise has no free-form description field. Use `instructions` only for ordered execution instructions.
+An exercise has no free-form description field. Use `instructions` only for ordered execution instructions. REP JOT has no `deprecated` flag. Selection follows the seed allowlist.
 
 ## Classification Enums
 
@@ -206,6 +233,18 @@ cardio
 olympic weightlifting
 ```
 
+### Level
+
+The values follow free-exercise-db. The seed copies the source value verbatim. See Requirement 13.4.
+
+```text
+beginner
+intermediate
+expert
+```
+
+REP JOT does not re-rate a level. REP JOT does not map a level to a display label beyond the source word.
+
 ### Movement Pattern
 
 Movement pattern is a separate REP JOT classification:
@@ -224,9 +263,10 @@ anti_rotation
 flexion
 extension
 other
+none
 ```
 
-Each exercise has one primary movement pattern.
+Each exercise has one primary movement pattern. `none` means REP JOT has no movement pattern for the exercise. The seed assigns `none` to a bare allowlist entry that names no pattern. See Requirement 13.16.
 
 ### Muscle
 
@@ -276,7 +316,7 @@ The allowed dimensions and units are:
 
 | Dimension | Compatible units | Value rule |
 |---|---|---|
-| `reps` | `rep` | Non-negative integer. |
+| `reps` | `reps` | Prescriptions use a non-negative integer. Results use `{ value: <non-negative integer>, unit: "reps" }`. |
 | `weight` | `lb`, `kg` | Non-negative number. |
 | `addedWeight` | `lb`, `kg` | Non-negative number. |
 | `assistedWeight` | `lb`, `kg` | Non-negative number. |
@@ -286,7 +326,7 @@ The allowed dimensions and units are:
 
 An exercise lists only applicable dimensions. Each listed unit must be compatible with its dimension.
 
-A prescription or result must use a listed dimension and compatible unit. `reps` remains a plain integer in prescriptions and results.
+A prescription or result must use a listed dimension and compatible unit. `reps` is a plain integer only in prescriptions. A result stores the explicit `reps` quantity.
 
 Load semantics are:
 
@@ -300,66 +340,6 @@ assisted
 For example, a 50 lb Dumbbell Bench Press with `per_implement` means one 50 lb dumbbell in each hand. Barbell load normally uses `total`. The `addedWeight` and `assistedWeight` dimensions use `added` and `assisted` respectively.
 
 The exercise directory does not select the user's preferred unit. `preferences.json` owns that selection.
-
-## Exercise Directory Example
-
-```json
-{
-  "format": "repjot/exercises",
-  "schemaVersion": 1,
-  "equipment": [
-    { "id": "barbell", "name": "Barbell" },
-    { "id": "squat-rack", "name": "Squat Rack" },
-    { "id": "pull-up-bar", "name": "Pull-up Bar" }
-  ],
-  "exercises": [
-    {
-      "id": "back-squat",
-      "name": "Back Squat",
-      "instructions": [
-        "Position the bar across the upper back.",
-        "Squat to the prescribed depth.",
-        "Stand and fully extend the hips and knees."
-      ],
-      "equipmentIds": ["barbell", "squat-rack"],
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "movementPattern": "squat",
-      "primaryMuscles": ["quadriceps", "glutes"],
-      "secondaryMuscles": ["hamstrings", "lower back"],
-      "laterality": "bilateral",
-      "measurements": [
-        { "dimension": "reps", "compatibleUnits": ["rep"] },
-        { "dimension": "weight", "compatibleUnits": ["kg", "lb"] }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "pull-up",
-      "name": "Pull-up",
-      "instructions": [
-        "Hang from the bar with extended arms.",
-        "Pull until the chin passes the bar.",
-        "Lower with control to extended arms."
-      ],
-      "equipmentIds": ["pull-up-bar"],
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "movementPattern": "vertical_pull",
-      "primaryMuscles": ["lats"],
-      "secondaryMuscles": ["biceps", "forearms", "middle back"],
-      "laterality": "bilateral",
-      "measurements": [
-        { "dimension": "reps", "compatibleUnits": ["rep"] },
-        { "dimension": "addedWeight", "compatibleUnits": ["kg", "lb"] }
-      ],
-      "loadSemantics": "added"
-    }
-  ]
-}
-```
 
 ---
 
@@ -397,9 +377,8 @@ Containers define execution and result scoring. Exercise nodes reference exercis
 | `name` | string | yes | Display name. |
 | `notes` | string | no | Author notes about the workout. |
 | `root` | container node | yes | Root of the workout tree. |
-| `deprecated` | boolean | no | Hides the workout from the chooser and prevents new sessions. |
 
-Each node ID is unique within its workout. Published node IDs must remain present and must not be reused.
+Each node ID is unique within its workout. The same node ID MAY appear in two different workouts. REP JOT has no `deprecated` flag. The chooser lists what `workouts.json` lists.
 
 ## Container Node
 
@@ -534,14 +513,13 @@ intervals
 ```text
 none
 optional
-required
 ```
 
-A scored AMRAP, EMOM, or complex stores one container score. It can also store child exercise results when `childDetail` permits them.
+A scored AMRAP, EMOM, or complex stores one container score. It can also store child exercise results when `childDetail` is `optional`.
 
-With no child results, the score is authoritative. When the user expands optional detail, the application creates the complete child-result set from the score and workout order. Child results then become authoritative, and each edit recomputes the stored container score.
+With no child results, the score is authoritative. When the user expands optional detail, the application produces a **draft** child set inferred from the score and the workout prescription. A draft value is not recorded actual work. The UI labels every draft value `Inferred` before the user saves. A draft value becomes recorded actual work only when the user saves it, with the explicit value and unit the user saw.
 
-A result must not contain partial child detail. `childDetail: "required"` always requires the complete child-result set. `childDetail: "none"` forbids it.
+Saved child detail can be partial while the user progressively enters work. If the saved detail follows valid progression and derives the aggregate exactly, each edit recomputes the standard container score. Otherwise, the container uses a `nonstandard` score and the UI displays `Detailed`. `childDetail: "none"` forbids child results.
 
 ### Benchmark Metadata
 
@@ -566,7 +544,7 @@ An exercise node defines one occurrence of an exercise in a workout.
 {
   "id": "heavy-squat",
   "type": "exercise",
-  "exerciseId": "back-squat",
+  "exerciseId": "Barbell_Squat",
   "stimulus": "strength",
   "setType": "working",
   "prescription": {
@@ -619,7 +597,7 @@ A numeric `reps` value is exact. Approximate and ranged targets use these forms:
 ]
 ```
 
-A range is inclusive. An actual repetition result is always a non-negative integer.
+A range is inclusive. An actual repetition result is a quantity with a non-negative integer `value` and the explicit unit `reps`. Prescription repetitions remain bare integers because they are not stored results.
 
 ### Effort Targets
 
@@ -748,7 +726,7 @@ container's configured iteration count.
               {
                 "id": "back-squat-set",
                 "type": "exercise",
-                "exerciseId": "back-squat",
+                "exerciseId": "Barbell_Squat",
                 "stimulus": "strength",
                 "setType": "working",
                 "prescription": {
@@ -774,9 +752,9 @@ container's configured iteration count.
             },
             "benchmark": { "name": "Cindy", "organization": "CrossFit" },
             "children": [
-              { "id": "cindy-pull-ups", "type": "exercise", "exerciseId": "pull-up", "stimulus": "conditioning", "prescription": { "reps": 5 } },
-              { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "push-up", "stimulus": "conditioning", "prescription": { "reps": 10 } },
-              { "id": "cindy-squats", "type": "exercise", "exerciseId": "air-squat", "stimulus": "conditioning", "prescription": { "reps": 15 } }
+              { "id": "cindy-pull-ups", "type": "exercise", "exerciseId": "Pullups", "stimulus": "conditioning", "prescription": { "reps": 5 } },
+              { "id": "cindy-push-ups", "type": "exercise", "exerciseId": "Pushups", "stimulus": "conditioning", "prescription": { "reps": 10 } },
+              { "id": "cindy-squats", "type": "exercise", "exerciseId": "Bodyweight_Squat", "stimulus": "conditioning", "prescription": { "reps": 15 } }
             ]
           }
         ]
@@ -803,10 +781,10 @@ The file is versioned for schema migration and write-conflict handling:
   "revision": 12,
   "updatedAtUtc": "2026-08-15T15:25:00Z",
   "exerciseUnits": {
-    "back-squat": {
+    "Barbell_Squat": {
       "weight": "lb"
     },
-    "pull-up": {
+    "Pullups": {
       "addedWeight": "kg"
     }
   }
@@ -817,19 +795,13 @@ The file is versioned for schema migration and write-conflict handling:
 |---|---|---:|---|
 | `format` | `"repjot/preferences"` | yes | Document family. |
 | `schemaVersion` | integer | yes | Structure version. |
-| `revision` | integer | yes | Monotonic file revision. Increment after each successful preference save. |
+| `revision` | integer | yes | Informational counter only. It never selects a migration and never resolves a conflict. |
 | `updatedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC time of the latest saved revision. |
-| `exerciseUnits` | object | yes | Preferred unit by exercise ID and measurement dimension. |
+| `exerciseUnits` | `Record<exerciseId, Record<dimension, unit>>` | yes | Preferred unit by exercise ID and measurement dimension. |
 
-## Exercise-Level Unit Preferences
+`exerciseUnits` is a keyed map. It is not an array. Each exercise key maps one dimension to one unit. This shape keeps `jsondiffpatch` deltas independent of position, so two devices that change different exercises never conflict.
 
-A unit preference belongs to one exercise and one dimension. The selected unit must appear in that exercise's `compatibleUnits`.
-
-The weight-entry pill displays the selected `lb` or `kg` value for that exercise. Activating the pill switches between supported units.
-
-The application saves the new selection to `preferences.json`. It then uses that selection for new prescriptions and results for the exercise.
-
-Synchronization merges mappings by exercise ID and dimension. If the same mapping changed locally and remotely, the pending value from the client performing the later synchronization wins. REP JOT does not prompt for preference conflicts.
+Synchronization merges mappings by exercise ID and dimension. The conflict unit is one exercise-and-dimension mapping. If the same mapping changed locally and remotely, the pending value from the client performing the later synchronization wins. REP JOT does not prompt for preference conflicts.
 
 Changing the preference does not rewrite saved historical prescriptions or results. If the user toggles a unit while editing an entered value, REP JOT converts that value with full internal precision. The editable display rounds the converted value to the nearest `0.1` in the selected unit. An exact half rounds upward because all measurement values are non-negative.
 
@@ -862,27 +834,15 @@ For example, a local start at `2026-08-31T23:30:00-07:00` persists as
   "format": "repjot/results",
   "schemaVersion": 1,
   "yearMonthUtc": "2026-08",
-  "sessions": [],
-  "sessionTombstones": []
+  "sessions": {}
 }
 ```
 
 `yearMonthUtc` must match the `YYYY-MM` part of the file name and the UTC year and month of each session's `startedAtUtc`.
 
-## Session Tombstone
+`sessions` is a `Record<sessionId, Session>`. It is not an array. The session ID is the key and also appears as the session `id`. REP JOT stores no `sessionTombstones` field. Deleting a session removes its key from the map.
 
-Deleting a session removes it from `sessions` and adds a permanent tombstone to its original monthly shard:
-
-```json
-{
-  "sessionId": "session-550e8400-e29b-41d4-a716-446655440000",
-  "deletedAtUtc": "2026-08-20T17:00:00Z"
-}
-```
-
-A tombstone wins over a session with the same ID during synchronization. REP JOT does not automatically remove tombstones because an unobserved stale device could restore the session. Delete All User Data physically deletes the complete shard.
-
-## Workout Session
+## Session
 
 ```json
 {
@@ -890,55 +850,38 @@ A tombstone wins over a session with the same ID during synchronization. REP JOT
   "workoutId": "strength-and-cindy",
   "status": "completed",
   "startedAtUtc": "2026-08-15T14:30:00Z",
-  "endedAtUtc": "2026-08-15T15:25:00Z",
+  "completedAtUtc": "2026-08-15T15:25:00Z",
   "updatedAtUtc": "2026-08-15T15:25:00Z",
-  "results": []
+  "exerciseResults": {},
+  "containerResults": {}
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | Globally stable `session-` prefixed UUID. |
-| `workoutId` | string | yes | Direct reference to the retained workout. |
+| `id` | string | yes | `session-` prefixed UUID v4. Matches the key in `sessions`. |
+| `workoutId` | string | yes | Direct reference to the workout used for that session. |
 | `status` | enum | yes | `in_progress`, `completed`, or `abandoned`. |
-| `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC session start time and shard source. |
-| `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | conditional | Required for `completed` and `abandoned`. Forbidden for `in_progress`. |
-| `updatedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC time of the latest saved session change. |
-| `conflictOfSessionId` | string | no | Original session ID when this session is a synchronization copy. |
-| `executionPlan` | object | conditional | Required for `in_progress`. Frozen effective workout tree. |
-| `results` | result[] | yes | Exercise and scored-container results. |
+| `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | UTC session start time and shard source. Immutable after it is written. |
+| `completedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | conditional | Required for `completed` and `abandoned`. Forbidden for `in_progress`. Immutable after it is written. Records the terminal instant for either terminal status. |
+| `updatedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | yes | System-managed. The application sets it on every saved write. The user cannot edit it. |
+| `exerciseResults` | `Record<compositeKey, ExerciseResult>` | yes | Exercise results keyed by composite key. |
+| `containerResults` | `Record<compositeKey, ContainerResult>` | yes | Scored-container results keyed by composite key. |
 | `notes` | string | no | Session notes. |
 
 `completed` means that the user intentionally completed the session. It does not mean that every prescribed item has a result.
 
-`abandoned` means that the user intentionally ended an unfinished session. `endedAtUtc` records when either terminal status occurred. Several sessions can have `in_progress` status.
+`abandoned` means that the user intentionally ended an unfinished session. `completedAtUtc` records when either terminal status occurred. The name follows Requirement 11.20. It marks the terminal instant, not a `completed` status. Several sessions can have `in_progress` status.
 
-New session IDs use a collision-resistant UUID and do not encode `startedAtUtc`.
+New session IDs use the prefix `session-` followed by a collision-resistant UUID v4. The prefix is required so the key can never be integer-like. The ID does not encode `startedAtUtc`.
 
-Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor starts from the current retained workout tree and overlays recorded results by execution path. New current-tree nodes appear with blank results. A deprecated exercise appears when the session already records its path; an unrecorded deprecated leaf stays hidden. Terminal sessions do not store `executionPlan`. Editing preserves `status`, `startedAtUtc`, and `endedAtUtc`. Release one does not permit timestamp edits. This reuses the editor without mislabeling historical sessions as active.
+No session stores an `executionPlan`, in progress or terminal. An in-progress session resolves its tree from the current bundle on each load. A deploy during an active workout can change that workout. The user restarts the session or edits the result afterward.
 
-## Session Sync Copy
+Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor starts from the current workout tree and overlays recorded results by execution path. New current-tree nodes appear with blank results. Editing preserves `status`, `startedAtUtc`, and `completedAtUtc`. Release one does not permit edits to workout timestamps.
 
-If the same live session changed locally and remotely, the remote session keeps the original ID. REP JOT saves the pending local version under a new UUID and sets `conflictOfSessionId` to the original ID. It preserves the local version's status and timestamps. History labels the new session `Sync copy`. The user can inspect, edit, or delete either session with the normal session screens; REP JOT does not provide a separate reconciliation UI.
+REP JOT creates no sync copy. A merge conflict resolves by the last-syncer-wins rule without a new session ID and without a label. History shows one entry per session ID. No session carries a `conflictOfSessionId` field.
 
-The client stores the generated copy ID in its pending edit before upload. Retries reuse that ID and cannot create additional copies for the same detected conflict. Tombstones still win over stale live sessions and do not create sync copies.
-
-## Frozen Execution Plan
-
-At session start, `executionPlan` copies the effective workout root, including node IDs, exercise references, strategies, scoring rules, and prescriptions. Exercises deprecated before the start are absent. REP JOT creates a skipped result with `reasonCode: "deprecated"` for each omitted exercise.
-
-For each scored container affected by an omission, the effective plan changes
-`childDetail` to `required`. The UI removes aggregate score entry and shows the remaining
-child inputs. Complete detail stores `{ "type": "nonstandard" }`. Structurally complete
-detail with incomplete results can leave the container score absent. If no executable
-child remains, the container is skipped with `reasonCode: "deprecated"` and has no score.
-
-For this rule, complete detail means all remaining leaves in each observed cycle or
-block that the user creates. It does not mean every cycle that time could permit. The UI
-does not create future AMRAP cycles. Once the user creates an observed cycle, its
-remaining leaves use completed, incomplete, or skipped results as applicable.
-
-An in-progress session executes this snapshot after reload or deployment. Later corrections and deprecations do not change it. When a session becomes `completed` or `abandoned`, REP JOT removes `executionPlan`; historical editing uses the current retained workout tree and overlays recorded results by execution path.
+A local edit beats a remote delete. When one device deletes a session and another device holds an unsynced edit to that session, the edit wins and the session returns. The user deletes it again on the device that still shows it.
 
 ## Execution Path
 
@@ -958,54 +901,56 @@ Nested repeated containers each contribute their own path segment and iteration.
 
 ## Exercise Result
 
-An exercise result stores both its programmed path and direct exercise reference:
+A session stores exercise results in `exerciseResults`, a `Record<compositeKey, ExerciseResult>`. The key is `<path>|<side>|<attempt>`. The value stores its programmed path and its direct exercise reference:
 
 ```json
 {
-  "type": "exercise",
-  "workoutId": "strength-and-cindy",
-  "executionPath": [
-    { "nodeId": "root" },
-    { "nodeId": "squat-sets", "iteration": 3 },
-    { "nodeId": "back-squat-set" }
-  ],
-  "exerciseId": "back-squat",
-  "attempt": 1,
-  "status": "completed",
-  "values": {
-    "reps": 1,
-    "weight": { "value": 255, "unit": "lb" }
+  "root/squat-sets:3/back-squat-set|both|1": {
+    "workoutId": "strength-and-cindy",
+    "executionPath": [
+      { "nodeId": "root" },
+      { "nodeId": "squat-sets", "iteration": 3 },
+      { "nodeId": "back-squat-set" }
+    ],
+    "exerciseId": "Barbell_Squat",
+    "side": "both",
+    "attempt": 1,
+    "status": "completed",
+    "values": {
+      "reps": { "value": 1, "unit": "reps" },
+      "weight": { "value": 255, "unit": "lb" }
+    }
   }
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `type` | `"exercise"` | yes | Result discriminator. |
 | `workoutId` | string | yes | Direct workout reference. It must match the containing session. |
-| `executionPath` | path segment[] | yes | Full path to the programmed exercise node. |
-| `exerciseId` | string | yes | Direct reference to the retained exercise. |
-| `attempt` | integer | no | One-based attempt number. The default is `1`. |
-| `side` | enum | no | `left`, `right`, `both`, or `alternating`. |
-| `startingSide` | enum | conditional | `left` or `right`. Required only when `side` is `alternating`. |
+| `executionPath` | path segment[] | yes | Full path to the programmed exercise node. The map key derives from it. |
+| `exerciseId` | string | yes | Direct reference to the exercise. |
+| `side` | enum | no | `left`, `right`, `both`, or `alternating`. The key derives from it. Default `both`. |
+| `attempt` | integer | no | One-based attempt number. The key derives from it. Default `1`. |
+| `startingSide` | enum | conditional | `left` or `right`. Required only when `side` is `alternating`. It is not part of the key. |
 | `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
 | `values` | object | conditional | Actual values. Required when measured data exists. |
 | `effort` | object | no | Observed `failure`, `rir`, or `rpe` outcome. |
 | `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC result start time. |
 | `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC result end time. |
-| `reasonCode` | enum | no | Controlled reason for an incomplete or skipped item. |
+| `reasonCode` | enum | conditional | Required for an incomplete or skipped item; forbidden for a completed item. |
 | `notes` | string | no | Optional free-text detail. |
 
-The direct `exerciseId` preserves exercise identity without traversing the workout tree. It must match the exercise node at the end of `executionPath`.
+There is no `type` field. The map name carries the kind. Validation rejects a key that does not match the `executionPath`, `side`, and `attempt` in the value it maps to.
 
-A zero-repetition attempt is measured data. It is not a skipped result. `side` is normally absent for bilateral work and required when unilateral actuals are recorded.
+The direct `exerciseId` preserves exercise identity without traversing the workout tree. It must match the exercise node at the end of `executionPath`. When it does not, the result is unresolved and the UI shows the error card.
+
+A repetition result uses `{ "value": <non-negative integer>, "unit": "reps" }`. A zero-repetition attempt is measured data. It is not a skipped result. `side` is normally absent for bilateral work and required when unilateral actuals are recorded.
 
 `left` and `right` store repetitions for one side. `both` stores simultaneous repetitions. `alternating` stores total repetitions across sides and requires the actual `startingSide`. The UI shows the derived split, such as `10 total / 5 each` or `9 total / 5 left / 4 right`.
 
 Supported reason codes are:
 
 ```text
-deprecated
 user_skipped
 not_completed
 equipment_unavailable
@@ -1017,21 +962,23 @@ other
 
 ## Scored Container Result
 
-A scored container result uses the score type configured on the workout container:
+A session stores container results in `containerResults`, a `Record<compositeKey, ContainerResult>`. The key is `<path>|<attempt>`. The result uses the score type configured on the workout container:
 
 ```json
 {
-  "type": "container",
-  "workoutId": "strength-and-cindy",
-  "executionPath": [
-    { "nodeId": "root" },
-    { "nodeId": "cindy" }
-  ],
-  "status": "completed",
-  "score": {
-    "type": "rounds_and_reps",
-    "completedRounds": 12,
-    "additionalReps": 7
+  "root/cindy|1": {
+    "workoutId": "strength-and-cindy",
+    "executionPath": [
+      { "nodeId": "root" },
+      { "nodeId": "cindy" }
+    ],
+    "attempt": 1,
+    "status": "completed",
+    "score": {
+      "type": "rounds_and_reps",
+      "completedRounds": 12,
+      "additionalReps": 7
+    }
   }
 }
 ```
@@ -1062,33 +1009,33 @@ Supported score shapes are:
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `type` | `"container"` | yes | Result discriminator. |
 | `workoutId` | string | yes | Direct workout reference. It must match the containing session. |
-| `executionPath` | path segment[] | yes | Full path to the scored workout container. |
+| `executionPath` | path segment[] | yes | Full path to the scored workout container. The map key derives from it. |
+| `attempt` | integer | no | One-based attempt number. The key derives from it. Default `1`. |
 | `status` | enum | yes | `completed`, `incomplete`, or `skipped`. |
 | `score` | score | conditional | Score defined by the container's `resultCapture.scoreType`. |
 | `startedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC container start time. |
 | `endedAtUtc` | RFC 3339 UTC timestamp ending in `Z` | no | UTC container end time. |
-| `reasonCode` | enum | no | Controlled reason for an incomplete or skipped container. |
+| `reasonCode` | enum | conditional | Required for an incomplete or skipped container; forbidden for a completed container. |
 | `notes` | string | no | Optional free-text detail. |
 
 A completed scored container has a `score`. An incomplete container can have the observed partial score. A skipped container has no score.
 
-Child detail uses separate exercise results beneath the scored container. It is either absent or complete. When valid ordered work can produce the configured score, semantic validation derives and matches it.
+Child detail uses separate exercise results beneath the scored container. It can be absent, partial, or complete. When complete valid ordered work can produce the configured score, semantic validation derives and matches it.
 
-If complete detail does not follow valid round or interval progression, the score is `{ "type": "nonstandard" }`. The child results remain authoritative, and the UI displays `Detailed` instead of a misleading aggregate.
+If detail does not follow valid round or interval progression, or cannot derive an exact aggregate, the score is `{ "type": "nonstandard" }`. The recorded child results remain authoritative, and the UI displays `Detailed` instead of a misleading aggregate.
 
 ## Save and Omission Rules
 
 The application saves an `in_progress` session when the user enters data or changes a data-relevant session field. Later saves update the same session ID.
 
-The application saves terminal status and `endedAtUtc` when the user completes or abandons the session.
+The application saves terminal status and `completedAtUtc` when the user completes or abandons the session.
 
 REP JOT does not create placeholder results for untouched work. Absence means that no data-relevant result was recorded.
 
-The application stores `incomplete` only when partial values, timing, a reason code, or notes are relevant. It stores `skipped` only when the skip itself is relevant.
+The application stores `incomplete` only when partial values, timing, or notes are relevant. It stores `skipped` only when the skip itself is relevant. Both statuses require a controlled `reasonCode`; free text belongs in `notes`.
 
-A skipped result normally has no `values`. An incomplete result can contain partial `values`.
+A skipped result normally has no `values`. An incomplete result can contain partial `values`. A `completed` result must contain recorded data, such as values, effort, or timing. A blank input creates no result.
 
 These rules prevent large result files that contain only default or inferred state.
 
@@ -1099,70 +1046,73 @@ These rules prevent large result files that contain only default or inferred sta
   "format": "repjot/results",
   "schemaVersion": 1,
   "yearMonthUtc": "2026-08",
-  "sessions": [
-    {
+  "sessions": {
+    "session-550e8400-e29b-41d4-a716-446655440000": {
       "id": "session-550e8400-e29b-41d4-a716-446655440000",
       "workoutId": "strength-and-cindy",
       "status": "completed",
       "startedAtUtc": "2026-08-15T14:30:00Z",
-      "endedAtUtc": "2026-08-15T15:25:00Z",
+      "completedAtUtc": "2026-08-15T15:25:00Z",
       "updatedAtUtc": "2026-08-15T15:25:00Z",
-      "results": [
-        {
-          "type": "exercise",
+      "exerciseResults": {
+        "root/squat-sets:1/back-squat-set|both|1": {
           "workoutId": "strength-and-cindy",
           "executionPath": [
             { "nodeId": "root" },
             { "nodeId": "squat-sets", "iteration": 1 },
             { "nodeId": "back-squat-set" }
           ],
-          "exerciseId": "back-squat",
+          "exerciseId": "Barbell_Squat",
+          "side": "both",
+          "attempt": 1,
           "status": "completed",
           "values": {
-            "reps": 5,
+            "reps": { "value": 5, "unit": "reps" },
             "weight": { "value": 225, "unit": "lb" }
           }
         },
-        {
-          "type": "exercise",
+        "root/squat-sets:3/back-squat-set|both|1": {
           "workoutId": "strength-and-cindy",
           "executionPath": [
             { "nodeId": "root" },
             { "nodeId": "squat-sets", "iteration": 3 },
             { "nodeId": "back-squat-set" }
           ],
-          "exerciseId": "back-squat",
+          "exerciseId": "Barbell_Squat",
+          "side": "both",
           "attempt": 1,
           "status": "incomplete",
           "values": {
-            "reps": 0,
+            "reps": { "value": 0, "unit": "reps" },
             "weight": { "value": 265, "unit": "lb" }
           },
           "reasonCode": "unsuccessful_attempt"
         },
-        {
-          "type": "exercise",
+        "root/squat-sets:3/back-squat-set|both|2": {
           "workoutId": "strength-and-cindy",
           "executionPath": [
             { "nodeId": "root" },
             { "nodeId": "squat-sets", "iteration": 3 },
             { "nodeId": "back-squat-set" }
           ],
-          "exerciseId": "back-squat",
+          "exerciseId": "Barbell_Squat",
+          "side": "both",
           "attempt": 2,
           "status": "completed",
           "values": {
-            "reps": 1,
+            "reps": { "value": 1, "unit": "reps" },
             "weight": { "value": 255, "unit": "lb" }
           }
-        },
-        {
-          "type": "container",
+        }
+      },
+      "containerResults": {
+        "root/cindy|1": {
           "workoutId": "strength-and-cindy",
           "executionPath": [
             { "nodeId": "root" },
             { "nodeId": "cindy" }
           ],
+          "attempt": 1,
           "status": "completed",
           "score": {
             "type": "rounds_and_reps",
@@ -1170,14 +1120,13 @@ These rules prevent large result files that contain only default or inferred sta
             "additionalReps": 7
           }
         }
-      ]
+      }
     }
-  ],
-  "sessionTombstones": []
+  }
 }
 ```
 
-This example uses aggregate-only Cindy entry, so it has no child results. If the user expands Cindy, REP JOT creates the complete child-result set and derives this score from it.
+This example uses aggregate-only Cindy entry, so it has no child results. If the user expands Cindy, REP JOT produces a draft child set inferred from the score and the prescription. Those draft values are not recorded actual work until the user saves them. The user can save part of that detail. If the saved detail cannot derive an exact aggregate, the container score is `nonstandard` and the UI displays `Detailed`.
 
 ---
 
@@ -1185,7 +1134,7 @@ This example uses aggregate-only Cindy entry, so it has no child results. If the
 
 ```text
 exercises.json
-    equipment ← exercise.equipmentIds
+    exercises include required equipment
     exercises
          ↑
          │ workout exerciseNode.exerciseId
@@ -1215,13 +1164,13 @@ The session and each result store `workoutId`. A result's value must match its s
 
 ## `exercises.json`
 
-Owns retained exercise and equipment facts:
+Owns exercise facts:
 
 ```text
 name
 instructions
 icon
-equipment
+required equipment
 force
 mechanic
 category
@@ -1264,7 +1213,6 @@ Owns actual execution:
 
 ```text
 session status and UTC times
-session deletion tombstones with `deletedAtUtc`
 workout execution paths
 direct exercise references
 attempts and measured values
@@ -1275,39 +1223,39 @@ relevant incomplete or skipped state
 reason codes and notes
 ```
 
+Sessions, exercise results, and container results are keyed maps. No array. REP JOT stores no session tombstones and no frozen execution plan.
+
 No result changes an exercise or programmed prescription.
 
 ---
 
 # 8. Validation Invariants
 
-Implementations must enforce these cross-file rules:
+Implementations must enforce these rules. Resolution failures in items 2 through 6 are nonfatal diagnostics for stored results, not schema-validation failures. They show the error card while preserving recorded-value display and synchronization.
 
-1. An `equipmentId` resolves to retained equipment.
-2. A workout `exerciseId` resolves to a retained, non-deprecated exercise when the workout is new.
-3. A session `workoutId` resolves to the retained workout used for that session.
-4. Each result `workoutId` matches its session and resolves to that same workout.
-5. Each result path resolves from that workout's root to its terminal node.
-6. An exercise result's direct `exerciseId` matches its terminal workout node.
-7. A measurement dimension appears in the referenced exercise's `measurements`.
-8. A quantity unit is compatible with its dimension and load semantics.
-9. A preferred unit is compatible with its exercise and dimension.
-10. A container score matches the workout container's `scoreType`, or it is `nonstandard` with complete authoritative child detail.
-11. Child detail obeys the workout container's `childDetail` rule and is absent or complete.
-12. Complete child detail derives exactly the stored container score.
-13. A session has at most one container result per execution path.
-14. Exercise results are unique by workout, execution path, side, and attempt.
-15. An alternating exercise result has `startingSide`; other results do not.
-16. Every session has `updatedAtUtc` and a `session-` prefixed UUID.
-17. An `in_progress` session has `executionPlan` and no `endedAtUtc`.
-18. A `completed` or `abandoned` session has `endedAtUtc` and no `executionPlan`.
-19. A monthly file name, `yearMonthUtc`, and each session `startedAtUtc` UTC month agree.
-20. A tombstone and live session do not share an ID in one merged document.
-21. Tombstones win over stale sessions with the same ID during synchronization.
-22. A sync copy references a different session ID in the same shard.
-23. Published equipment, exercise, workout, and node IDs remain present and are not reused.
-24. Deprecated entities remain available for historical references.
-25. `rounds_and_reps` containers resolve only to deterministic repetition-based leaf sequences.
-26. Every persisted `*Utc` timestamp is a valid RFC 3339 date-time that ends in `Z`.
-27. Iteration overrides inherit omitted top-level fields, and each iteration number appears at most once in a prescription.
-28. A scored container affected by a deprecated omission is detail-only and uses `nonstandard` only with complete remaining detail.
+1. Every workout node `exerciseId` resolves in `exercises.json` during static build validation.
+2. A session `workoutId` resolves to the workout used for that session when the current bundle still contains it.
+3. Each result `workoutId` always matches its containing session. It resolves to that same workout when the current bundle contains the workout.
+4. Each result path resolves from that workout's root to its terminal node when the current tree still contains the path.
+5. An exercise result's direct `exerciseId` matches its terminal workout node when that node resolves.
+6. A result with a failure under items 2 through 5 is marked unresolved; it is not rejected or rewritten.
+7. Every result quantity has a recognized dimension and stores an explicit compatible unit.
+8. If current exercise measurements differ from a stored result, the loader marks a nonfatal unresolved-reference diagnostic. It does not reject the result.
+9. A preferred unit is compatible with its current exercise and dimension.
+10. A container score matches the workout container's `scoreType`, or it is `nonstandard` when detail cannot derive an exact valid aggregate.
+11. Child detail obeys the workout container's `childDetail` rule and can be absent, partial, or complete when optional.
+12. Standard child detail derives exactly the stored container score and follows valid progression.
+13. A session has at most one container result per execution path and attempt.
+14. Every exercise result key equals the `<path>|<side>|<attempt>` string derived from its own `executionPath`, `side`, and `attempt`.
+15. Every container result key equals the `<path>|<attempt>` string derived from its own `executionPath` and `attempt`.
+16. An alternating exercise result has `startingSide`; other results do not.
+17. Every key in `sessions` equals the `id` of the session it maps to, and every session `id` uses the `session-` prefix.
+18. An `in_progress` session has no `completedAtUtc`. A `completed` or `abandoned` session has `completedAtUtc`.
+19. No session contains an `executionPlan` field, in any status.
+20. A monthly file name, `yearMonthUtc`, and each session `startedAtUtc` UTC month agree.
+21. No exercise, workout, node, or non-null equipment value contains `/`, `|`, or `:`.
+22. No key in a synchronized document is integer-like.
+23. Every collection that two devices can change is a keyed map. None is an array.
+24. `rounds_and_reps` containers resolve only to deterministic repetition-based leaf sequences.
+25. Every persisted `*Utc` timestamp is a valid RFC 3339 date-time that ends in `Z`.
+26. Iteration overrides inherit omitted top-level fields, and each iteration number appears at most once in a prescription.

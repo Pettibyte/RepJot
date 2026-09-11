@@ -2,8 +2,15 @@
 
 ## Status
 
-This specification defines JSON envelopes, independent family migrations, static-data
-compatibility, and safe Drive write-back for REP JOT.
+This specification defines JSON envelopes, independent family migrations,
+static-data handling, and safe Drive write-back for REP JOT.
+It follows `../docs/REQUIREMENTS.md` (v4). Where the two differ, `REQUIREMENTS.md`
+wins.
+
+The migration scaffolding stays. REP JOT must keep the ability to change a schema
+later and still read existing user data. Removed from the earlier revision: frozen
+execution plans, session tombstones, sync copies, the `deprecated` flag, and the
+prior-production-bundle comparison. See `../docs/REQUIREMENTS.md` Section 22.0.
 
 ## Scope and ownership
 
@@ -17,8 +24,9 @@ Google Drive `appDataFolder` owns these user documents:
 - `preferences.json` with format `repjot/preferences`
 - `results-YYYY-MM.json` with format `repjot/results`
 
-IndexedDB contains disposable cached copies and migrated views. An IndexedDB layout
-version is separate from every persisted JSON schema version.
+The local cache contains disposable cached copies, base copies, pending deltas, and
+migrated views. A cache layout version is separate from every persisted JSON schema
+version.
 
 ## Document envelope
 
@@ -27,10 +35,9 @@ Every current JSON document declares its family and schema version:
 ```json
 {
   "format": "repjot/results",
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "yearMonthUtc": "2026-08",
-  "sessions": [],
-  "sessionTombstones": []
+  "sessions": {}
 }
 ```
 
@@ -39,9 +46,9 @@ one format family. It does not identify an application release, a Drive revision
 cache layout, or a content edit.
 
 Every persisted application timestamp uses a `*Utc` field. Its RFC 3339 value ends in
-`Z`. A migration must convert a supported legacy offset timestamp to the equivalent UTC
-instant before it writes the next schema version. Local date and time values are never
-migration context and are never persisted as canonical timestamps.
+`Z`. A migration must convert a supported legacy offset timestamp to the equivalent
+UTC instant before it writes the next schema version. Local date and time values are
+never migration context and are never persisted as canonical timestamps.
 
 A family-specific loader can accept a known legacy document without `format` only
 through an explicit and tested importer. A missing `schemaVersion` also requires an
@@ -52,10 +59,10 @@ explicit importer. The loader must not infer either value from casual shape chec
 Each family owns a monotonically increasing version and an ordered migration chain:
 
 ```text
-repjot/exercises   v1 -> v2
-repjot/workouts    v1 -> v2 -> v3
+repjot/exercises   v1
+repjot/workouts    v1
 repjot/preferences v1
-repjot/results     v1 -> v2 -> v3
+repjot/results     v1
 ```
 
 A change to one family does not increment another family. Every monthly result shard
@@ -63,20 +70,35 @@ migrates independently. Thus, supported shards can remain at different persisted
 versions.
 
 REP JOT does not use one application-wide persisted schema version. It never uses a
-Drive `version`, checksum, modification time, or application version to select a schema
-migration.
+Drive `version`, checksum, modification time, or application version to select a
+schema migration.
 
 ## Migration chains
 
 Maintain one current-version constant, schema set, and migration registry for each
-family. A migration registered for version 2 accepts only version 2 and produces version
-3.
+family. A migration registered for version 1 accepts only version 1 and produces
+version 2.
+
+### Empty chain at version one
+
+A family at its first version registers an empty migration chain. The scaffolding
+must work before any migration exists.
+
+```ts
+const resultsMigrations: Migration[] = [];   // v1 is current. Valid setup.
+```
+
+The loader runs the same code path for an empty chain and for a populated one. This
+proves the scaffolding at v1, so adding the first real migration later changes data,
+not architecture.
+
+### Loader sequence
 
 The loader follows this sequence:
 
 1. Parse JSON as `unknown`.
 2. Validate the family and version envelope.
-3. Reject a future or unsupported version.
+3. Reject a future or unsupported version. See the next section.
 4. Validate the declared historical schema.
 5. Apply one pure migration.
 6. Validate the next envelope and schema.
@@ -84,8 +106,11 @@ The loader follows this sequence:
 8. Validate the complete current document.
 9. Normalize it into disposable application models.
 
-Do not create a matrix of direct conversions to the current version. Retain each
-migration while its input version remains supported.
+When the input is already the current version, steps 4 through 7 do not run. When the
+chain is empty and the input is v1, the loader validates and normalizes only.
+
+Do not create a matrix of direct conversions to the current version. Retain every
+migration. REP JOT has no support floor that removes an older declared version.
 
 Every migration must:
 
@@ -94,7 +119,7 @@ Every migration must:
 - Produce a new object without changing its input.
 - Produce the same output for the same input and context.
 - Preserve meaningful user data.
-- Avoid Drive, IndexedDB, network, DOM, UI, time, random, and locale operations.
+- Avoid Drive, cache, network, DOM, UI, time, random, and locale operations.
 - Produce output that validates against the next schema.
 - Fail with a precise diagnostic when a required value cannot be derived.
 
@@ -102,73 +127,103 @@ A migration must not invent workout identity, exercise identity, measurements, o
 history. Migration and normalization remain separate operations. Derived indexes never
 cause a persisted schema-version increment.
 
-## Result migrations and references
+## Newer-version rejection
+
+The application must never accept, edit, or overwrite a document whose version is newer
+than its own highest supported version for that family. Raw inspection remains available.
+
+| Input | Required behavior |
+| --- | --- |
+| Missing version | Reject it unless a dedicated importer supports it. |
+| Supported older version | Validate it and apply each sequential migration. |
+| Older version with a missing migration step | Show the data error UI, offer **View Raw JSON**, and do not overwrite it. |
+| Current version | Validate it without migration. |
+| Future version | Do not edit or overwrite it. Show the data error UI and offer **View Raw JSON**. |
+
+An older cached application can encounter files written by a newer application. It
+must not pretend to understand them. Missing versions, missing migration steps,
+older versions with missing migration steps, and future versions use the same data error UI.
+
+The data error UI is the single `DataError` component. It names the family, the
+declared version, and the highest supported version. It offers **View Raw JSON** and
+**Dismiss**. See `../docs/REQUIREMENTS.md` Section 22.2.10.
+
+## Shipping a version without its migration
+
+A release MAY ship a new schema version without the migration step for the prior
+version. This is permitted. It is not a violation of the migration-chain rule.
+
+Old data then fails the loader and shows the data error UI. The raw JSON stays readable through the export in `./storage-and-lookup.md`.
+See also `../docs/REQUIREMENTS.md` Section 12.10.
+
+The migration chain is how REP JOT closes that gap later. A migration written after
+the fact still applies, because the old file keeps its declared version. A v1 file on
+Drive in 2027 still says `schemaVersion: 1`, so a `v1 -> v2` step written in 2027
+still loads it.
+
+This is the reason the scaffolding exists at v1 rather than later.
+
+## Result references
+
+The UTC month in each result's `startedAtUtc` selects its `results-YYYY-MM.json` shard.
+The file name, `yearMonthUtc`, and each session start month must agree.
 
 Current result documents directly store these identities:
 
 - A session stores `workoutId`.
 - Each exercise result stores `workoutId` and `exerciseId`.
-- Each exercise result stores its full `executionPath`, optional unilateral side, explicit unit, and load value.
+- Each exercise result stores its full `executionPath`, optional unilateral side,
+  and all actual values with explicit units.
 - Each scored-container result stores `workoutId` and `executionPath`.
-- Each shard stores permanent session-deletion tombstones.
 
 The path identifies repeated ancestors and the terminal workout node. Container results
 preserve observed container scores. Exercise results preserve actual values and units.
 
-A supported legacy migration can derive a missing `exerciseId` from the result
-`workoutId` and terminal node. It can derive an old flat iteration only when the old
-shape maps unambiguously to an execution path. If a reference is missing or ambiguous,
-the migration must identify the shard, session, workout, and node, then fail.
+A migration must not derive a missing `exerciseId` from the current workout tree.
+Static data can change, so this derivation can invent incorrect historical identity.
+If a required identity or path is absent, the migration identifies the shard, session,
+workout, and node, then fails.
 
-Migrate and validate reference families in this order when context is necessary:
+Migrations can validate direct references after structural migration. An unresolved
+current static reference is a nonfatal result diagnostic. It does not cause automatic
+reference repair.
 
-```text
-exercises -> workouts -> preferences -> result shards
-```
+## Static bundle handling
 
-Only current, validated static references enter a read-only migration context. New
-formats must retain direct historical identity when current static content cannot
-reconstruct it reliably.
+REP JOT treats published exercise and workout data as editable facts. It is not an
+immutable ledger. REP JOT has one user, who edits this data by hand.
 
-## Static bundle compatibility
+The build does not download a prior production bundle. It does not diff IDs. It
+enforces no immutability rule and no backwards-compatibility rule. Any release may
+add, rename, re-parent, re-spec, or remove an exercise, a workout, or a workout node.
 
-Published exercise, workout, and workout-node IDs are permanent namespace entries.
-The build must prevent deletion and reuse of these IDs. Authors can make content
-corrections without creating a new ID.
+The build performs three checks on static identity:
 
-The build downloads the prior production bundle and compares it with the current
-bundle. It preserves exercise, workout, and node IDs. It also preserves node type,
-parent, exercise reference, container strategy, result-capture contract, and previously
-supported measurement dimensions and units.
+1. Each file validates against its JSON Schema.
+2. No duplicate node ID within one workout. Node IDs are scoped to their workout.
+3. Every workout node `exerciseId` resolves in `exercises.json`.
 
-The build does not compare complete content hashes, labels, instructions, notes, or
-prescriptions.
+REP JOT has no `deprecated` flag. An exercise appears in selection when the seed
+allowlist lists it. A workout appears in the chooser when `workouts.json` lists it.
 
-Only `deprecated` represents lifecycle state. A deprecated entity remains in the
-bundle and remains resolvable.
+Static documents change through a validated application build and the seed script, not
+through Drive migration. Drive migration never writes `exercises.json` or
+`workouts.json`.
 
-A deprecated exercise cannot appear in a new workout. A node absent from the prior
-production bundle is new, even when its workout ID already exists. A new session from
-an existing workout filters exercises already deprecated at its start and records each
-omission with the `deprecated` reason code.
-
-An in-progress session uses its frozen `executionPlan`, so later deprecations do not
-change it. Historical results continue to resolve the exercise and workout node. The
-build reports workouts and scored or timed containers affected by new deprecations.
-
-A deprecated workout remains available for historical resolution. The UI hides it and
-does not permit new sessions from it.
-
-These lifecycle rules are semantic validation rules. Changing lifecycle state does not
-permit ID deletion or reuse.
+When a stored result references static data that no longer resolves, the loader marks
+that result unresolved. The UI shows the error card with **View Raw JSON**. It also
+shows the stored values and units. If the tree cannot order the result, the UI sorts
+by the encoded `executionPath` string. REP JOT never auto-migrates a result, never
+substitutes a similar exercise, and never rewrites a stored result to repair a reference. See `../docs/REQUIREMENTS.md`
+Section 6.7 through Section 6.12.
 
 ## Versioned schemas
 
 The UTC timestamp naming and prescription override rules are part of the first
-production v1 contract. The prototype stores no canonical preference, result, or workout
-document, so these corrections do not migrate released data. Freeze the v1 schemas when
-the first production release publishes them. Every later persisted contract change
-increments its family version.
+production v1 contract. The prototype stores no canonical preference, result, or
+workout document, so these corrections do not migrate released data. Freeze the v1
+schemas when the first production release publishes them. Every later persisted
+contract change increments its family version.
 
 Keep a machine-readable schema for every supported version:
 
@@ -200,9 +255,6 @@ Consequently, `preferences.json` and every result shard must remain independentl
 and readable. A mixed set of supported versions is valid. A migration can control its
 in-memory order, but it cannot require an atomic multi-file overwrite.
 
-Static documents change through a validated application build, not through Drive
-migration. Drive migration never writes `exercises.json` or `workouts.json`.
-
 If a future feature requires an all-or-none multi-file change, use immutable generation
 files and one commit record. Readers must ignore incomplete generations. An
 application-wide schema version is not a transaction protocol.
@@ -211,30 +263,63 @@ application-wide schema version is not a transaction protocol.
 
 Use this sequence for a preference file or result shard:
 
-1. Read the source bytes and retain the Drive file ID and metadata.
-2. Parse and validate the exact source document.
-3. Apply the edit or pure migration to a new object.
-4. Validate the complete output.
-5. Serialize, parse, and validate the output again.
-6. Recheck remote metadata immediately before upload.
-7. If remote state changed, repeat the read and automatic merge.
-8. Update the retained file ID without deleting and recreating the file.
-9. Read Drive after an ambiguous response or before retrying.
-10. Update IndexedDB only after the remote outcome is known.
+1. Apply the user edit to a new object in memory.
+2. Validate the complete output.
+3. Persist the working document, base copy, and pending delta in one local transaction.
+4. Read the latest Drive content and retain the Drive file ID and metadata.
+5. Parse and validate the exact remote document.
+6. Compare its content with the cached base and run the keyed-map merge.
+7. Validate the merged output.
+8. Serialize, parse, and validate the output again.
+9. Update the retained file ID without deleting and recreating the file.
+10. Read Drive after upload and after an ambiguous response.
 
-Keep the old valid cache record until the remote commit is known. A metadata recheck
-reduces stale writes but does not make `files.update` a compare-and-swap transaction.
+Only the normal save path writes a migrated document. A read-only migration stays in
+memory. Keep the working document and pending delta until the remote commit is known.
 
-Before write-back, compare the cached base, local edit, and latest remote content. Apply
-permanent tombstones first, then merge live sessions by stable session ID. Changes to
-different sessions merge automatically. A tombstone wins over a stale session with the
-same ID. If both copies changed the same live session, retain the remote version and
-save the pending local version as a labeled sync copy with a new UUID. Persist that UUID
-before upload and reuse it on retries.
+### Merge policy on write-back
+
+Before write-back, compute the local delta from base to local and the remote delta
+from base to remote. Apply the remote delta to a copy of the base. Then apply the
+local delta by keyed entry. The conflict unit is one session, or one
+exercise-and-dimension preference mapping.
+
+A conflict exists when both deltas touch a path under the same conflict unit. The
+client does not field-merge that unit.
+
+The last device to synchronize wins. On a conflict, the client replaces the merged
+entry with its own local version in full. An edit beats a delete regardless of which
+side contains the edit. Thus, a local edit beats a remote delete, and a remote edit
+beats a local delete.
+
+REP JOT creates no sync copy. It mints no new session ID and adds no label.
 
 Merge preferences by exercise and dimension. If both sides changed the same mapping,
 the pending local value wins because this client performs the later synchronization.
 Neither policy requires a reconciliation UI.
+
+### No compare-and-swap
+
+A metadata recheck reduces stale writes but does not make `files.update` a
+compare-and-swap transaction. The Google Drive v3 REST reference defines no
+`If-Match` conditional write for file content. REP JOT must not assume one exists.
+
+Instead, verify after upload:
+
+1. Upload the merged document.
+2. Read the file back and confirm that the content matches what the client wrote.
+3. On a mismatch or an upload error, re-read the remote file, re-run the merge from a
+   fresh base, and re-upload.
+4. Retry at most three times.
+5. After three failed attempts, show `Sync failed` and keep every pending local edit.
+
+After a successful read-back, one local transaction stores the confirmed merged
+content as both the working document and the new base. The same transaction clears
+the acknowledged pending delta.
+
+REP JOT accepts the residual race between the final read-back and a simultaneous
+write from another device. The last writer wins and the loser detects the mismatch on
+its next sync.
 
 ## Read and migration policy
 
@@ -253,37 +338,26 @@ The migrated cache is reusable only when its account, file ID, remote metadata, 
 schema version, and cached validation still match. Otherwise, discard it and rebuild
 it from Drive.
 
-## Version handling
-
-| Input | Required behavior |
-| --- | --- |
-| Missing version | Reject it unless a dedicated importer supports it. |
-| Supported older version | Validate it and apply each sequential migration. |
-| Unsupported older version | Report the support floor and do not overwrite it. |
-| Current version | Validate it without migration. |
-| Future version | Do not edit or overwrite it. Report that newer code is required. |
-
-An older cached application can encounter files written by a newer application. It
-must not pretend to understand them.
-
 ## Tests
 
 Keep input and expected-output fixtures for every supported migration. Tests must cover:
 
+- An empty chain at v1 loads, validates, and normalizes without error.
 - Every supported version reaches the current version.
 - Every migration produces exactly the next valid version.
 - Source objects remain unchanged.
-- IDs, conflict-copy relationships, paths, execution plans, sides, starting sides, load semantics, measurements, timestamps, tombstones, reason codes, notes, and scores survive.
+- IDs, keyed-map entries, composite result keys, paths, execution paths, sides,
+  starting sides, load semantics, measurements, timestamps, reason codes, notes, and
+  scores survive.
 - Invalid historical input fails before migration.
-- Missing links and future versions have distinct errors.
+- A structurally missing required identity and a future version have distinct errors.
+- A future-version document is never edited or overwritten by older code.
 - Current documents pass without transformation.
-- Cross-family lookup errors identify the failed reference.
+- An unresolved current static reference produces a nonfatal diagnostic that identifies the reference.
 - Serialization and parsing preserve validity.
 - Monthly shards migrate independently.
-- Static compatibility comparison downloads the prior production bundle.
-- ID deletion, reuse, or incompatible identity-field changes fail the build.
-- Label, instruction, note, and prescription corrections remain permitted.
-- Deprecation behavior matches execution, frozen-plan, and selection rules.
+- A keyed map round-trips without index drift after a simulated concurrent merge.
+- A composite result key that does not match its value fails validation.
 - Nonstandard detailed scores and result uniqueness rules remain valid.
 
 Each production migration defect requires a regression fixture.
@@ -298,8 +372,10 @@ Each production migration defect requires a regression fixture.
 - Ambiguous uploads require a Drive read before retry.
 - Migrations preserve schema-permitted user data.
 - Automatic recovery never invents IDs or workout results.
+- An unresolved static reference shows the error card. It never blocks the app.
 
 ## Related specification
 
 See [Storage and Lookup Architecture](./storage-and-lookup.md) for file ownership,
-monthly shards, synchronization, caching, and indexes.
+monthly shards, the keyed-map shapes, the local storage façade, synchronization, and
+indexes.

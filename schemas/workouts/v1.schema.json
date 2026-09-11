@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://repjot.com/schemas/workouts/v1.schema.json",
   "title": "REP JOT Workouts",
-  "description": "Workout definitions and programmed prescriptions for REP JOT.",
+  "description": "Workout definitions and programmed prescriptions for REP JOT. See specs/rep-jot-json-schema-spec.md section 3.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "schemaVersion", "workouts"],
@@ -16,15 +16,11 @@
   },
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
-    "identifier": { "type": "string", "minLength": 1 },
-    "nonNegativeQuantity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["value", "unit"],
-      "properties": {
-        "value": { "type": "number", "minimum": 0 },
-        "unit": { "$ref": "#/$defs/nonEmptyString" }
-      }
+    "identifier": {
+      "description": "ID segment. Bans '/', '|', and ':' (composite result key separators) and rejects an all-digit key (integer-like Record keys reorder in JavaScript).",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![0-9]+$)[^/|:]+$"
     },
     "weightQuantity": {
       "type": "object",
@@ -79,8 +75,7 @@
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/nonEmptyString" },
         "notes": { "type": "string" },
-        "root": { "$ref": "#/$defs/containerNode" },
-        "deprecated": { "type": "boolean" }
+        "root": { "$ref": "#/$defs/containerNode" }
       }
     },
     "node": {
@@ -90,170 +85,124 @@
       ]
     },
     "containerNode": {
-      "oneOf": [
-        { "$ref": "#/$defs/sequenceContainer" },
-        { "$ref": "#/$defs/roundsContainer" },
-        { "$ref": "#/$defs/amrapContainer" },
-        { "$ref": "#/$defs/emomContainer" },
-        { "$ref": "#/$defs/complexContainer" }
+      "description": "Ordered container of nodes. strategy selects the execution model and the shape of strategyConfig. Node IDs are unique within one workout; the same node ID MAY appear in two workouts. Duplicate node IDs inside one workout are a build-time check, not a schema check.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "strategy", "strategyConfig", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "const": "container" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": {
+          "enum": ["sequence", "rounds", "amrap", "emom", "complex"]
+        },
+        "strategyConfig": { "type": "object" },
+        "resultCapture": { "$ref": "#/$defs/resultCapture" },
+        "benchmark": { "$ref": "#/$defs/benchmark" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "strategy": { "const": "sequence" } },
+            "required": ["strategy"]
+          },
+          "then": {
+            "properties": {
+              "strategyConfig": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "strategy": { "const": "rounds" } },
+            "required": ["strategy"]
+          },
+          "then": {
+            "properties": {
+              "strategyConfig": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["rounds"],
+                "properties": {
+                  "rounds": { "type": "integer", "minimum": 1 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "strategy": { "const": "amrap" } },
+            "required": ["strategy"]
+          },
+          "then": {
+            "properties": {
+              "strategyConfig": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["duration"],
+                "properties": {
+                  "duration": { "$ref": "#/$defs/positiveDuration" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "strategy": { "const": "emom" } },
+            "required": ["strategy"]
+          },
+          "then": {
+            "properties": {
+              "strategyConfig": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["cycles", "interval"],
+                "properties": {
+                  "cycles": { "type": "integer", "minimum": 1 },
+                  "interval": { "$ref": "#/$defs/positiveDuration" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "strategy": { "const": "complex" } },
+            "required": ["strategy"]
+          },
+          "then": {
+            "properties": {
+              "strategyConfig": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["cycles"],
+                "properties": {
+                  "cycles": { "type": "integer", "minimum": 1 }
+                }
+              }
+            }
+          }
+        }
       ]
     },
-    "sequenceContainer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "type", "strategy", "strategyConfig", "children"],
-      "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "type": { "const": "container" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "strategy": { "const": "sequence" },
-        "strategyConfig": {
-          "type": "object",
-          "additionalProperties": false
-        },
-        "benchmark": { "$ref": "#/$defs/benchmark" },
-        "children": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/node" }
-        }
-      }
-    },
-    "roundsContainer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "type", "strategy", "strategyConfig", "children"],
-      "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "type": { "const": "container" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "strategy": { "const": "rounds" },
-        "strategyConfig": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["rounds"],
-          "properties": {
-            "rounds": { "type": "integer", "minimum": 1 }
-          }
-        },
-        "benchmark": { "$ref": "#/$defs/benchmark" },
-        "children": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/node" }
-        }
-      }
-    },
-    "amrapContainer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "type", "strategy", "strategyConfig", "children"],
-      "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "type": { "const": "container" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "strategy": { "const": "amrap" },
-        "strategyConfig": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["duration"],
-          "properties": {
-            "duration": { "$ref": "#/$defs/positiveDuration" }
-          }
-        },
-        "resultCapture": { "$ref": "#/$defs/roundsAndRepsCapture" },
-        "benchmark": { "$ref": "#/$defs/benchmark" },
-        "children": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/node" }
-        }
-      }
-    },
-    "emomContainer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "type", "strategy", "strategyConfig", "children"],
-      "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "type": { "const": "container" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "strategy": { "const": "emom" },
-        "strategyConfig": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["cycles", "interval"],
-          "properties": {
-            "cycles": { "type": "integer", "minimum": 1 },
-            "interval": { "$ref": "#/$defs/positiveDuration" }
-          }
-        },
-        "resultCapture": { "$ref": "#/$defs/intervalsCapture" },
-        "benchmark": { "$ref": "#/$defs/benchmark" },
-        "children": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/node" }
-        }
-      }
-    },
-    "complexContainer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "type", "strategy", "strategyConfig", "children"],
-      "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "type": { "const": "container" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "strategy": { "const": "complex" },
-        "strategyConfig": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["cycles"],
-          "properties": {
-            "cycles": { "type": "integer", "minimum": 1 }
-          }
-        },
-        "resultCapture": { "$ref": "#/$defs/cyclesCapture" },
-        "benchmark": { "$ref": "#/$defs/benchmark" },
-        "children": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/node" }
-        }
-      }
-    },
-    "resultCaptureBase": {
-      "type": "object",
-      "required": ["mode", "scoreType", "childDetail"],
-      "properties": {
-        "mode": { "const": "scored" },
-        "childDetail": { "enum": ["none", "optional", "required"] }
-      }
-    },
-    "roundsAndRepsCapture": {
+    "resultCapture": {
+      "description": "Container score and child-detail rules. childDetail 'none' forbids child exercise results; 'optional' allows absent, partial, or complete detail.",
       "type": "object",
       "additionalProperties": false,
       "required": ["mode", "scoreType", "childDetail"],
       "properties": {
         "mode": { "const": "scored" },
-        "scoreType": { "const": "rounds_and_reps" },
-        "childDetail": { "enum": ["none", "optional", "required"] }
-      }
-    },
-    "intervalsCapture": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode", "scoreType", "childDetail"],
-      "properties": {
-        "mode": { "const": "scored" },
-        "scoreType": { "const": "intervals" },
-        "childDetail": { "enum": ["none", "optional", "required"] }
-      }
-    },
-    "cyclesCapture": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode", "scoreType", "childDetail"],
-      "properties": {
-        "mode": { "const": "scored" },
-        "scoreType": { "const": "cycles" },
-        "childDetail": { "enum": ["none", "optional", "required"] }
+        "scoreType": { "enum": ["cycles", "rounds_and_reps", "intervals"] },
+        "childDetail": { "enum": ["none", "optional"] }
       }
     },
     "benchmark": {
@@ -343,6 +292,7 @@
       }
     },
     "iterationPrescription": {
+      "description": "One-based override for the nearest repeated container. Overrides only the fields it contains; omitted fields inherit the top-level value. Each iteration number appears at most once, which is a build-time check, not a schema check.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 2,

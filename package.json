@@ -7,12 +7,15 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
-    "check:compat": "bun run build && bun scripts/check-browser-compat.ts"
+    "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
+    "check:schemas": "bun scripts/validate-schemas.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "latest",
     "@types/node": "^26.2.0",
     "acorn": "^8.18.0",
+    "ajv": "^8",
+    "ajv-formats": "^3",
     "svelte": "latest",
     "svelte-check": "latest",
     "typescript": "~6",

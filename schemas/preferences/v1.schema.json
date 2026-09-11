@@ -2,18 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://repjot.com/schemas/preferences/v1.schema.json",
   "title": "REP JOT Preferences",
-  "description": "Versioned user preferences for REP JOT with an explicit UTC update timestamp.",
+  "description": "Versioned user preferences for REP JOT. exerciseUnits is a keyed map so jsondiffpatch deltas stay independent of position. See specs/rep-jot-json-schema-spec.md section 4.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "schemaVersion", "revision", "updatedAtUtc", "exerciseUnits"],
   "properties": {
     "format": { "const": "repjot/preferences" },
     "schemaVersion": { "const": 1 },
-    "revision": { "type": "integer", "minimum": 0 },
+    "revision": {
+      "description": "Informational counter only. It never selects a migration and never resolves a conflict.",
+      "type": "integer",
+      "minimum": 0
+    },
     "updatedAtUtc": { "$ref": "#/$defs/utcTimestamp" },
     "exerciseUnits": {
       "type": "object",
-      "propertyNames": { "type": "string", "minLength": 1 },
+      "propertyNames": { "$ref": "#/$defs/exerciseKey" },
       "additionalProperties": { "$ref": "#/$defs/exerciseUnitPreferences" }
     }
   },
@@ -23,12 +27,19 @@
       "format": "date-time",
       "pattern": "Z$"
     },
+    "exerciseKey": {
+      "description": "Exercise ID used as a Record key. Bans '/', '|', and ':' and rejects an all-digit key.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![0-9]+$)[^/|:]+$"
+    },
     "exerciseUnitPreferences": {
+      "description": "Preferred unit per measurement dimension. The conflict unit for preference merge is one exercise-and-dimension mapping.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "reps": { "const": "rep" },
+        "reps": { "const": "reps" },
         "weight": { "enum": ["lb", "kg"] },
         "addedWeight": { "enum": ["lb", "kg"] },
         "assistedWeight": { "enum": ["lb", "kg"] },
