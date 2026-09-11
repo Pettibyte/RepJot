@@ -12,7 +12,30 @@ Phase 0 authorization testing is complete on the physical Kindle. The flow suppo
 2. Copy `.env.example` to `.env.local` and configure the Google OAuth client ID.
 3. Start the app with `bun run dev` and open `http://localhost:5173`.
 
-Run `bun run check` for strict TypeScript and Svelte checks. Run `bun run test` for the authorization continuity tests.
+Run `bun run check` for strict TypeScript and Svelte checks. Run `bun run test` for the authorization continuity tests. Run `bun run check:schemas` to validate every JSON Schema.
+
+## Exercise data
+
+`src/public/data/exercises.json` is generated. Do not edit it by hand.
+Edit `scripts/exercise-allowlist.json` and run `bun run seed`.
+The seed copies the fields listed in `specs/exercise-seeding.md` from
+`yuhonas/free-exercise-db` and adds the curated fields the source lacks.
+The pinned source commit lives in `scripts/seed-config.json`.
+
+- `bun run seed` writes the output file from the pinned commit.
+- `bun run seed:check` fails when the file on disk is out of date.
+- `bun run seed:bump` moves the pinned commit to the head of the source ref and reseeds. Review the diff before you commit.
+
+`bun run build` runs `check:schemas` and `seed:check` before Vite packages the
+site. A stale or invalid `exercises.json` fails the build instead of shipping.
+
+The seed caches each fetched source commit under `scripts/.cache/`. Pass `--source <path>` to read a local copy instead.
+
+Equipment is a closed vocabulary, not a free string. `$defs.equipmentValue` in
+`schemas/exercises/v1.schema.json` owns the list, and every value is lower case and
+singular. The seed folds each equipment value into that list, so `Kettlebells`
+becomes `kettlebell` and `bands` becomes `band`. A value outside the list fails the
+build and names the field to edit.
 
 Run `bun run build` to produce the static bundle in `dist/`. Run `bun run check:compat` to apply the Kindle bundle gates. The gates require ES2019 syntax and prohibit `window.open`. The production entry also includes a `String.replaceAll`
 polyfill required by Svelte. Drive multipart uploads use Web Crypto when available and

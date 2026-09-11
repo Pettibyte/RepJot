@@ -1,0 +1,10 @@
+{
+  "source": {
+    "repo": "yuhonas/free-exercise-db",
+    "ref": "main",
+    "commit": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+    "path": "dist/exercises.json"
+  },
+  "allowlist": "scripts/exercise-allowlist.json",
+  "output": "src/public/data/exercises.json"
+}

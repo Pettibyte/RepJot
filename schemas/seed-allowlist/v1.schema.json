@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repjot.com/schemas/seed-allowlist/v1.schema.json",
+  "title": "REP JOT Exercise Seed Allowlist",
+  "description": "Input for scripts/seed-exercises.ts. Each entry names one free-exercise-db source ID and may override the curated fields that the source lacks. Shared value sets are referenced from the exercise schema so the allowlist never accepts a value that the output schema rejects. See docs/REQUIREMENTS.md section 13.0 and specs/exercise-seeding.md.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/entry" },
+  "$defs": {
+    "sourceId": {
+      "description": "A free-exercise-db exercise ID. The seed resolves it against the pinned source and fails when it is absent.",
+      "type": "string",
+      "minLength": 1
+    },
+    "entry": {
+      "description": "A bare source ID takes every curated default. An object entry overrides the fields it lists.",
+      "oneOf": [
+        { "$ref": "#/$defs/sourceId" },
+        { "$ref": "#/$defs/overrideEntry" }
+      ]
+    },
+    "overrideEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sourceId" },
+        "equipment": {
+          "description": "Replaces the source equipment. The shape check stays loose on purpose: the seed normalizes the value and reports the raw value, the normalized value, and $defs.equipmentValue when the fold fails. The exercise schema still decides what can be written, so no unsafe value reaches the output. null means no equipment.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "laterality": {
+          "description": "Default: bilateral.",
+          "allOf": [
+            { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/exercise/properties/laterality" }
+          ]
+        },
+        "movementPattern": {
+          "description": "Default: none.",
+          "allOf": [
+            { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/exercise/properties/movementPattern" }
+          ]
+        },
+        "loadSemantics": {
+          "description": "Default: total.",
+          "allOf": [
+            { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/exercise/properties/loadSemantics" }
+          ]
+        },
+        "measurements": {
+          "description": "Default: one reps dimension. In the allowlist the unit list is named 'units'. The seed writes it to the output as 'compatibleUnits'.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/measurementOverride" }
+        },
+        "icon": {
+          "description": "Default: absent.",
+          "allOf": [
+            { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/icon" }
+          ]
+        }
+      }
+    },
+    "measurementOverride": {
+      "type": "object",
+      "discriminator": { "propertyName": "dimension" },
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "reps" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/repsMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "weight" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/weightMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "addedWeight" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/addedWeightMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "assistedWeight" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/assistedWeightMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "distance" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/distanceMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "duration" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/durationMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dimension", "units"],
+          "properties": {
+            "dimension": { "const": "calories" },
+            "units": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "https://repjot.com/schemas/exercises/v1.schema.json#/$defs/caloriesMeasurement/properties/compatibleUnits/items" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

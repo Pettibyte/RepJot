@@ -22,6 +22,22 @@
       "minLength": 1,
       "pattern": "^(?![0-9]+$)[^/|:]+$"
     },
+    "equipmentValue": {
+      "description": "Closed equipment vocabulary. Every value is lower case and singular. The seed folds source spellings such as 'Kettlebells' into this set and fails on any value outside it. The seed also rejects this list if a value is not already lower case and singular.",
+      "enum": [
+        "band",
+        "barbell",
+        "cable",
+        "dumbbell",
+        "e-z curl bar",
+        "exercise ball",
+        "foam roll",
+        "kettlebell",
+        "machine",
+        "medicine ball",
+        "other"
+      ]
+    },
     "icon": {
       "oneOf": [
         {
@@ -76,9 +92,11 @@
         },
         "icon": { "$ref": "#/$defs/icon" },
         "equipment": {
-          "description": "Required equipment. Copied from the source, with 'body only' mapped to null, or replaced by an allowlist override. null means no equipment.",
-          "type": ["string", "null"],
-          "pattern": "^(?![0-9]+$)[^/|:]+$"
+          "description": "Required equipment. The seed normalizes the source value or the allowlist override into this closed vocabulary and maps 'body only' to null. null means no equipment.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/equipmentValue" }
+          ]
         },
         "force": {
           "type": ["string", "null"],
@@ -134,6 +152,7 @@
         },
         "laterality": { "enum": ["bilateral", "unilateral"] },
         "measurements": {
+          "description": "Unique dimensions. uniqueItems catches identical objects only, so the seed enforces one entry per dimension and fails on a repeated dimension name.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,

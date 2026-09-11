@@ -269,7 +269,7 @@ One list drives everything. The list says which exercises to copy. The script co
   - `loadSemantics`: `total`
   - `measurements`: one dimension, `reps`, with unit `reps`
   - `icon`: none
-  - `equipment`: the source value, with `body only` mapped to no equipment
+  - `equipment`: the source value, normalized under Section 13.19, with `body only` mapped to no equipment
 - **13.8** An object allowlist entry copies the exercise and applies the listed curated overrides. All curated data lives in the allowlist, keyed by source ID.
 - **13.9** The script is deterministic. The same source commit and the same allowlist produce identical output.
 - **13.10** The script does not hash its output. It does not diff against a prior bundle. It does not preserve removed entries. It makes no backwards-compatibility promise.
@@ -278,8 +278,13 @@ One list drives everything. The list says which exercises to copy. The script co
 - **13.13** Source `body only` maps to no equipment. A source `null` equipment value fails the build unless the allowlist supplies an override.
 - **13.14** REP JOT keeps the source muscle vocabulary. It does not remap muscle names.
 - **13.15** To change published exercise data, edit the allowlist and re-run the seed script. No other path writes `exercises.json`.
-- **13.17** `bun run seed:bump` advances the pinned source commit and rewrites `exercises.json`. The allowlist stays unchanged. A bump that breaks a curated override fails the build and reports the offending ID.
+- **13.17** `bun run seed:bump` advances the pinned source commit and rewrites `exercises.json`. The allowlist stays unchanged. A bump that breaks a curated override fails the build and reports the offending ID. The command resolves the new commit, fetches the source, and validates the whole generated document before it writes anything. A failed bump changes neither the pinned commit nor `exercises.json`.
+- **13.22** The production build validates static data before it packages the site. `bun run build` runs the schema check and `seed:check` first. A stale or invalid `exercises.json` fails the build instead of reaching `dist/`. This satisfies Section 6.19 and Section 7.4 for exercise data.
+- **13.23** A measurement list holds one entry per dimension. The schema `uniqueItems` check rejects an identical repeated entry. The seed rejects a repeated dimension name that carries different unit lists.
 - **13.18** The pinned commit lives in the seed script configuration. The author reviews the diff before commit. REP JOT never auto-updates the source.
+- **13.19** The equipment vocabulary is closed. `$defs.equipmentValue` in `schemas/exercises/v1.schema.json` owns the list. Every value in the list is lower case and singular. The script reads the list from the schema, so the validator and the seed cannot drift apart.
+- **13.20** The script normalizes every equipment value before it writes, whether the value came from the source or from an override. It trims the value, collapses inner whitespace to one space, forces lower case, and takes the singular form. It then matches the result against the vocabulary. `Kettlebells`, `KETTLEBELLS`, and `kettlebells` all write `kettlebell`. `bands` writes `band`.
+- **13.21** The script fails when a normalized equipment value falls outside the vocabulary. The error names the raw value, the normalized value, and the schema field to edit. The script also fails when the vocabulary itself holds a value that is not lower case and singular, or lists `body only`.
 
 Example allowlist shape:
 
@@ -453,14 +458,14 @@ Monthly result shards (Section 3.3, Section 3.4), UTC-only persisted timestamps 
 1. ~~Rewrite `specs/storage-and-lookup.md`.~~ Done. Plan freezing, tombstones, and the prior-bundle comparison are gone. The merge and the keyed-map shapes from Section 22.4 are specified.
 2. ~~Update `specs/schema-versioning.md`.~~ Done. The chain stays, with the empty-chain-at-v1 rule and the newer-version rejection rule.
 3. ~~Update `specs/rep-jot-json-schema-spec.md`.~~ Done. Sessions, preferences, and both result kinds are keyed maps on the composite keys in Section 22.4.4 and Section 22.4.9. `deprecated`, `executionPlan`, `sessionTombstones`, and `conflictOfSessionId` are gone.
-4. Add `scripts/seed-exercises.ts` and `scripts/exercise-allowlist.json`.
+4. ~~Add `scripts/seed-exercises.ts` and `scripts/exercise-allowlist.json`.~~ Done. `bun run seed`, `bun run seed:check`, and `bun run seed:bump` implement `specs/exercise-seeding.md`. The pinned source commit lives in `scripts/seed-config.json`. The allowlist entry schema is `schemas/seed-allowlist/v1.schema.json`.
 5. Remove the `deprecated` field from the exercise schema and every reference to it in code and mockups. The specs no longer declare it; the code still does.
 6. Add the `DataError` component and the **View Raw JSON** screen.
 7. Add `jsondiffpatch` as a dependency and confirm its bundle size against the Kindle budget in `docs/CAPABILITIES-kindle-scribe.md`.
 8. Implement the local storage façade from Section 3.11 through Section 3.16. Keep it under about 50 lines and keep IndexedDB behind it.
 9. ~~Rewrite `schemas/exercises/v1.schema.json`, `schemas/workouts/v1.schema.json`, `schemas/preferences/v1.schema.json`, and `schemas/results/v1.schema.json` to match the v4 contract in `specs/rep-jot-json-schema-spec.md`.~~ Done. The pre-v4 model is gone: `sessions` is a keyed map, `sessionTombstones`, `executionPlan`, `conflictOfSessionId`, and the `deprecated` reason code are removed. The `identifier` pattern bans `/`, `|`, and `:` per Section 22.4.6. `bun run check:schemas` now reads these files with `ajv`.
 10. ~~Add the `movementPattern` value `none` and the `level` field to `schemas/exercises/v1.schema.json` when item 9 runs.~~ Done with item 9. The exercise schema also drops the top-level equipment registry and `equipmentIds` for the single `equipment` string or `null` field in Section 13.16, and uses the `reps` unit spelling from the spec.
-11. Write the seed specification for Section 13.0. No spec covers the pinned source commit, the seed defaults in Section 13.16, the strictness rules in Section 13.11, the `seed:bump` command in Section 13.18, or the output path `src/public/data/exercises.json`. Item 4 cannot be built correctly until this exists.
+11. ~~Write the seed specification for Section 13.0. No spec covers the pinned source commit, the seed defaults in Section 13.16, the strictness rules in Section 13.11, the `seed:bump` command in Section 13.18, or the output path `src/public/data/exercises.json`. Item 4 cannot be built correctly until this exists.~~ Done. `specs/exercise-seeding.md` covers all of it, and item 4 is built against that spec.
 12. Specify the raw-file export in Section 12.10. `specs/schema-versioning.md` cites it as the user-facing escape hatch but never defines it. Only the diagnostic-log download is specified today.
 
 ### 22.8 Notes on the spec update

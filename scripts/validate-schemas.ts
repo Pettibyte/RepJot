@@ -15,7 +15,7 @@ import { join } from "node:path";
 
 const SCHEMA_ROOT = new URL("../schemas/", import.meta.url).pathname;
 
-const FAMILIES = ["exercises", "workouts", "preferences", "results"];
+const FAMILIES = ["exercises", "workouts", "preferences", "results", "seed-allowlist"];
 
 function listSchemaFiles(family: string): string[] {
   const dir = join(SCHEMA_ROOT, family);
@@ -25,7 +25,9 @@ function listSchemaFiles(family: string): string[] {
     .sort();
 }
 
-const ajv = new Ajv2020({ strict: true });
+// discriminator: true supports the OpenAPI discriminator keyword that the seed
+// allowlist schema uses to pick a measurement branch by its "dimension" tag.
+const ajv = new Ajv2020({ strict: true, discriminator: true });
 // The spec requires the validator to assert formats, not treat them as annotations.
 addFormats(ajv, { assertion: true });
 
@@ -52,6 +54,10 @@ for (const family of FAMILIES) {
 
     try {
       ajv.addSchema(schema);
+      // Ajv compiles on first use. One call forces the compile, so a strict-mode
+      // problem surfaces here instead of inside the consumer that first needs it.
+      const validate = ajv.getSchema((schema as { $id?: string }).$id ?? "")!;
+      validate(undefined);
       console.log(`${family}/${file}: valid Draft 2020-12 schema`);
     } catch (error) {
       console.error(`${family}/${file}: ${(error as Error).message}`);

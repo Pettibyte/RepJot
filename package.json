@@ -4,11 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "bun run check:schemas && bun run seed:check && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
-    "check:schemas": "bun scripts/validate-schemas.ts"
+    "check:schemas": "bun scripts/validate-schemas.ts",
+    "seed": "bun scripts/seed-exercises.ts",
+    "seed:check": "bun scripts/seed-exercises.ts check",
+    "seed:bump": "bun scripts/seed-exercises.ts bump"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "latest",

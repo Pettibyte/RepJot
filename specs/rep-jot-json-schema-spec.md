@@ -178,7 +178,7 @@ An exercise contains classification, instructions, and supported measurements.
 | `name` | string | yes | Display name. |
 | `instructions` | string[] | yes | Ordered execution instructions. The array can be empty. |
 | `icon` | icon | no | Material Symbol or local SVG. |
-| `equipment` | string or null | yes | Required equipment copied from the source or replaced by the allowlist override. `null` means no equipment. |
+| `equipment` | vocabulary value or null | yes | Required equipment. One value from the closed vocabulary in `$defs.equipmentValue`, normalized by the seed. `null` means no equipment. |
 | `force` | enum or null | yes | General force direction. |
 | `mechanic` | enum or null | yes | Compound or isolation classification. |
 | `category` | enum | yes | General free-exercise-db category. |
@@ -300,6 +300,28 @@ unilateral
 ```
 
 Laterality describes normal execution. It does not describe every possible variation.
+
+### Equipment
+
+The equipment vocabulary is closed. `$defs.equipmentValue` owns the list.
+
+```text
+band
+barbell
+cable
+dumbbell
+e-z curl bar
+exercise ball
+foam roll
+kettlebell
+machine
+medicine ball
+other
+```
+
+Every value is lower case and singular. The seed normalizes input into this list and
+fails on any value outside it. `body only` is not a value. The seed maps it to
+`null`. See [Exercise Seeding](./exercise-seeding.md).
 
 ## Measurements and Units
 

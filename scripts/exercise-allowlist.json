@@ -1,0 +1,26 @@
+[
+  {
+    "id": "Barbell_Squat",
+    "movementPattern": "squat",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Barbell_Bench_Press_-_Medium_Grip",
+    "movementPattern": "horizontal_push",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Barbell_Deadlift",
+    "movementPattern": "hinge",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  }
+]
