@@ -95,6 +95,16 @@ REP JOT supports several devices for one account. The merge model stays. The imp
 - **4.20** After three failed attempts, the client shows `Sync failed` and keeps every pending local edit. Per Section 4.4, it discards nothing.
 - **4.21** REP JOT accepts the residual race between the final read-back and a simultaneous write from another device. The last writer wins and the loser detects the mismatch on its next sync.
 
+### Duplicate Drive files
+
+Drive permits two files with the same name. REP JOT clears a duplicate recognized name automatically. It never ignores one and it never asks the user to choose a file.
+
+- **4.22** A duplicate exists when the `appDataFolder` catalog holds more than one file with the same recognized name. The client treats the whole set as one duplicate group.
+- **4.23** The client consolidates a group only when every copy parses, declares the correct family, uses a supported schema version, and passes semantic validation. A group that holds a corrupt, wrong-family, or unsupported copy stays blocked. The `DataError` component names the file and offers **View Raw JSON**, and pending local edits stay durable.
+- **4.24** Consolidation keeps every distinct session and every distinct preference mapping found in the group. When one session ID, or one exercise-and-dimension mapping, appears in more than one copy, the client keeps the value from the copy with the greatest `(updatedAtUtc, Drive file ID)` tuple. The rule makes cleanup deterministic when Drive holds no shared base document. Normal synchronization still follows Section 4.11.
+- **4.25** The client writes the consolidated document to one primary file, reads that primary back, and confirms the consolidated data. Only then does it delete the redundant files by stable Drive file ID. It lists the name again before it records one remaining file ID locally.
+- **4.26** A copy that changes during cleanup blocks the group, and the client retries on the next synchronization. The client never deletes a file whose content the primary does not already hold.
+
 ## 5.0 Schema Versioning
 
 The migration scaffolding stays. REP JOT must keep the ability to change a schema later and still read existing user data.

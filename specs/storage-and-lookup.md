@@ -241,8 +241,10 @@ GET https://www.googleapis.com/drive/v3/files
   &fields=nextPageToken,files(id,name,modifiedTime,md5Checksum,size,version)
 ```
 
-Follow every `nextPageToken`. Drive permits duplicate names. Report duplicate
-recognized names as sync conflicts, and never select one silently.
+Follow every `nextPageToken`. Drive permits duplicate names. The client never ignores
+a duplicate recognized name and never asks the user to choose a file. It consolidates
+the group automatically. See the consolidation steps below and
+`../docs/REQUIREMENTS.md` Section 4.22 through Section 4.26.
 
 Retain each discovered Drive file ID for reads and updates. Process only
 `preferences.json` and valid monthly result names. Leave unknown Drive files unchanged
@@ -319,6 +321,41 @@ file export.
 REP JOT supports several devices for one account. The merge model uses
 `jsondiffpatch`.
 
+### Duplicate file consolidation
+
+Drive permits duplicate names, so a recognized logical file can exist twice. The client
+clears the duplicate automatically. `../docs/REQUIREMENTS.md` Section 4.22 through
+Section 4.26 governs the rule; the steps below state the mechanism.
+
+The client consolidates a duplicate group only when every copy parses, declares the
+correct family, uses a supported schema version, and passes semantic validation. For
+such a group:
+
+1. Download every copy and retain its Drive file ID and metadata.
+2. Select the lexicographically smallest Drive file ID as the primary.
+3. For a result shard, union the different session IDs. For one session ID that appears
+   in more than one copy, keep the version with the greatest
+   `(updatedAtUtc, Drive file ID)` tuple.
+4. For preferences, merge the different mappings. For one mapping that appears in more
+   than one copy, keep the value from the file with the greatest
+   `(updatedAtUtc, Drive file ID)` tuple.
+5. Validate the consolidated document.
+6. Recheck the metadata of every copy in the group.
+7. Update the primary file and read it back.
+8. Delete the redundant files only after the primary holds the consolidated data.
+9. List the name again before the local cache records one remaining Drive file ID.
+
+The tuple rule gives cleanup a deterministic result when Drive holds no shared base
+document. Normal synchronization still uses the last-synchronizer-wins rule in the next
+section. An edit beats a conflicting delete. Consolidation creates no tombstone and no
+sync copy.
+
+A group that holds a corrupt, wrong-family, or unsupported copy stays blocked. The
+`DataError` component names the file and offers **View Raw JSON**, and pending local
+edits stay durable. A copy that changes during cleanup also blocks the group, and the
+client retries on the next synchronization. The client never deletes a file whose
+content the primary does not already hold.
+
 ### Merge model
 
 The conflict unit is one top-level keyed entry. For results, the unit is one session.
@@ -352,7 +389,7 @@ label.
 ### Full reconciliation
 
 1. List every Drive catalog page.
-2. Validate recognized names, envelopes, versions, and filename uniqueness.
+2. Detect duplicate recognized names and consolidate them before any normal write. Validate recognized names, envelopes, and versions.
 3. Compare remote metadata with the account-scoped cache records.
 4. Download files that are absent or changed locally.
 5. Remove synchronized cache records for remote files that no longer exist.
@@ -510,7 +547,7 @@ Account connections so the user can remove access there.
 - Corrupt cached JSON is discarded and downloaded again.
 - Corrupt remote JSON is reported and never overwritten automatically.
 - A future schema version is not opened for editing or overwritten.
-- Duplicate recognized Drive names are conflicts.
+- Duplicate recognized Drive names consolidate automatically when every copy is valid. A corrupt, unsupported, or changing copy blocks that logical file and shows the error card.
 - A failed sync keeps the last valid cache and all pending local edits.
 - A failed upload does not update cached remote metadata.
 - Unknown Drive files are never deleted automatically.
