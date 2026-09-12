@@ -1,0 +1,292 @@
+/**
+ * Shared component classes. Every screen composes these instead of writing its own
+ * rules. Values come from `tokens.css` only.
+ *
+ * Kindle Silk 80 has no flexbox `gap`, so this layer spaces children with margins.
+ */
+
+/* Icon ---------------------------------------------------------------- */
+
+.icon {
+  display: inline-block;
+  fill: currentColor;
+  height: var(--icon-size);
+  vertical-align: middle;
+  width: var(--icon-size);
+}
+
+.icon--sm {
+  height: 18px;
+  width: 18px;
+}
+
+.icon--lg {
+  height: 32px;
+  width: 32px;
+}
+
+/* Button ------------------------------------------------------------- */
+
+.btn {
+  align-items: center;
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  justify-content: flex-start;
+  line-height: var(--lh-headline);
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  text-decoration: none;
+}
+
+.btn .icon {
+  margin-right: var(--space-2);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background-color: var(--color-surface-sunken);
+  border-color: var(--color-disabled);
+  color: var(--color-disabled);
+  cursor: not-allowed;
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.btn--primary {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.btn--secondary {
+  background-color: var(--color-surface-raised);
+  color: var(--color-on-bg);
+}
+
+/* Destructive action. Severity reads through weight, never through color.
+   The label must name the action, for example "DELETE SESSION". */
+.btn--danger {
+  background-color: var(--color-primary);
+  border-width: calc(var(--border-weight) * 2);
+  color: var(--color-on-primary);
+}
+
+/* Card --------------------------------------------------------------- */
+
+.card {
+  background-color: var(--color-surface-raised);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.card--sunken {
+  background-color: var(--color-surface-sunken);
+}
+
+.card--flush {
+  padding: 0;
+}
+
+/* Field -------------------------------------------------------------- */
+
+.field {
+  display: block;
+}
+
+.field__label {
+  color: var(--color-on-surface-variant);
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-label);
+  line-height: var(--lh-data);
+  margin-bottom: var(--space-1);
+}
+
+.field__control {
+  width: 100%;
+}
+
+.field__hint {
+  color: var(--color-on-surface-variant);
+  display: block;
+  font-size: var(--text-label);
+  margin-top: var(--space-1);
+}
+
+.field__error {
+  color: var(--color-on-bg);
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  margin-top: var(--space-1);
+}
+
+.field--disabled .field__label,
+.field--disabled .field__hint {
+  color: var(--color-disabled);
+}
+
+/* Tabs --------------------------------------------------------------- */
+
+.tabs {
+  border-bottom: var(--border-weight) solid var(--color-primary);
+  display: flex;
+}
+
+.tabs__item {
+  align-items: center;
+  border: var(--border-weight) solid transparent;
+  border-bottom: 0;
+  color: var(--color-on-surface-variant);
+  display: flex;
+  flex: 1 1 auto;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  text-decoration: none;
+}
+
+.tabs__item .icon {
+  margin-right: var(--space-2);
+}
+
+.tabs__item--current {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+/* Progress bar ------------------------------------------------------- */
+
+.bar {
+  background-color: var(--color-surface-sunken);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  height: var(--space-3);
+  overflow: hidden;
+  width: 100%;
+}
+
+.bar__fill {
+  background-color: var(--color-primary);
+  height: 100%;
+  width: 0;
+}
+
+/* Pill and badge ------------------------------------------------------ */
+
+.pill {
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  display: inline-block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-label);
+  line-height: var(--lh-data);
+  padding: var(--space-1) var(--space-2);
+}
+
+.badge {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  display: inline-block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  line-height: var(--lh-data);
+  padding: var(--space-1) var(--space-2);
+}
+
+.badge--outline {
+  background-color: transparent;
+  color: var(--color-on-bg);
+}
+
+/* Layout helpers ----------------------------------------------------- */
+
+.screen {
+  margin: 0 auto;
+  padding: var(--space-gutter);
+  width: 100%;
+}
+
+.screen--narrow {
+  max-width: 640px;
+}
+
+.stack > * + * {
+  margin-top: var(--space-3);
+}
+
+.stack--lg > * + * {
+  margin-top: var(--space-stack);
+}
+
+/* App header (tab routes) ------------------------------------------------ */
+
+.app-header {
+  align-items: center;
+  border-bottom: var(--border-weight) solid var(--color-primary);
+  display: flex;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-gutter);
+}
+
+.app-header__status {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  margin-left: auto;
+  text-align: right;
+}
+
+/* Back header (detail and task routes) ---------------------------------- */
+
+.back-header {
+  border-bottom: var(--border-weight) solid var(--color-primary);
+  padding: var(--space-2) var(--space-gutter);
+}
+
+.back-header__back {
+  align-items: center;
+  display: inline-flex;
+  font-weight: var(--weight-bold);
+  min-height: var(--tap-target-min);
+  text-decoration: none;
+}
+
+.back-header__back .icon {
+  margin-right: var(--space-2);
+}
+
+.back-header__title {
+  font-size: var(--text-headline-md);
+  margin-top: var(--space-1);
+}
+
+/* Wordmark. Always uppercase; the component enforces the text. */
+
+.wordmark {
+  font-family: var(--font-ui);
+  font-size: var(--text-headline-md);
+  font-weight: var(--weight-extra-bold);
+  letter-spacing: var(--tracking-tight);
+  text-transform: uppercase;
+}

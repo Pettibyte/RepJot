@@ -1,0 +1,194 @@
+/**
+ * Base layer: reset, document colors, type scale, links, focus rings, and native
+ * control resets.
+ *
+ * Kindle Silk 80 reports as Chrome 80. It has no flexbox `gap`, so spacing here
+ * uses margins. Do not introduce `gap` in this layer.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-on-bg);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+  min-height: 100vh;
+}
+
+/* Type scale. Headlines are heavy and tightly tracked. */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--color-on-bg);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-headline);
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--text-headline-lg);
+}
+
+h2 {
+  font-size: var(--text-headline-sm);
+}
+
+h3 {
+  font-size: var(--text-headline-md);
+}
+
+h4,
+h5,
+h6 {
+  font-size: var(--text-body-lg);
+}
+
+p {
+  margin: 0;
+}
+
+strong {
+  font-weight: var(--weight-bold);
+}
+
+/* Monospace data. Use for reps, sets, weights, and timers. */
+
+code,
+kbd,
+samp,
+.data {
+  font-family: var(--font-data);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-label);
+}
+
+/* Links are always underlined. Color never carries the alone. */
+
+a {
+  color: var(--color-on-bg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:visited {
+  color: var(--color-on-bg);
+}
+
+/* Focus. A 4px outline with a 4px offset reads on any surface. */
+
+:focus-visible {
+  outline: 4px solid var(--color-primary);
+  outline-offset: 4px;
+}
+
+/* Inverted surfaces need the light outline to stay visible. */
+.on-inverted :focus-visible,
+.btn--primary:focus-visible,
+.btn--danger:focus-visible,
+.tabs__item--current:focus-visible {
+  outline-color: var(--color-bg);
+}
+
+/* Native control resets. Primitives wrap these; no control library. */
+
+button,
+input,
+select,
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--color-surface-raised);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  color: var(--color-on-bg);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  margin: 0;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+select {
+  padding-right: var(--space-4);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  background-color: var(--color-surface-sunken);
+  border-color: var(--color-disabled);
+  color: var(--color-disabled);
+  cursor: not-allowed;
+}
+
+/* Checkboxes and radios stay large squares with a heavy fill. */
+
+input[type="checkbox"],
+input[type="radio"] {
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  vertical-align: middle;
+  width: 24px;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background-color: var(--color-primary);
+}
+
+/* Lists, rules, and media. */
+
+ul,
+ol {
+  margin: 0;
+  padding-left: var(--space-3);
+}
+
+hr {
+  border: 0;
+  border-top: var(--border-weight) solid var(--color-outline-variant);
+  margin: var(--space-stack) 0;
+}
+
+img,
+svg,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}

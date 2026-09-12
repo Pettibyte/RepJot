@@ -107,56 +107,100 @@ token, never the raw value.
 
 ### Implementation
 
-- [ ] Create `src/ui/styles/tokens.css` with every color, spacing, type, radius, and
+- [x] Create `src/ui/styles/tokens.css` with every color, spacing, type, radius, and
       border token from `design/DESIGN.md`.
-- [ ] Create `src/ui/styles/fonts.css` with `@font-face` for Inter (400, 700, 800)
+- [x] Create `src/ui/styles/fonts.css` with `@font-face` for Inter (400, 700, 800)
       and JetBrains Mono (500, 700) from `src/public/fonts/`.
-- [ ] Copy the font binaries and their license files into `src/public/fonts/`.
-- [ ] Create `src/ui/styles/base.css`: reset, `body` color and font, heading scale,
+- [x] Copy the font binaries and their license files into `src/public/fonts/`.
+- [x] Create `src/ui/styles/base.css`: reset, `body` color and font, heading scale,
       link style, `:focus-visible` 4px offset outline, native control resets with
       `border-radius: var(--radius)`.
-- [ ] Create `src/ui/styles/components.css` with `.btn`, `.btn--primary`,
+- [x] Create `src/ui/styles/components.css` with `.btn`, `.btn--primary`,
       `.btn--secondary`, `.btn--danger`, `.card`, `.field`, `.field__label`,
       `.tabs`, `.tabs__item`, `.tabs__item--current`, `.bar`, `.bar__fill`,
       `.pill`, `.badge`, `.screen`, `.stack`.
-- [ ] Create `src/ui/styles/index.css` that imports the four files in order.
-- [ ] Import `./ui/styles/index.css` from `src/main.ts` so Vite emits one stylesheet
+- [x] Create `src/ui/styles/index.css` that imports the four files in order.
+- [x] Import `./ui/styles/index.css` from `src/main.ts` so Vite emits one stylesheet
       (`cssCodeSplit: false` is already set).
-- [ ] Create `src/ui/components/Icon.svelte` with props `name`, `label`,
+- [x] Create `src/ui/components/Icon.svelte` with props `name`, `label`,
       `decorative`, `kind: 'material' | 'svg'`.
-- [ ] Create `src/ui/icons/manifest.json` listing the reviewed Material Symbols glyph
+- [x] Create `src/ui/icons/manifest.json` listing the reviewed Material Symbols glyph
       names used by the application.
-- [ ] Create `Button.svelte`, `Card.svelte`, `Field.svelte`, `Tabs.svelte`,
+- [x] Create `Button.svelte`, `Card.svelte`, `Field.svelte`, `Tabs.svelte`,
       `AppHeader.svelte`, `BackHeader.svelte`, `ProgressBar.svelte`.
-- [ ] Write `scripts/check-styles.ts` implementing the eight guard rules above.
-- [ ] Add `"check:styles": "bun scripts/check-styles.ts"` to `package.json` and add
+- [x] Write `scripts/check-styles.ts` implementing the eight guard rules above.
+- [x] Add `"check:styles": "bun scripts/check-styles.ts"` to `package.json` and add
       `bun run check:styles` to the `build` script chain.
 
 ### Tests
 
-- [ ] `tests/styles.test.ts`: the guard passes on the current tree.
-- [ ] `tests/styles.test.ts`: the guard fails on a fixture that uses a hex color in
+- [x] `tests/styles.test.ts`: the guard passes on the current tree.
+- [x] `tests/styles.test.ts`: the guard fails on a fixture that uses a hex color in
       `components.css`.
-- [ ] `tests/styles.test.ts`: the guard fails on a fixture with `box-shadow` and on
+- [x] `tests/styles.test.ts`: the guard fails on a fixture with `box-shadow` and on
       one with `border-radius: 8px`.
-- [ ] `tests/styles.test.ts`: the guard fails on `display: grid` and on
+- [x] `tests/styles.test.ts`: the guard fails on `display: grid` and on
       `position: sticky` under `src/ui/`.
-- [ ] `tests/styles.test.ts`: the guard fails on a remote `url(https://...)` in CSS.
-- [ ] Component tests for `Icon.svelte`: a decorative icon renders `aria-hidden="true"`;
+- [x] `tests/styles.test.ts`: the guard fails on a remote `url(https://...)` in CSS.
+- [x] Component tests for `Icon.svelte`: a decorative icon renders `aria-hidden="true"`;
       a non-decorative icon without a `label` throws.
-- [ ] Component test for `Button.svelte`: renders `<a>` when `href` is set and
+- [x] Component test for `Button.svelte`: renders `<a>` when `href` is set and
       `<button type="button">` otherwise.
 
 ### Verification
 
-- [ ] `bun run check` passes with no new errors.
-- [ ] `bun test` passes.
-- [ ] `bun run check:styles` passes.
-- [ ] `bun run build` produces one CSS asset under `dist/` and no font request
+- [x] `bun run check` passes with no new errors.
+- [x] `bun test` passes.
+- [x] `bun run check:styles` passes.
+- [x] `bun run build` produces one CSS asset under `dist/` and no font request
       leaves the origin.
-- [ ] `bun run check:compat` passes.
+- [x] `bun run check:compat` passes.
 - [ ] Manual: open `bun run dev`, confirm headings, buttons, fields, and tabs render
-      with local fonts and zero radius.
+      with local fonts and zero radius. The dev server serves the page and the
+      compiled stylesheet, and `/fonts/*.woff2` returns 200. A person still needs
+      to look at it.
+
+## Notes on this build
+
+Deviations from the plan, and why.
+
+1. **Fonts are variable, not three static weights.** Google Fonts serves one
+   variable file per subset. `src/public/fonts/` holds `inter-latin.woff2`,
+   `inter-latin-ext.woff2`, `jetbrains-mono-latin.woff2`, and
+   `jetbrains-mono-latin-ext.woff2` — 176 KB total, against about 350 KB for five
+   static files. `fonts.css` declares `font-weight: 400 800` for Inter and
+   `font-weight: 500 700` for JetBrains Mono. Provenance and SHA-256 values are in
+   `src/public/fonts/README.md`.
+2. **Material Symbols ship as inline SVG path data, not as a font.**
+   `src/ui/icons/manifest.json` holds the reviewed glyph list. `Icon.svelte`
+   renders the path inline. The Material Symbols Outlined font is about 3 MB, and
+   ARCHITECTURE C-04 says a core control must not depend on a font glyph.
+   `scripts/build-icon-manifest.ts` regenerates the manifest from
+   `@iconify-json/material-symbols` (Apache 2.0). Add a glyph by adding its
+   codepoint name to `REVIEWED_GLYPHS` and running `bun run icons:build`.
+3. **Token set is the full design palette plus the plan's semantic aliases.**
+   Every color in `design/DESIGN.md` front matter is declared as `--color-<name>`,
+   and the plan's nine names alias those tokens. `--text-headline-sm` is the design
+   `headline-lg-mobile` step. Line-height, tracking, and weight tokens were added
+   so no component needs a raw number.
+4. **Guard rule 9 was added: no `gap` under `src/ui/`.** Kindle Silk 80 reports as
+   Chrome 80, and flexbox `gap` landed in Chrome 84. A `gap` declaration would
+   pass every other rule and silently collapse spacing on the target device. Use
+   margins.
+5. **`src/capabilities.html` is exempt from the guard.** It is the diagnostic page.
+   It renders a standalone report whose CSS is generated as a string in
+   JavaScript, and it is not part of the design system. The exemption list lives in
+   `EXEMPT` at the top of `scripts/check-styles.ts`.
+6. **`.btn--danger` stays monochrome.** REQUIREMENTS 8.2 limits the UI to black,
+   white, and middle gray, so severity reads through a 4px border instead of red.
+   The label must name the destructive action.
+7. **Component tests render through the Svelte server renderer.** `bunfig.toml`
+   preloads `tests/support/svelte-ssr.ts`, which compiles `.svelte` files for
+   `bun test`. No DOM library was added.
+8. **Header classes were added to `components.css`** (`.app-header`,
+   `.back-header`, and their children). The plan listed the primitives but not
+   their layout classes, and rule 8 keeps component `<style>` blocks from owning
+   shared class names.
 
 ## Exit criteria
 

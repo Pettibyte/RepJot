@@ -4,8 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "bun run check:schemas && bun run seed:check && vite build",
+    "build": "bun run check:schemas && bun run seed:check && bun run check:styles && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check:styles": "bun scripts/check-styles.ts",
+    "icons:build": "bun scripts/build-icon-manifest.ts",
     "test": "bun test",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
     "check:schemas": "bun scripts/validate-schemas.ts",
@@ -14,6 +16,7 @@
     "seed:bump": "bun scripts/seed-exercises.ts bump"
   },
   "devDependencies": {
+    "@iconify-json/material-symbols": "1.2.92",
     "@sveltejs/vite-plugin-svelte": "latest",
     "@types/node": "^26.2.0",
     "acorn": "^8.18.0",

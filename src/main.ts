@@ -1,4 +1,5 @@
 import './polyfills';
+import './ui/styles/index.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import {
