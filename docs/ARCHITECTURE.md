@@ -571,7 +571,8 @@ type AppErrorKind =
   | 'migration'
   | 'semantic_reference'
   | 'storage'
-  | 'ambiguous_upload';
+  | 'ambiguous_upload'
+  | 'insecure_environment';
 ```
 
 | Category | UI behavior | Recovery |
@@ -583,6 +584,7 @@ type AppErrorKind =
 | Unresolved static reference | Show stored result values and `DataError`. | Update compatible static data or inspect raw JSON. |
 | Storage failure | Keep temporary field text. Do not show **Saved**. | Retry after browser storage recovery. |
 | Ambiguous upload | Keep local intent and show saving or sync failure. | Read Drive before retry. |
+| Insecure environment | Show that the browser cannot create secure IDs. | Open the app over HTTPS in a browser that exposes `crypto.getRandomValues`. |
 
 Errors contain safe typed context. Diagnostics do not record raw error messages, tokens, authorization headers, file contents, notes, or measurements.
 

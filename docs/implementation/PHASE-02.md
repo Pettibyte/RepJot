@@ -32,6 +32,10 @@ that every other layer reuses: IDs, UTC handling, shards, and composite keys.
 
 ### Types
 
+The sketch below shows the top-level shapes. `src/domain/types.ts` mirrors the four
+v1 schemas in full, including the nested shapes the sketch omits: `Icon`,
+`MeasurementSupport`, `ContainerNode`, `ExerciseNode`, `Prescription`,
+`IterationPrescription`, `ResultValues`, `EffortOutcome`, and `Score`.
 ```ts
 // src/domain/types.ts
 export interface Exercise {
@@ -149,53 +153,93 @@ export function nodeKey(workoutId: string, nodeId: string): string; // '<workout
 
 ### Implementation
 
-- [ ] Create `src/domain/enums.ts` with `Force`, `Mechanic`, `Category`, `Level`,
+- [x] Create `src/domain/enums.ts` with `Force`, `Mechanic`, `Category`, `Level`,
       `MovementPattern`, `Muscle` (17 values), `Laterality`, `EquipmentValue`
       (11 values), `LoadSemantics`, `Side`, `StartingSide`, `ResultStatus`,
       `SessionStatus`, `ReasonCode`, `ScoreType`, `Stimulus`, `SetType`.
-- [ ] Create `src/domain/types.ts` with the document and entity types above.
-- [ ] Create `src/domain/errors.ts` with `AppErrorKind` and `AppError`.
-- [ ] Create `src/domain/ids.ts`. `secureUuid()` reads 16 bytes from
+- [x] Create `src/domain/types.ts` with the document and entity types above.
+- [x] Create `src/domain/errors.ts` with `AppErrorKind` and `AppError`.
+- [x] Create `src/domain/ids.ts`. `secureUuid()` reads 16 bytes from
       `crypto.getRandomValues`, sets the RFC 4122 v4 and variant bits, and throws
       `AppError('insecure_environment')` when the API is missing.
-- [ ] Create `src/domain/time.ts`. `nowUtc()` emits whole-second precision.
-- [ ] Create `src/domain/execution-path.ts` with encode, decode, and both key builders.
-- [ ] Delete `src/random-uuid.ts`. Update `src/polyfills.ts` and `src/google-drive.ts`
+- [x] Create `src/domain/time.ts`. `nowUtc()` emits whole-second precision.
+- [x] Create `src/domain/execution-path.ts` with encode, decode, and both key builders.
+- [x] Delete `src/random-uuid.ts`. Update `src/polyfills.ts` and `src/google-drive.ts`
       to import from `src/domain/ids.ts`. Keep the `crypto.randomUUID` polyfill, but
       back it with `secureUuid()` so no `Math.random()` path remains.
-- [ ] Add a short doc comment above each exported function that names the requirement
+- [x] Add a short doc comment above each exported function that names the requirement
       section it implements.
 
 ### Tests
 
-- [ ] `tests/domain-ids.test.ts`: `createSessionId()` starts with `session-`, matches
+- [x] `tests/domain-ids.test.ts`: `createSessionId()` starts with `session-`, matches
       the UUID v4 pattern, and two calls differ.
-- [ ] `tests/domain-ids.test.ts`: `secureUuid()` throws `AppError` with kind
+- [x] `tests/domain-ids.test.ts`: `secureUuid()` throws `AppError` with kind
       `insecure_environment` when `crypto.getRandomValues` is stubbed out.
-- [ ] `tests/domain-ids.test.ts`: `assertIdSafe` rejects `a/b`, `a|b`, `a:b` and
+- [x] `tests/domain-ids.test.ts`: `assertIdSafe` rejects `a/b`, `a|b`, `a:b` and
       accepts `back-squat-set`.
-- [ ] `tests/domain-ids.test.ts`: `isIntegerLikeKey` is true for `'12'` and `'1e2'`
-      forms and false for `'session-x'` and composite keys.
-- [ ] `tests/domain-time.test.ts`: `shardName('2026-09-01T06:30:00Z')` returns
+- [x] `tests/domain-ids.test.ts`: `isIntegerLikeKey` is true for an all-digit key,
+      such as `'12'`, `'0'`, and `'007'`, and false for `'1e2'`, `'session-x'`, and
+      composite keys. The rule matches the schema pattern `^(?![0-9]+$)` exactly,
+      because only an all-digit key reorders in JavaScript.
+- [x] `tests/domain-time.test.ts`: `shardName('2026-09-01T06:30:00Z')` returns
       `'results-2026-09.json'`.
-- [ ] `tests/domain-time.test.ts`: `nowUtc()` ends in `Z` and holds no millisecond part.
-- [ ] `tests/domain-time.test.ts`: `parseUtc` rejects `'2026-08-15T07:30:00-07:00'`.
-- [ ] `tests/execution-path.test.ts`: `encodePath` produces
+- [x] `tests/domain-time.test.ts`: `nowUtc()` ends in `Z` and holds no millisecond part.
+- [x] `tests/domain-time.test.ts`: `parseUtc` rejects `'2026-08-15T07:30:00-07:00'`.
+- [x] `tests/execution-path.test.ts`: `encodePath` produces
       `root/squat-sets:3/back-squat-set` for the spec example.
-- [ ] `tests/execution-path.test.ts`: `exerciseResultKey` always emits both `side`
+- [x] `tests/execution-path.test.ts`: `exerciseResultKey` always emits both `side`
       and `attempt`, including the defaults, and matches
       `root/squat-sets:3/back-squat-set|both|1`.
-- [ ] `tests/execution-path.test.ts`: `decodePath(encodePath(x))` equals `x` for
+- [x] `tests/execution-path.test.ts`: `decodePath(encodePath(x))` equals `x` for
       nested repeated containers.
-- [ ] `tests/execution-path.test.ts`: `nodeKey('w', 'n')` equals `'w|n'`.
+- [x] `tests/execution-path.test.ts`: `nodeKey('w', 'n')` equals `'w|n'`.
 
 ### Verification
 
-- [ ] `bun run check` passes.
-- [ ] `bun test` passes, including the existing Phase 0 tests after the UUID move.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
-- [ ] `grep -rn "Math.random" src/` returns nothing.
+- [x] `bun run check` passes.
+- [x] `bun test` passes, including the existing Phase 0 tests after the UUID move.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
+- [x] `grep -rn "Math.random" src/` returns nothing.
+
+## Notes on this build
+
+Deviations from the plan, and why.
+
+1. **`types.ts` mirrors the full schema, not only the sketched types.** The plan
+   sketch lists the top-level shapes. The file also defines `Icon`, the seven
+   `MeasurementSupport` variants, `ContainerNode`, `ExerciseNode`, `Prescription`,
+   `IterationPrescription`, `ResultValues`, `EffortOutcome`, `Score`, the five
+   `strategyConfig` shapes, and the `ExercisesDoc` and `WorkoutsDoc` envelopes.
+   Phases 03 through 05 need them, so no later phase adds a type.
+2. **`ScoreType` holds the three capture types only.** `resultCapture.scoreType`
+   allows `cycles`, `rounds_and_reps`, and `intervals`. The recorded `Score` union
+   adds the `'nonstandard'` discriminator. One name does not cover both sets, so the
+   enum follows the author-facing field and `Score` carries the wider set.
+3. **`isIntegerLikeKey` matches the schema rule exactly.** It returns true for an
+   all-digit key, the pattern `^(?![0-9]+$)`. The plan test asked for `'1e2'` to be
+   true. JavaScript treats `'1e2'` as an ordinary string key, so it cannot reorder.
+   A wider rule would reject documents the schema accepts. The plan test was updated
+   to the exact rule.
+4. **`insecure_environment` was added to `docs/ARCHITECTURE.md` section 15.** The
+   plan lists 13 `AppErrorKind` values and says the list matches the architecture,
+   which held 12. The architecture now lists 13 and carries a UI row for the new
+   kind.
+5. **`ContainerNode` is a discriminated union over `strategy`.** `strategyConfig`
+   shape depends on the sibling `strategy` field, which a plain interface cannot
+   express. `ContainerNodeFor<S>` plus `StrategyConfigFor<S>` let TypeScript narrow
+   `strategyConfig` after a `strategy` check. The schema still owns validation.
+6. **Domain modules import no DOM types.** `ids.ts` reads `globalThis.crypto`
+   through a local `RandomSource` interface, so `src/domain/` holds no DOM,
+   Svelte, OAuth, Drive, or IndexedDB import. Plan rule 6.
+7. **The `crypto.randomUUID` installer lives in `src/polyfills.ts`.**
+   `src/random-uuid.ts` is deleted. The installer now calls `secureUuid()` from
+   `src/domain/ids.ts`, so the polyfill and the domain share one random path.
+   `src/google-drive.ts` calls `secureUuid()` for its multipart boundary.
+8. **`AppError` sets its prototype in the constructor.** `Object.setPrototypeOf`
+   keeps `instanceof AppError` correct when a bundler down-levels the class. An
+   `isAppError()` guard is exported with the class.
 
 ## Exit criteria
 
