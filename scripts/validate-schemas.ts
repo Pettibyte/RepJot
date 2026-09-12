@@ -28,8 +28,11 @@ function listSchemaFiles(family: string): string[] {
 // discriminator: true supports the OpenAPI discriminator keyword that the seed
 // allowlist schema uses to pick a measurement branch by its "dimension" tag.
 const ajv = new Ajv2020({ strict: true, discriminator: true });
-// The spec requires the validator to assert formats, not treat them as annotations.
-addFormats(ajv, { assertion: true });
+// Formats assert. ajv-formats v3 registers each format as a validation keyword.
+// The spec requires the validator to assert formats, not treat them as
+// annotations. The v2 option `{ assertion: true }` no longer exists in v3.
+// `keywords: false` matches what the app validator registers.
+addFormats(ajv, { keywords: false });
 
 let failed = 0;
 

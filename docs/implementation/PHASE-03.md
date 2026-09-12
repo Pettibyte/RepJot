@@ -114,60 +114,90 @@ tests for every registered step:
 
 ### Implementation
 
-- [ ] Create `src/documents/limits.ts` with `MAX_DOCUMENT_BYTES` and
+- [x] Create `src/documents/limits.ts` with `MAX_DOCUMENT_BYTES` and
       `MAX_NESTING_DEPTH` and a comment that ties them to the Kindle memory budget.
-- [ ] Create `src/validation/schema-validator.ts`. Import the four v1 schema JSON
+- [x] Create `src/validation/schema-validator.ts`. Import the four v1 schema JSON
       files statically. Build one Ajv 2020 instance with
       `{ strict: true, discriminator: true }` and `addFormats(ajv, { assertion: true })`.
-- [ ] Cache compiled validators in a `Map<string, ValidateFunction>` keyed
+- [x] Cache compiled validators in a `Map<string, ValidateFunction>` keyed
       `family@version`.
-- [ ] Add a `FAMILY_MAX_VERSION` map so `highestSupportedVersion` needs no schema scan.
-- [ ] Create `src/migrations/migration-registry.ts` with the `Migration` interface,
+- [x] Add a `FAMILY_MAX_VERSION` map so `highestSupportedVersion` needs no schema scan.
+- [x] Create `src/migrations/migration-registry.ts` with the `Migration` interface,
       `registerMigration`, `getChain`, and `findStep`. Register an empty chain for
       all four families.
-- [ ] Create `src/documents/document-pipeline.ts` implementing the eight stages.
-- [ ] Make every thrown `AppError` carry the document identity in `detail` so the
+- [x] Create `src/documents/document-pipeline.ts` implementing the eight stages.
+- [x] Make every thrown `AppError` carry the document identity in `detail` so the
       `DataError` component can name family, declared version, and max version.
-- [ ] Add a note in `schema-validator.ts` about bundle size: if the Ajv cost breaks
+- [x] Add a note in `schema-validator.ts` about bundle size: if the Ajv cost breaks
       the Phase 20 budget, move schema loading to a runtime `fetch` of bundled
       `data/schemas/*.json` without changing any call site.
 
 ### Tests
 
-- [ ] `tests/schema-validator.test.ts`: each family and v1 compiles and validates a
+- [x] `tests/schema-validator.test.ts`: each family and v1 compiles and validates a
       known-good fixture.
-- [ ] `tests/schema-validator.test.ts`: format assertion rejects a `*Utc` field with
+- [x] `tests/schema-validator.test.ts`: format assertion rejects a `*Utc` field with
       a numeric offset such as `2026-08-15T07:30:00-07:00`.
-- [ ] `tests/schema-validator.test.ts`: `validateEnvelope` rejects a missing
+- [x] `tests/schema-validator.test.ts`: `validateEnvelope` rejects a missing
       `format`, a missing `schemaVersion`, and a non-integer `schemaVersion`.
-- [ ] `tests/document-pipeline.test.ts`: an empty chain at v1 loads, validates, and
+- [x] `tests/document-pipeline.test.ts`: an empty chain at v1 loads, validates, and
       normalizes with `migrated: false`.
-- [ ] `tests/document-pipeline.test.ts`: a future `schemaVersion` yields
+- [x] `tests/document-pipeline.test.ts`: a future `schemaVersion` yields
       `AppError('unsupported_schema')` carrying `declaredVersion` and
       `maxSupportedVersion`.
-- [ ] `tests/document-pipeline.test.ts`: a test-only registered `v1 -> v2` step runs,
+- [x] `tests/document-pipeline.test.ts`: a test-only registered `v1 -> v2` step runs,
       and its output validates against a test-only v2 schema.
-- [ ] `tests/document-pipeline.test.ts`: a registered step whose input fails stage 5
+- [x] `tests/document-pipeline.test.ts`: a registered step whose input fails stage 5
       never executes the step. Assert with a spy.
-- [ ] `tests/document-pipeline.test.ts`: a missing middle step yields
+- [x] `tests/document-pipeline.test.ts`: a missing middle step yields
       `AppError('migration')` naming the missing version, and the input object is
       unchanged.
-- [ ] `tests/document-pipeline.test.ts`: every registered step is pure. Deep-freeze
+- [x] `tests/document-pipeline.test.ts`: every registered step is pure. Deep-freeze
       the input and assert no throw and a new object identity on output.
-- [ ] `tests/document-pipeline.test.ts`: a document over `MAX_DOCUMENT_BYTES` and a
+- [x] `tests/document-pipeline.test.ts`: a document over `MAX_DOCUMENT_BYTES` and a
       document over `MAX_NESTING_DEPTH` fail at stage 1.
-- [ ] `tests/document-pipeline.test.ts`: `expectedFamily` mismatch fails with
+- [x] `tests/document-pipeline.test.ts`: `expectedFamily` mismatch fails with
       `reason: 'family'`.
 
 ### Verification
 
-- [ ] `bun run check` passes.
-- [ ] `bun test` passes.
-- [ ] `bun run check:schemas` passes.
-- [ ] `bun run build` passes and the bundle still parses as ES2019.
-- [ ] `bun run check:compat` passes.
+- [x] `bun run check` passes.
+- [x] `bun test` passes.
+- [x] `bun run check:schemas` passes.
+- [x] `bun run build` passes and the bundle still parses as ES2019.
+- [x] `bun run check:compat` passes.
 
 ## Exit criteria
 
 Any byte string in the system reaches a typed document or a typed error through one
 function. No caller parses, version-checks, or migrates on its own.
+
+## Notes from implementation
+
+1. **ajv-formats v3 removed the `assertion` option.** The plan showed
+   `addFormats(ajv, { assertion: true })`. That option existed in v2 only. In
+   v3.0.1 `addFormat` registers each format as a validation keyword, so formats
+   assert by default. The code calls `addFormats(ajv, { keywords: false })`.
+   `keywords: false` keeps the optional `formatMaximum`/`formatMinimum` keywords
+   out of the validator, which matches the previous call surface. The test
+   `rejects a calendar-invalid Utc value that the Z pattern alone would accept`
+   proves the assertion holds. `scripts/validate-schemas.ts` changed the same way
+   so both validators register the same set.
+
+2. **`registerValidator(family, version, schema)` is the test seam.** It compiles
+   a schema, caches it, and raises that family's highest supported version when
+   the new version is higher. Tests register a v2 and v3 preferences schema this
+   way. No test schema lives under `schemas/`, so nothing test-only ships.
+   `resetValidatorsForTesting()` and `resetMigrationsForTesting()` restore the
+   shipped state between tests. Test schema `$id` values use the `repjot.test`
+   host so they never collide with a shipped `$id`.
+
+3. **Stage 1 splits across the two entry points.** The byte gate needs text and
+   lives in `processDocument`. The depth gate works on a parsed value and lives in
+   `processJson`, so both entry points enforce it and neither runs twice.
+
+4. **Bundle cost measured.** A probe build of the pipeline plus Ajv and
+   ajv-formats produced 175 kB minified. The current `dist/app.js` is 77 kB
+   because no app code imports the pipeline yet. Phase 20 owns the budget gate.
+   The bundle-size note in `schema-validator.ts` records the runtime `fetch`
+   escape hatch.
