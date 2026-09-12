@@ -1,0 +1,162 @@
+# Phase 07 — Authentication service and redirect adapter
+
+Move the proven Phase 0 authorization prototype into the production module layout and
+add the account binding, sign-out, and disconnect behavior on top of it.
+
+## Prerequisites
+
+- Phase 02 for `AppError` and the UTC helpers.
+- Phase 06 for the state stores and the diagnostic log.
+- `docs/PHASE-0-AUTHORIZATION-PROOF.md` records the behavior this phase must
+  preserve. Do not change the wire flow.
+- `VITE_GOOGLE_CLIENT_ID` set in `.env.local`.
+
+## Goals
+
+1. Split the prototype `src/google-identity.ts` into the adapter and the service.
+2. Keep the full-page implicit redirect, the 30-minute state, and the 60-second
+   credential-free receipt exactly as proven.
+3. Bind every token to its Drive permission ID before any private cache access.
+4. Implement sign out, disconnect with revocation, and expiry handling.
+
+## Interfaces
+
+### Files
+
+| Path | Purpose |
+| --- | --- |
+| `src/auth/oauth-redirect-adapter.ts` | Redirect construction, state records, callback parsing, receipts, fragment cleanup, token persistence. |
+| `src/auth/auth-service.ts` | Token lifecycle, account binding, remember choice, sign out, disconnect. |
+| `src/auth/storage-keys.ts` | The `sessionStorage` and `localStorage` key names. |
+| `src/google-identity.ts` | Deleted after the port. |
+
+### Signatures
+
+```ts
+// src/auth/oauth-redirect-adapter.ts
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+export const STATE_TTL_MS = 30 * 60 * 1000;
+export const RECEIPT_TTL_MS = 60 * 1000;
+
+export interface TokenRecord {
+  accessToken: string;
+  expiresAtUtc: string;
+  grantedScope: string;
+  accountKey: string | null;   // filled after binding
+}
+export interface CallbackResult {
+  kind: 'accepted' | 'duplicate' | 'invalid_state' | 'error';
+  token?: TokenRecord;
+  error?: string;              // safe code only, for example 'access_denied'
+}
+export function beginAuthorization(clientId: string, opts: { remember: boolean }): void;
+export function consumeCallback(nowMs?: number): CallbackResult;
+export function restoreToken(nowMs?: number): TokenRecord | null;
+export function saveToken(token: TokenRecord, remember: boolean): void;
+export function clearAllAuthState(): void;   // tokens, state records, receipts, account selection
+```
+
+```ts
+// src/auth/auth-service.ts
+export interface AuthSession { accessToken: string; accountKey: string; expiresAtUtc: string; }
+export function isSignedIn(): boolean;
+export function getSession(): AuthSession | null;
+export function restoreAndBind(deps: { bind: (t: string) => Promise<string> }): Promise<AuthSession | null>;
+export function signOut(): void;
+export function disconnect(deps: {
+  revoke: (t: string) => Promise<void>;
+  probeRejected: (t: string) => Promise<boolean>;
+}): Promise<{ kind: 'revoked' | 'revoke_failed' }>;
+export function millisecondsUntilExpiry(nowMs?: number): number;
+```
+
+### Storage rules
+
+| Choice | Store | Lifetime |
+| --- | --- | --- |
+| Remember unchecked | `sessionStorage` | Browser session. Cleared on tab close. |
+| Remember checked | `localStorage` | Until `expiresAtUtc`, then treated as absent. |
+
+The temporary OAuth state record lives in both stores for Kindle redirect
+continuity. It holds no token. The receipt holds a token fingerprint only, never the
+token itself.
+
+## Requirements traceability
+
+| Source | How this phase satisfies it |
+| --- | --- |
+| REQUIREMENTS 2.1, 2.2, 2.14 | Full-page redirect only. No popup, GIS, PKCE, code flow, or backend exchange. |
+| REQUIREMENTS 2.3 | The adapter requests `drive.appdata` and nothing else. |
+| REQUIREMENTS 2.4, 2.5 | 30-minute state in both storages. |
+| REQUIREMENTS 2.6 | `consumeCallback` accepts only a matching unexpired state. |
+| REQUIREMENTS 2.7, 2.8 | 60-second receipt. A duplicate is valid only with the exact accepted token. |
+| REQUIREMENTS 2.9, 2.10 | The remember choice selects the store and the exact expiry. |
+| REQUIREMENTS 2.11 | `restoreAndBind` binds before any private cache access. |
+| REQUIREMENTS 2.12 | `clearAllAuthState` clears token, state, receipt, and account selection. |
+| REQUIREMENTS 2.13 | `disconnect` revokes and confirms Drive rejects the token. |
+| REQUIREMENTS 14.2, 14.3, 14.4 | One OAuth client, HTTPS origins, non-sensitive scope only. |
+| ARCHITECTURE ADR-002, ADR-003, ADR-004 | Proven redirect flow, remember default off, permission-ID account binding. |
+| ARCHITECTURE §10 | The 14-step lifecycle maps to the adapter and service functions above. |
+
+## Checklist
+
+### Implementation
+
+- [ ] Create `src/auth/storage-keys.ts` with the key names for state, receipt,
+      session token, stored token, and selected account.
+- [ ] Port the redirect builder into `oauth-redirect-adapter.ts`. Keep
+      `response_type=token` and the single scope.
+- [ ] Port state creation, storage in both storages, TTL check, and matching.
+- [ ] Port the receipt logic. Store a fingerprint of the accepted token, not the token.
+- [ ] Port `consumeCallback`. Return the typed `CallbackResult` instead of throwing.
+- [ ] Port token persistence for the remember choice and the exact expiry check.
+- [ ] Add `clearAllAuthState()` covering every key in `storage-keys.ts`.
+- [ ] Create `auth-service.ts` with `restoreAndBind`, `signOut`, `disconnect`, and
+      `millisecondsUntilExpiry`. Inject the Drive calls so the service imports no
+      Drive module.
+- [ ] On expiry or a `401` signal, erase token state and set `activeError` with kind
+      `authentication`.
+- [ ] Delete `src/google-identity.ts` and update `src/main.ts` to the new imports.
+- [ ] Keep the URL fragment removal through `history.replaceState` before any private
+      data access.
+
+### Tests
+
+- [ ] `tests/oauth-redirect-adapter.test.ts`: a callback with an unknown or expired
+      `state` returns `kind: 'invalid_state'` and stores no token.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: a valid callback returns `accepted`
+      with `expiresAtUtc` computed from `expires_in`.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with the same token
+      inside the receipt window returns `duplicate` and reuses the stored token.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with a different
+      token is not accepted as a duplicate.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: remember unchecked writes
+      `sessionStorage` only. Remember checked writes `localStorage`.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: `restoreToken` returns `null` past
+      `expiresAtUtc` and erases the stored record.
+- [ ] `tests/oauth-redirect-adapter.test.ts`: `clearAllAuthState` leaves no key from
+      `storage-keys.ts` in either storage.
+- [ ] `tests/auth-service.test.ts`: `restoreAndBind` calls `bind` and stores the
+      returned account key before reporting a session.
+- [ ] `tests/auth-service.test.ts`: `disconnect` calls revoke, then the rejection
+      probe, and returns `revoked` only when the probe says rejected.
+- [ ] `tests/auth-service.test.ts`: a failed revoke returns `revoke_failed` and the UI
+      path links to Google Account connections.
+- [ ] Port the existing `tests/google-identity.test.ts` cases into the two new files.
+      Do not lose coverage of callback replay or account switching.
+
+### Verification
+
+- [ ] `bun run check` passes.
+- [ ] `bun test` passes with the ported Phase 0 cases included.
+- [ ] `bun run build` passes.
+- [ ] `bun run check:compat` passes and still finds the `drive.appdata` scope string.
+- [ ] Manual in `bun run dev`: sign in, reload, sign out, sign in with remember
+      checked, and confirm the storage location changes.
+- [ ] Physical Kindle smoke: redirect, callback replay, restore, and sign out still
+      work. This is risk R-02.
+
+## Exit criteria
+
+The app can sign in, restore, bind, expire, sign out, and disconnect through two
+modules. No other module touches `sessionStorage` or `localStorage` for auth.
