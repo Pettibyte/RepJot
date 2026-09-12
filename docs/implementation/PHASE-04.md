@@ -119,60 +119,111 @@ Nonfatal for stored results, reported as `UnresolvedResult`:
 
 ### Implementation
 
-- [ ] Create `src/validation/issues.ts` with `ValidationIssue`, `UnresolvedReason`,
+- [x] Create `src/validation/issues.ts` with `ValidationIssue`, `UnresolvedReason`,
       and `UnresolvedResult`.
-- [ ] Implement `validateStaticData`: schema already ran, so check duplicate node ID
+- [x] Implement `validateStaticData`: schema already ran, so check duplicate node ID
       within one workout and that each node `exerciseId` resolves.
-- [ ] Implement `validateSession` covering fatal checks 1–8 and 14–17.
-- [ ] Implement result-level checks 4–6, 8–9 inside the session walk.
-- [ ] Implement container checks 7, 10–13 using the current workout tree.
-- [ ] Implement `validateShard` and the shard-month agreement check.
-- [ ] Implement `validatePreferences` for unit compatibility against current exercise
+- [x] Implement `validateSession` covering fatal checks 1–8 and 14–17.
+- [x] Implement result-level checks 4–6, 8–9 inside the session walk.
+- [x] Implement container checks 7, 10–13 using the current workout tree.
+- [x] Implement `validateShard` and the shard-month agreement check.
+- [x] Implement `validatePreferences` for unit compatibility against current exercise
       measurements.
-- [ ] Implement the unresolved-reference pass that produces `UnresolvedResult`
+- [x] Implement the unresolved-reference pass that produces `UnresolvedResult`
       entries instead of issues.
-- [ ] Wire the semantic stage into `document-pipeline.ts` as an optional callback so
+- [x] Wire the semantic stage into `document-pipeline.ts` as an optional callback so
       callers that hold `StaticData` pass it.
-- [ ] Keep issue messages free of user note text, measurements, and file bodies.
+- [x] Keep issue messages free of user note text, measurements, and file bodies.
 
 ### Tests
 
-- [ ] `tests/semantic-static.test.ts`: duplicate node ID in one workout fails; the
+- [x] `tests/semantic-static.test.ts`: duplicate node ID in one workout fails; the
       same node ID in two workouts passes.
-- [ ] `tests/semantic-static.test.ts`: an unresolvable node `exerciseId` fails.
-- [ ] `tests/semantic-results.test.ts`: a key that does not match its value fails
+- [x] `tests/semantic-static.test.ts`: an unresolvable node `exerciseId` fails.
+- [x] `tests/semantic-results.test.ts`: a key that does not match its value fails
       with code `key_mismatch`.
-- [ ] `tests/semantic-results.test.ts`: an `in_progress` session with
+- [x] `tests/semantic-results.test.ts`: an `in_progress` session with
       `completedAtUtc` fails, and a `completed` session without it fails.
-- [ ] `tests/semantic-results.test.ts`: a session carrying `executionPlan` fails.
-- [ ] `tests/semantic-results.test.ts`: a shard whose `yearMonthUtc` disagrees with a
+- [x] `tests/semantic-results.test.ts`: a session carrying `executionPlan` fails.
+- [x] `tests/semantic-results.test.ts`: a shard whose `yearMonthUtc` disagrees with a
       session start month fails.
-- [ ] `tests/semantic-results.test.ts`: an alternating result without
+- [x] `tests/semantic-results.test.ts`: an alternating result without
       `startingSide` fails, and a `both` result with one fails.
-- [ ] `tests/semantic-results.test.ts`: a score type that mismatches the container
+- [x] `tests/semantic-results.test.ts`: a score type that mismatches the container
       `scoreType` fails, and `nonstandard` passes.
-- [ ] `tests/semantic-results.test.ts`: child detail under a `childDetail: "none"`
+- [x] `tests/semantic-results.test.ts`: child detail under a `childDetail: "none"`
       container fails.
-- [ ] `tests/semantic-results.test.ts`: standard detail that derives a different
+- [x] `tests/semantic-results.test.ts`: standard detail that derives a different
       aggregate fails; matching detail passes.
-- [ ] `tests/semantic-unresolved.test.ts`: unknown workout, unknown exercise, broken
+- [x] `tests/semantic-unresolved.test.ts`: unknown workout, unknown exercise, broken
       path, and path-exercise mismatch each produce one `UnresolvedResult` and zero
       fatal issues.
-- [ ] `tests/semantic-unresolved.test.ts`: one unresolved result leaves every other
+- [x] `tests/semantic-unresolved.test.ts`: one unresolved result leaves every other
       result in the same shard valid.
-- [ ] `tests/fixtures/semantic/` holds one valid shard plus one fixture per failing
+- [x] `tests/fixtures/semantic/` holds one valid shard plus one fixture per failing
       case, loaded by the tests above.
 
 ### Verification
 
-- [ ] `bun run check` passes.
-- [ ] `bun test` passes.
-- [ ] `bun run check:schemas` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
+- [x] `bun run check` passes.
+- [x] `bun test` passes.
+- [x] `bun run check:schemas` passes.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
 
 ## Exit criteria
 
 The pipeline can mark a stored result unresolved without failing, and can reject a
 malformed document with a path-addressed issue. No later layer re-implements these
 checks.
+
+## Notes from implementation
+
+1. **Check 13 derivation rules are set here, not upstream.** No spec states how
+   child detail rolls up into a container score. The rules now live in the
+   `deriveAndCompare` doc comment and are covered by tests:
+
+   | Score | Derivation |
+   | --- | --- |
+   | `cycles` | Iteration i counts when one completed child result sits at i. Present iterations must run 1..N with no gap. |
+   | `intervals` | `totalIntervals` must equal cycles x direct children. A slot is (iteration, direct-child position) in cycle-major order. Filled slots must form a prefix. |
+   | `rounds_and_reps` | A round is full when every leaf holds a completed result whose reps meet that leaf's prescribed reps. The next iteration may hold a partial round; its reps sum to `additionalReps`. Nothing may appear past it. |
+
+   A `rounds_and_reps` leaf that prescribes no reps is not deterministic, so the
+   derivation is skipped rather than guessed. A later UI phase that changes these
+   rules must change this table and the tests together.
+
+2. **Checks 19 and 20 live in a new `validateWorkoutSemantics(workouts, exercises)`.**
+   They need the exercise directory, and REQUIREMENTS 6.22 pins
+   `validateStaticData` to the three identity checks. The Phase 05 build gate MAY
+   call `validateWorkoutSemantics` as a second pass. The runtime does not.
+
+3. **`UnresolvedResult` is now a discriminated union on `kind`.** A preference
+   mapping has no session or result key, so it cannot share the result shape.
+   `kind: 'result'` carries the fields the plan fixed; `kind: 'preference'`
+   carries `exerciseId`, `dimension`, and `unit`. A bad unit choice degrades one
+   unit pill instead of rejecting the whole preferences document.
+
+4. **`validateSession` takes an optional `sessionKey`.** Check 17 compares the
+   `sessions` map key with the session `id`, which needs the key. A caller that
+   holds only the value omits it and skips that one check. `validateShard` always
+   passes it.
+
+5. **`validateShard` takes an optional `fileName`.** Check 20 also ties the Drive
+   file name to `yearMonthUtc`. The document carries no file name, so the caller
+   supplies it. Omitting it skips only that sub-check.
+
+6. **An unresolved result suppresses its own fatal checks.** `checkExerciseResult`
+   returns whether the reference resolved. The caller skips the child-detail rule
+   for an unresolved result, so one bad reference yields one diagnostic and no
+   stacked fatal issue. REQUIREMENTS 6.10.
+
+7. **Fixtures live in `tests/fixtures/semantic.ts`, not `tests/fixtures/semantic/`.**
+   This matches the existing `tests/fixtures/documents.ts` convention. The module
+   holds one valid shard plus builders the tests mutate through `clone()`.
+
+8. **Stage 9 is a caller-supplied callback.** `processDocument` and `processJson`
+   take an optional `SemanticStage` that runs after the final schema pass. The
+   pipeline stays free of `StaticData`. A callback that throws rejects the
+   document; one that returns normally lets it through, which is how a caller
+   keeps unresolved references nonfatal.

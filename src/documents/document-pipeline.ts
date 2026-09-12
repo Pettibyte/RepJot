@@ -34,6 +34,17 @@ export interface PipelineResult<T> {
 }
 
 /**
+ * Stage 9. The caller's semantic pass over a schema-valid current-version value.
+ *
+ * The pipeline stays free of `StaticData`: the caller closes over whatever it
+ * holds and throws to reject the document. A callback that returns normally lets
+ * the document through, so a caller that treats unresolved references as
+ * nonfatal simply does not throw for them.
+ * ARCHITECTURE section 14, Phase 04.
+ */
+export type SemanticStage = (document: unknown, family: DocFamily) => void;
+
+/**
  * Count UTF-8 bytes without building a byte array.
  *
  * Uses `TextEncoder` when the host provides one. The manual pass is the fallback
@@ -138,17 +149,19 @@ function assertNestingDepth(value: unknown): void {
  * Read a text document through the full pipeline.
  *
  * Stages: parse, envelope, family check, version gate, historical schema,
- * migrate, current schema, normalize.
+ * migrate, current schema, normalize, semantic.
  *
  * @param text The raw document text.
  * @param expectedFamily When set, the document must carry this family.
+ * @param semantic Stage 9. Runs last, over the current-version value.
  */
 export function processDocument<T = unknown>(
   text: string,
-  expectedFamily?: DocFamily
+  expectedFamily?: DocFamily,
+  semantic?: SemanticStage
 ): PipelineResult<T> {
   const parsed = parseWithByteLimit(text);
-  return processJson<T>(parsed, expectedFamily);
+  return processJson<T>(parsed, expectedFamily, semantic);
 }
 
 /**
@@ -157,10 +170,14 @@ export function processDocument<T = unknown>(
  *
  * Use this for a value a host API already parsed. Every text source uses
  * `processDocument` instead.
+ *
+ * @param semantic Stage 9. Runs after the final schema pass, so the callback sees
+ *        a schema-valid current-version value. Throw to reject the document.
  */
 export function processJson<T = unknown>(
   raw: unknown,
-  expectedFamily?: DocFamily
+  expectedFamily?: DocFamily,
+  semantic?: SemanticStage
 ): PipelineResult<T> {
   // Stage 1, depth gate. The byte gate needs text and lives in processDocument.
   assertNestingDepth(raw);
@@ -227,6 +244,12 @@ export function processJson<T = unknown>(
   validateAgainst(family, maxSupportedVersion, current);
 
   // Stage 8, normalize. The current-version document is the normalized view.
+  // Stage 9, semantic. The caller supplies the check, because only the caller
+  // holds the static data the checks need. A throw here rejects the document.
+  if (semantic !== undefined) {
+    semantic(current, family);
+  }
+
   return {
     document: current as T,
     family,
