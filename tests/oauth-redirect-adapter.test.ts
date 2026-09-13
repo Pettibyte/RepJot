@@ -10,6 +10,7 @@ import {
   hasCallbackFragment,
   hasStoredToken,
   isTokenRemembered,
+  peekStoredToken,
   restoreToken,
   saveToken,
   type TokenRecord
@@ -342,6 +343,45 @@ describe('token persistence', () => {
     const restored = restoreToken();
     expect(restored?.accessToken).toBe(first.accessToken);
     expect(restored?.expiresAtUtc).toBe(first.expiresAtUtc);
+  });
+
+  test('peekStoredToken reads a live record and writes nothing', () => {
+    const browser = installFakeBrowser();
+    const first = completeSignIn(browser, true);
+    const localLength = browser.localStorage.length;
+    const sessionLength = browser.sessionStorage.length;
+
+    const peeked = peekStoredToken();
+
+    expect(peeked?.accessToken).toBe(first.accessToken);
+    expect(browser.localStorage.length).toBe(localLength);
+    expect(browser.sessionStorage.length).toBe(sessionLength);
+  });
+
+  test('peekStoredToken prefers the sessionStorage record', () => {
+    const browser = installFakeBrowser();
+    saveToken(tokenWith('session-token', HOUR_MS), false);
+    browser.localStorage.setItem(LOCAL_TOKEN_KEY, JSON.stringify(tokenWith('local-token', HOUR_MS)));
+
+    expect(peekStoredToken()?.accessToken).toBe('session-token');
+    // The other record stays where it is. Two tabs can hold one record each.
+    expect(browser.localStorage.getItem(LOCAL_TOKEN_KEY)).not.toBeNull();
+  });
+
+  test('peekStoredToken returns null for an expired record and leaves it in place', () => {
+    const browser = installFakeBrowser();
+    browser.localStorage.setItem(LOCAL_TOKEN_KEY, JSON.stringify(tokenWith('dead-token', -HOUR_MS)));
+    const localLength = browser.localStorage.length;
+
+    expect(peekStoredToken()).toBeNull();
+    expect(browser.localStorage.length).toBe(localLength);
+  });
+
+  test('peekStoredToken skips a malformed record', () => {
+    const browser = installFakeBrowser();
+    browser.localStorage.setItem(LOCAL_TOKEN_KEY, 'not-json');
+
+    expect(peekStoredToken()).toBeNull();
   });
 
   test('restoreToken returns null past the exact expiry and erases the record', () => {

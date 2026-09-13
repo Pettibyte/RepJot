@@ -2,7 +2,7 @@
 
 Lightweight fitness journal tool. Works on not-so-modern browsers such as Kindle Scribe so you can log workouts on a distraction-free device.
 
-The current Svelte and TypeScript prototype implements the production authorization flow. It also stores a hello-world document in Google Drive `appDataFolder`.
+The current Svelte and TypeScript prototype implements the production authorization flow. Drive access runs through the `DriveAdapter` interface in `src/drive/`, which stores every user file in the Google Drive `appDataFolder`.
 
 Phase 0 authorization testing is complete on the physical Kindle. The flow supports callback replay, remembered and session-only tokens, exact expiry, account switching, sign-out, and grant revocation. See [`docs/PHASE-0-AUTHORIZATION-PROOF.md`](docs/PHASE-0-AUTHORIZATION-PROOF.md).
 

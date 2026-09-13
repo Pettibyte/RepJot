@@ -6,9 +6,9 @@
 //
 // This module imports no Drive module. The caller injects the Drive calls so the
 // service stays testable and the dependency direction stays one way. See
-// `src/auth/drive-operations.ts` for the injected implementations.
+// `src/drive/drive-rest-adapter.ts` for the injected implementations.
 
-import { AppError } from '../domain/errors';
+import { AppError, isAppError } from '../domain/errors';
 import { reportError } from '../state/app-state';
 import {
   clearAllAuthState,
@@ -48,18 +48,37 @@ export interface BindDependencies {
    *
    * A plain string is the `user.permissionId`. A `BoundAccount` also carries
    * the display name, so the screen does not send a second `about` request.
+   *
+   * Error contract: a Drive `401` arrives as `AppError` kind `authentication`
+   * with the status at `detail.status`. This service reads that status and
+   * erases the stored token. Any other rejection keeps the token for a retry.
+   * REQUIREMENTS 2.11, ARCHITECTURE §10 step 14.
    */
   bind: (accessToken: string) => Promise<string | BoundAccount>;
 }
 
 export interface DisconnectDependencies {
-  /** Send the token to Google's revocation endpoint. Reject when Google does not confirm. */
+  /**
+   * Send the token to Google's revocation endpoint and confirm the revocation.
+   *
+   * Resolve only when the token is no longer accepted. Reject when Google does
+   * not confirm. The adapter's `revokeToken` already polls Drive until Drive
+   * answers `401`, so this service performs no second probe. A probe after a
+   * confirmed revocation would report failure for a revocation that worked.
+   * REQUIREMENTS 2.13.
+   */
   revoke: (accessToken: string) => Promise<void>;
-  /** Return `true` only when Drive rejects the token. */
-  probeRejected: (accessToken: string) => Promise<boolean>;
 }
 
 let boundSession: AuthSession | null = null;
+
+/**
+ * Link the UI shows when Google does not confirm a revocation.
+ *
+ * The user revokes from there. REP JOT keeps its local state so the disconnect
+ * can be retried or completed by hand. REQUIREMENTS 2.13.
+ */
+export const GOOGLE_ACCOUNT_CONNECTIONS_URL = 'https://myaccount.google.com/connections';
 
 /** True when this page holds a bound session. */
 export function isSignedIn(): boolean {
@@ -144,11 +163,12 @@ export function signOut(): void {
 }
 
 /**
- * Revoke the grant at Google, then confirm that Drive rejects the token.
+ * Revoke the grant at Google and clear local state once the revoke confirms.
  *
- * REQUIREMENTS 2.13. Local state clears only after Google confirms. A failed
- * revocation keeps the session and reports the failure so the UI can link to
- * Google Account connections.
+ * REQUIREMENTS 2.13. Local state clears only after the injected revoke step
+ * confirms that the token is dead. A failed or unconfirmed revocation keeps the
+ * session and reports the failure so the UI can link to Google Account
+ * connections.
  */
 export async function disconnect(deps: DisconnectDependencies): Promise<DisconnectResult> {
   const accessToken: string | null =
@@ -162,13 +182,9 @@ export async function disconnect(deps: DisconnectDependencies): Promise<Disconne
 
   try {
     await deps.revoke(accessToken);
-    if ((await deps.probeRejected(accessToken)) === true) {
-      clearAllAuthState();
-      boundSession = null;
-      return { kind: 'revoked' };
-    }
-    reportRevokeFailure();
-    return { kind: 'revoke_failed' };
+    clearAllAuthState();
+    boundSession = null;
+    return { kind: 'revoked' };
   } catch (error: unknown) {
     if (httpStatusOf(error) === 401) {
       clearAllAuthState();
@@ -252,11 +268,16 @@ function reportRevokeFailure(): void {
 /**
  * Read an HTTP status from an injected dependency error.
  *
- * The service does not import the Drive module, so it reads the status field
- * structurally instead of by class.
+ * The service does not import the Drive module, so it reads the status
+ * structurally instead of by class. The Drive adapter throws `AppError` and
+ * carries the status at `detail.status`. A plain thrown object with a
+ * top-level `status` is read too, so any injected dependency can report one.
+ * ARCHITECTURE §10 step 14.
  */
 function httpStatusOf(error: unknown): number | null {
   if (typeof error !== 'object' || error === null) return null;
-  const status = (error as { status?: unknown }).status;
+  const status: unknown = isAppError(error)
+    ? error.detail.status
+    : (error as { status?: unknown }).status;
   return typeof status === 'number' ? status : null;
 }

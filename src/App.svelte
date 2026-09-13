@@ -1,35 +1,24 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import {
-    createHelloWorld,
-    deleteHelloWorld,
-    DriveHttpError,
-    findHelloWorldFile,
-    readHelloWorld,
-    updateHelloWorld,
-    type DriveAccount,
-    type HelloWorldDocument
-  } from './google-drive';
-  import {
-    beginAuthorization,
-    hasStoredToken,
-    isTokenRemembered,
-    type CallbackResult
-  } from './auth/oauth-redirect-adapter';
-  import {
+    GOOGLE_ACCOUNT_CONNECTIONS_URL,
     disconnect as disconnectAccount,
     expireSession,
     millisecondsUntilExpiry,
     restoreAndBind,
+    getSession,
     signOut as clearDeviceSession,
     type AuthSession
   } from './auth/auth-service';
   import {
-    bindAccountWithProfile,
-    GOOGLE_ACCOUNT_CONNECTIONS_URL,
-    probeRejected,
-    revokeToken
-  } from './auth/drive-operations';
+    beginAuthorization,
+    hasStoredToken,
+    isTokenRemembered,
+    peekStoredToken,
+    type CallbackResult
+  } from './auth/oauth-redirect-adapter';
+  import { createDriveRestAdapter } from './drive/drive-rest-adapter';
+  import type { DriveAccountProfile } from './drive/drive-interface';
   import { activeError, clearError } from './state/app-state';
 
   export let initialCallback: CallbackResult | null = null;
@@ -37,14 +26,20 @@
   const clientId: string = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
   const configured: boolean = clientId.length > 0 && !clientId.startsWith('YOUR_CLIENT_ID');
 
+  // One Drive adapter for the page. It reads the access token from the live
+  // session on every call, so a refreshed or cleared token takes effect at once
+  // and nothing here holds a copy. The fallback reader is pure: a per-call
+  // getter never writes to browser storage. ARCHITECTURE §14.
+  const drive = createDriveRestAdapter(
+    () => getSession()?.accessToken ?? peekStoredToken()?.accessToken ?? null
+  );
+
   let session: AuthSession | null = null;
-  let account: DriveAccount | null = null;
+  let account: DriveAccountProfile | null = null;
   // True when a live token record sits in browser storage. The view keys off this,
   // not off `session`, so a token that failed to bind still exposes a way to
   // erase it. REQUIREMENTS 2.12.
   let storedToken: boolean = hasStoredToken();
-  let fileId: string | null = null;
-  let helloWorld = 'Hello, world!';
   let remember = false;
   let busy = false;
   let showRevocationFallback = false;
@@ -68,7 +63,6 @@
     clearExpiryTimer();
     session = null;
     account = null;
-    fileId = null;
     busy = false;
     storedToken = hasStoredToken();
     status = message;
@@ -88,28 +82,6 @@
     }, delay);
   }
 
-  function handleDriveError(error: unknown): void {
-    if (error instanceof DriveHttpError && error.status === 401) {
-      expireSession('unauthorized');
-      clearView('Google access expired. Sign in to REP JOT again.');
-      return;
-    }
-    status = `Error: ${errorMessage(error)}`;
-  }
-
-  async function loadFromDrive(token: string): Promise<void> {
-    const file = await findHelloWorldFile(token);
-    if (file === null) {
-      fileId = null;
-      status = 'Authorized. No saved prototype document exists.';
-    } else {
-      fileId = file.id;
-      const document: HelloWorldDocument = await readHelloWorld(token, file.id);
-      helloWorld = document.helloWorld;
-      status = 'Authorized and loaded from Google Drive.';
-    }
-  }
-
   async function afterSignedIn(current: AuthSession): Promise<void> {
     session = current;
     account = {
@@ -119,15 +91,7 @@
     storedToken = true;
     remember = isTokenRemembered();
     startExpiryTimer();
-    busy = true;
-    status = 'Loading the prototype document from Google Drive…';
-    try {
-      await loadFromDrive(current.accessToken);
-    } catch (error: unknown) {
-      handleDriveError(error);
-    } finally {
-      busy = false;
-    }
+    status = 'Authorized.';
   }
 
   async function restore(fallbackMessage: string = 'Sign in to REP JOT with Google.'): Promise<void> {
@@ -137,14 +101,18 @@
     busy = true;
     status = 'Restoring your REP JOT session…';
     try {
-      const restored = await restoreAndBind({ bind: bindAccountWithProfile });
+      const restored = await restoreAndBind({ bind: () => drive.getAccountProfile() });
       if (restored === null) {
         clearView(fallbackMessage);
         return;
       }
       await afterSignedIn(restored);
     } catch (error: unknown) {
-      handleDriveError(error);
+      // Safety net only. `restoreAndBind` catches every throw, reports through
+      // the shared `activeError` store, and returns `null`, so this branch does
+      // not run in normal flow. It shows the message and keeps the stored
+      // token; it never wipes authorization state on its own.
+      clearView(`Error: ${errorMessage(error)}`);
     }
   }
 
@@ -205,48 +173,15 @@
 
   onDestroy(clearExpiryTimer);
 
-  async function save(): Promise<void> {
-    if (session === null || account === null) return;
-    busy = true;
-    status = 'Saving to Google Drive…';
-    try {
-      const document: HelloWorldDocument = { helloWorld };
-      if (fileId === null) {
-        const file = await createHelloWorld(session.accessToken, document);
-        fileId = file.id;
-      } else {
-        await updateHelloWorld(session.accessToken, fileId, document);
-      }
-      status = 'Saved to Google Drive.';
-    } catch (error: unknown) {
-      handleDriveError(error);
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function remove(): Promise<void> {
-    if (session === null || fileId === null) return;
-    busy = true;
-    status = 'Deleting from Google Drive…';
-    try {
-      await deleteHelloWorld(session.accessToken, fileId);
-      fileId = null;
-      status = 'Deleted from Google Drive.';
-    } catch (error: unknown) {
-      handleDriveError(error);
-    } finally {
-      busy = false;
-    }
-  }
-
   async function disconnect(): Promise<void> {
     if (session === null || account === null) return;
     busy = true;
     showRevocationFallback = false;
     status = 'Asking Google to revoke REP JOT access…';
     try {
-      const result = await disconnectAccount({ revoke: revokeToken, probeRejected });
+      const result = await disconnectAccount({
+        revoke: (token: string): Promise<void> => drive.revokeToken(token)
+      });
       if (result.kind === 'revoked') {
         clearView('Google confirmed the revocation. REP JOT is disconnected.');
       } else {
@@ -296,11 +231,6 @@
         <dd>{session?.expiresAtUtc}</dd>
       </dl>
     </section>
-
-    <label for="hello-world">Prototype text</label>
-    <input id="hello-world" bind:value={helloWorld} disabled={busy} />
-    <button type="button" onclick={save} disabled={busy}>Save to Google Drive</button>
-    <button type="button" onclick={remove} disabled={busy || fileId === null}>Delete from Google Drive</button>
 
     <h2>Authorization actions</h2>
     <button type="button" onclick={switchAccount} disabled={busy}>Switch Google account</button>

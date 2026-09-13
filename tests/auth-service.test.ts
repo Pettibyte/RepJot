@@ -22,10 +22,18 @@ import {
   SESSION_TOKEN_KEY
 } from '../src/auth/storage-keys';
 import { activeError, clearError } from '../src/state/app-state';
+import { AppError } from '../src/domain/errors';
+import { createDriveRestAdapter } from '../src/drive/drive-rest-adapter';
 import { installFakeBrowser, uninstallFakeBrowser, type FakeBrowser } from './support/fake-browser';
 
 const HOUR_MS = 3_600_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/** Fetch stub that answers every call with one fixed response. */
+function fixedFetch(status: number): typeof fetch {
+  return (async (): Promise<Response> =>
+    new Response('{}', { status })) as unknown as typeof fetch;
+}
 
 function unboundToken(hours = 1): TokenRecord {
   return {
@@ -223,7 +231,7 @@ describe('sign out', () => {
 });
 
 describe('disconnect', () => {
-  test('disconnect revokes, probes, and clears state only when Drive rejects the token', async () => {
+  test('disconnect clears state when the revoke confirms', async () => {
     const browser = installFakeBrowser();
     saveToken(unboundToken(), true);
     await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
@@ -232,27 +240,24 @@ describe('disconnect', () => {
     const result = await disconnect({
       revoke: async (token: string): Promise<void> => {
         order.push(`revoke:${token}`);
-      },
-      probeRejected: async (token: string): Promise<boolean> => {
-        order.push(`probe:${token}`);
-        return true;
       }
     });
 
     expect(result.kind).toBe('revoked');
-    expect(order).toEqual(['revoke:a-token', 'probe:a-token']);
+    expect(order).toEqual(['revoke:a-token']);
     expect(authKeysEmpty(browser)).toBe(true);
     expect(getSession()).toBeNull();
   });
 
-  test('a probe that says the token still works returns revoke_failed and keeps the session', async () => {
+  test('an unconfirmed revoke returns revoke_failed and keeps the session', async () => {
     const browser = installFakeBrowser();
     saveToken(unboundToken(), true);
     await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
 
     const result = await disconnect({
-      revoke: async (): Promise<void> => undefined,
-      probeRejected: async (): Promise<boolean> => false
+      revoke: async (): Promise<void> => {
+        throw new Error('Google did not confirm that it revoked access.');
+      }
     });
 
     expect(result.kind).toBe('revoke_failed');
@@ -265,21 +270,31 @@ describe('disconnect', () => {
     const browser = installFakeBrowser();
     saveToken(unboundToken(), false);
     await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
-    let probeCalls = 0;
 
     const result = await disconnect({
       revoke: async (): Promise<void> => {
         throw new Error('Google did not confirm that it revoked access.');
-      },
-      probeRejected: async (): Promise<boolean> => {
-        probeCalls += 1;
-        return true;
       }
     });
 
     expect(result.kind).toBe('revoke_failed');
-    expect(probeCalls).toBe(0);
     expect(browser.sessionStorage.getItem(SESSION_TOKEN_KEY)).not.toBeNull();
+  });
+
+  test('a revoke that reports a 401 clears the state', async () => {
+    const browser = installFakeBrowser();
+    saveToken(unboundToken(), true);
+    await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
+
+    const result = await disconnect({
+      revoke: async (): Promise<void> => {
+        throw new AppError('authentication', { status: 401 }, 'Google rejected the access token.');
+      }
+    });
+
+    expect(result.kind).toBe('revoked');
+    expect(authKeysEmpty(browser)).toBe(true);
+    expect(getSession()).toBeNull();
   });
 
   test('disconnect works from a stored token with no bound session', async () => {
@@ -290,13 +305,90 @@ describe('disconnect', () => {
     const result = await disconnect({
       revoke: async (token: string): Promise<void> => {
         revoked = token;
-      },
-      probeRejected: async (): Promise<boolean> => true
+      }
     });
 
     expect(result.kind).toBe('revoked');
     expect(revoked).toBe('a-token');
     expect(authKeysEmpty(browser)).toBe(true);
+  });
+});
+
+// The stub-based tests above pin the flow with a hand-made error. These wire the
+// real adapter behind a fetch stub, so the error shape the adapter actually
+// throws is the one under test. ARCHITECTURE §10 step 14.
+describe('real adapter integration', () => {
+  test('a real adapter 401 during bind erases the stored token', async () => {
+    const browser = installFakeBrowser();
+    saveToken(unboundToken(), true);
+    const adapter = createDriveRestAdapter(() => 'a-token', { fetchImpl: fixedFetch(401) });
+
+    const session = await restoreAndBind({ bind: () => adapter.getAccountProfile() });
+
+    expect(session).toBeNull();
+    expect(browser.localStorage.getItem(LOCAL_TOKEN_KEY)).toBeNull();
+    expect(browser.sessionStorage.getItem(SESSION_TOKEN_KEY)).toBeNull();
+    expect(get(activeError)?.kind).toBe('authentication');
+    expect(get(activeError)?.detail.reason).toBe('unauthorized');
+  });
+
+  test('a real adapter bind stores the account key and reports a session', async () => {
+    saveToken(unboundToken(), false);
+    const fetchImpl = (async (): Promise<Response> =>
+      new Response(
+        JSON.stringify({ user: { permissionId: 'permission-7', displayName: 'Ada' } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )) as unknown as typeof fetch;
+    const adapter = createDriveRestAdapter(() => 'a-token', { fetchImpl });
+
+    const session = await restoreAndBind({ bind: () => adapter.getAccountProfile() });
+
+    expect(session?.accountKey).toBe('permission-7');
+    expect(session?.displayName).toBe('Ada');
+  });
+
+  test('a real adapter network failure keeps the token for a retry', async () => {
+    const browser = installFakeBrowser();
+    saveToken(unboundToken(), false);
+    const fetchImpl = (async (): Promise<Response> => {
+      throw new TypeError('offline');
+    }) as unknown as typeof fetch;
+    const adapter = createDriveRestAdapter(() => 'a-token', { fetchImpl });
+
+    const session = await restoreAndBind({ bind: () => adapter.getAccountProfile() });
+
+    expect(session).toBeNull();
+    expect(browser.sessionStorage.getItem(SESSION_TOKEN_KEY)).not.toBeNull();
+    expect(get(activeError)?.detail.stage).toBe('bind');
+  });
+
+  test('disconnect through the real adapter clears state once Drive rejects', async () => {
+    const browser = installFakeBrowser();
+    saveToken(unboundToken(), true);
+    await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
+    const adapter = createDriveRestAdapter(() => 'a-token', { fetchImpl: fixedFetch(401) });
+
+    const result = await disconnect({ revoke: (token: string) => adapter.revokeToken(token) });
+
+    expect(result.kind).toBe('revoked');
+    expect(authKeysEmpty(browser)).toBe(true);
+    expect(getSession()).toBeNull();
+  });
+
+  test('disconnect through the real adapter reports failure when the revoke is unconfirmed', async () => {
+    const browser = installFakeBrowser();
+    saveToken(unboundToken(), true);
+    await restoreAndBind({ bind: async (): Promise<string> => 'permission-1' });
+    const adapter = createDriveRestAdapter(() => 'a-token', {
+      fetchImpl: fixedFetch(200),
+      revokeTimeoutMs: 10
+    });
+
+    const result = await disconnect({ revoke: (token: string) => adapter.revokeToken(token) });
+
+    expect(result.kind).toBe('revoke_failed');
+    expect(browser.localStorage.getItem(LOCAL_TOKEN_KEY)).not.toBeNull();
+    expect(getSession()).not.toBeNull();
   });
 });
 

@@ -5,7 +5,7 @@
 // the redirect request, the request-state records, the callback receipt, the
 // token records, and the fragment cleanup. It talks to no network service. The
 // account binding and the revocation calls live in `auth-service.ts` and
-// `drive-operations.ts`.
+// `src/drive/drive-rest-adapter.ts`.
 //
 // The wire flow is the one proven in Phase 0. Do not change it. See
 // `docs/PHASE-0-AUTHORIZATION-PROOF.md`.
@@ -445,7 +445,7 @@ export function consumeCallback(nowMs: number = Date.now()): CallbackResult {
 }
 
 /**
- * Read the stored token and drop it when it passed its exact expiry.
+ * Read the live token record and drop it when it cannot be used.
  *
  * REQUIREMENTS 2.10. Returns `null` for an absent, malformed, or expired record
  * and erases the record in every case where it cannot be used.
@@ -459,6 +459,23 @@ export function restoreToken(nowMs: number = Date.now()): TokenRecord | null {
     removeKeyEverywhere(SELECTED_ACCOUNT_KEY);
   }
   return record;
+}
+
+/**
+ * Read the live token record without writing anything.
+ *
+ * `restoreToken` cleans up state it finds unusable, so it writes to browser
+ * storage. A value read on every Drive call must not write, because a getter
+ * that mutates storage is a trap for its callers. This reader only reads, and
+ * skips a record past its expiry the same way `restoreToken` does.
+ * REQUIREMENTS 2.10.
+ */
+export function peekStoredToken(nowMs: number = Date.now()): TokenRecord | null {
+  const sessionValue = parseJson(window.sessionStorage.getItem(SESSION_TOKEN_KEY));
+  const localValue = parseJson(window.localStorage.getItem(LOCAL_TOKEN_KEY));
+  if (isLiveTokenRecord(sessionValue, nowMs)) return sessionValue;
+  if (isLiveTokenRecord(localValue, nowMs)) return localValue;
+  return null;
 }
 
 function clearStateRecords(): void {

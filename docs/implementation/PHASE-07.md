@@ -51,7 +51,8 @@ export interface CallbackResult {
 }
 export function beginAuthorization(clientId: string, opts: { remember: boolean }): void;
 export function consumeCallback(nowMs?: number): CallbackResult;
-export function restoreToken(nowMs?: number): TokenRecord | null;
+export function restoreToken(nowMs?: number): TokenRecord | null;  // drops records it cannot use
+export function peekStoredToken(nowMs?: number): TokenRecord | null; // read-only, safe in a getter
 export function saveToken(token: TokenRecord, remember: boolean): void;
 export function clearAllAuthState(): void;   // tokens, state records, receipts, account selection
 ```
@@ -64,8 +65,7 @@ export function getSession(): AuthSession | null;
 export function restoreAndBind(deps: { bind: (t: string) => Promise<string> }): Promise<AuthSession | null>;
 export function signOut(): void;
 export function disconnect(deps: {
-  revoke: (t: string) => Promise<void>;
-  probeRejected: (t: string) => Promise<boolean>;
+  revoke: (t: string) => Promise<void>;   // resolves only once the token is dead
 }): Promise<{ kind: 'revoked' | 'revoke_failed' }>;
 export function millisecondsUntilExpiry(nowMs?: number): number;
 ```
@@ -138,8 +138,11 @@ token itself.
       `storage-keys.ts` in either storage.
 - [x] `tests/auth-service.test.ts`: `restoreAndBind` calls `bind` and stores the
       returned account key before reporting a session.
-- [x] `tests/auth-service.test.ts`: `disconnect` calls revoke, then the rejection
-      probe, and returns `revoked` only when the probe says rejected.
+- [x] `tests/auth-service.test.ts`: `disconnect` returns `revoked` when the revoke
+      confirms, and `revoke_failed` when it does not. Phase 08 dropped the second
+      rejection probe because the adapter's `revokeToken` already polls Drive until
+      Drive answers `401`. A probe after a confirmed revocation reported failure
+      for a revocation that worked.
 - [x] `tests/auth-service.test.ts`: a failed revoke returns `revoke_failed` and the UI
       path links to Google Account connections.
 - [x] Port the existing `tests/google-identity.test.ts` cases into the two new files.
