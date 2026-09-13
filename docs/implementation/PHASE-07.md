@@ -102,59 +102,63 @@ token itself.
 
 ### Implementation
 
-- [ ] Create `src/auth/storage-keys.ts` with the key names for state, receipt,
+- [x] Create `src/auth/storage-keys.ts` with the key names for state, receipt,
       session token, stored token, and selected account.
-- [ ] Port the redirect builder into `oauth-redirect-adapter.ts`. Keep
+- [x] Port the redirect builder into `oauth-redirect-adapter.ts`. Keep
       `response_type=token` and the single scope.
-- [ ] Port state creation, storage in both storages, TTL check, and matching.
-- [ ] Port the receipt logic. Store a fingerprint of the accepted token, not the token.
-- [ ] Port `consumeCallback`. Return the typed `CallbackResult` instead of throwing.
-- [ ] Port token persistence for the remember choice and the exact expiry check.
-- [ ] Add `clearAllAuthState()` covering every key in `storage-keys.ts`.
-- [ ] Create `auth-service.ts` with `restoreAndBind`, `signOut`, `disconnect`, and
+- [x] Port state creation, storage in both storages, TTL check, and matching.
+- [x] Port the receipt logic. Store a fingerprint of the accepted token, not the token.
+- [x] Port `consumeCallback`. Return the typed `CallbackResult` instead of throwing.
+- [x] Port token persistence for the remember choice and the exact expiry check.
+- [x] Add `clearAllAuthState()` covering every key in `storage-keys.ts`.
+- [x] Create `auth-service.ts` with `restoreAndBind`, `signOut`, `disconnect`, and
       `millisecondsUntilExpiry`. Inject the Drive calls so the service imports no
       Drive module.
-- [ ] On expiry or a `401` signal, erase token state and set `activeError` with kind
+- [x] On expiry or a `401` signal, erase token state and set `activeError` with kind
       `authentication`.
-- [ ] Delete `src/google-identity.ts` and update `src/main.ts` to the new imports.
-- [ ] Keep the URL fragment removal through `history.replaceState` before any private
+- [x] Delete `src/google-identity.ts` and update `src/main.ts` to the new imports.
+- [x] Keep the URL fragment removal through `history.replaceState` before any private
       data access.
 
 ### Tests
 
-- [ ] `tests/oauth-redirect-adapter.test.ts`: a callback with an unknown or expired
+- [x] `tests/oauth-redirect-adapter.test.ts`: a callback with an unknown or expired
       `state` returns `kind: 'invalid_state'` and stores no token.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: a valid callback returns `accepted`
+- [x] `tests/oauth-redirect-adapter.test.ts`: a valid callback returns `accepted`
       with `expiresAtUtc` computed from `expires_in`.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with the same token
+- [x] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with the same token
       inside the receipt window returns `duplicate` and reuses the stored token.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with a different
+- [x] `tests/oauth-redirect-adapter.test.ts`: a repeated callback with a different
       token is not accepted as a duplicate.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: remember unchecked writes
+- [x] `tests/oauth-redirect-adapter.test.ts`: remember unchecked writes
       `sessionStorage` only. Remember checked writes `localStorage`.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: `restoreToken` returns `null` past
+- [x] `tests/oauth-redirect-adapter.test.ts`: `restoreToken` returns `null` past
       `expiresAtUtc` and erases the stored record.
-- [ ] `tests/oauth-redirect-adapter.test.ts`: `clearAllAuthState` leaves no key from
+- [x] `tests/oauth-redirect-adapter.test.ts`: `clearAllAuthState` leaves no key from
       `storage-keys.ts` in either storage.
-- [ ] `tests/auth-service.test.ts`: `restoreAndBind` calls `bind` and stores the
+- [x] `tests/auth-service.test.ts`: `restoreAndBind` calls `bind` and stores the
       returned account key before reporting a session.
-- [ ] `tests/auth-service.test.ts`: `disconnect` calls revoke, then the rejection
+- [x] `tests/auth-service.test.ts`: `disconnect` calls revoke, then the rejection
       probe, and returns `revoked` only when the probe says rejected.
-- [ ] `tests/auth-service.test.ts`: a failed revoke returns `revoke_failed` and the UI
+- [x] `tests/auth-service.test.ts`: a failed revoke returns `revoke_failed` and the UI
       path links to Google Account connections.
-- [ ] Port the existing `tests/google-identity.test.ts` cases into the two new files.
+- [x] Port the existing `tests/google-identity.test.ts` cases into the two new files.
       Do not lose coverage of callback replay or account switching.
 
 ### Verification
 
-- [ ] `bun run check` passes.
-- [ ] `bun test` passes with the ported Phase 0 cases included.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes and still finds the `drive.appdata` scope string.
+- [x] `bun run check` passes.
+- [x] `bun test` passes with the ported Phase 0 cases included.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes and still finds the `drive.appdata` scope string.
 - [ ] Manual in `bun run dev`: sign in, reload, sign out, sign in with remember
       checked, and confirm the storage location changes.
 - [ ] Physical Kindle smoke: redirect, callback replay, restore, and sign out still
       work. This is risk R-02.
+
+The last two checks need a Google test account and a physical Kindle, so they stay
+open until the next device pass. The automated gates above cover the same
+behavior against an in-memory browser.
 
 ## Exit criteria
 

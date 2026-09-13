@@ -1,0 +1,320 @@
+{
+  "format": "repjot/workouts",
+  "schemaVersion": 1,
+  "workouts": [
+    {
+      "id": "strength-and-cindy",
+      "name": "Strength and Cindy",
+      "notes": "Heavy triples and a bench block, then the Cindy benchmark AMRAP.",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "squat-block",
+            "type": "container",
+            "name": "Back Squat",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 3 },
+            "children": [
+              {
+                "id": "back-squat-set",
+                "type": "exercise",
+                "exerciseId": "Barbell_Squat",
+                "stimulus": "strength",
+                "setType": "working",
+                "prescription": {
+                  "reps": 3,
+                  "loadStrategy": {
+                    "type": "ascending"
+                  },
+                  "iterations": [
+                    { "iteration": 1, "reps": 5, "weight": { "value": 80, "unit": "kg" } },
+                    { "iteration": 2, "weight": { "value": 90, "unit": "kg" } },
+                    { "iteration": 3, "weight": { "value": 100, "unit": "kg" } }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "bench-block",
+            "type": "container",
+            "name": "Bench Press",
+            "strategy": "rounds",
+            "strategyConfig": { "rounds": 4 },
+            "children": [
+              {
+                "id": "bench-set",
+                "type": "exercise",
+                "exerciseId": "Barbell_Bench_Press_-_Medium_Grip",
+                "stimulus": "hypertrophy",
+                "setType": "working",
+                "prescription": {
+                  "reps": 8,
+                  "weight": { "value": 60, "unit": "kg" },
+                  "effort": { "type": "rir", "target": 2 },
+                  "iterations": [
+                    { "iteration": 4, "reps": 5, "effort": { "type": "failure" } }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "cindy",
+            "type": "container",
+            "name": "Cindy",
+            "strategy": "amrap",
+            "strategyConfig": { "duration": { "value": 20, "unit": "minute" } },
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "rounds_and_reps",
+              "childDetail": "optional"
+            },
+            "benchmark": { "name": "Cindy", "organization": "CrossFit" },
+            "children": [
+              {
+                "id": "cindy-pull-ups",
+                "type": "exercise",
+                "exerciseId": "Pullups",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 5 }
+              },
+              {
+                "id": "cindy-push-ups",
+                "type": "exercise",
+                "exerciseId": "Pushups",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 10 }
+              },
+              {
+                "id": "cindy-air-squats",
+                "type": "exercise",
+                "exerciseId": "Bodyweight_Squat",
+                "stimulus": "conditioning",
+                "prescription": { "reps": 15 }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "emom-conditioning",
+      "name": "EMOM Conditioning",
+      "notes": "Four minutes per cycle of work. One exercise fills each interval.",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "name": "Every minute on the minute",
+        "strategy": "emom",
+        "strategyConfig": {
+          "cycles": 4,
+          "interval": { "value": 1, "unit": "minute" }
+        },
+        "resultCapture": {
+          "mode": "scored",
+          "scoreType": "intervals",
+          "childDetail": "optional"
+        },
+        "children": [
+          {
+            "id": "emom-swings",
+            "type": "exercise",
+            "exerciseId": "One-Arm_Kettlebell_Swings",
+            "stimulus": "conditioning",
+            "prescription": {
+              "reps": 15,
+              "weight": { "value": 16, "unit": "kg" }
+            }
+          },
+          {
+            "id": "emom-row",
+            "type": "exercise",
+            "exerciseId": "Rowing_Stationary",
+            "stimulus": "conditioning",
+            "prescription": { "distance": { "value": 250, "unit": "m" } }
+          },
+          {
+            "id": "emom-rope",
+            "type": "exercise",
+            "exerciseId": "Rope_Jumping",
+            "stimulus": "conditioning",
+            "prescription": { "duration": { "value": 40, "unit": "second" } }
+          },
+          {
+            "id": "emom-knee-tucks",
+            "type": "exercise",
+            "exerciseId": "Knee_Tuck_Jump",
+            "stimulus": "power",
+            "prescription": { "reps": 10 }
+          }
+        ]
+      }
+    },
+    {
+      "id": "kb-complex",
+      "name": "Kettlebell Complex",
+      "notes": "One unit of work per cycle. The complex score is the record; components log nothing.",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "name": "Complex",
+        "strategy": "complex",
+        "strategyConfig": { "cycles": 4 },
+        "resultCapture": {
+          "mode": "scored",
+          "scoreType": "cycles",
+          "childDetail": "none"
+        },
+        "children": [
+          {
+            "id": "complex-weighted-pull-ups",
+            "type": "exercise",
+            "exerciseId": "Weighted_Pull_Ups",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 5,
+              "addedWeight": { "value": 20, "unit": "kg" }
+            }
+          },
+          {
+            "id": "complex-halo",
+            "type": "exercise",
+            "exerciseId": "Kettlebell_Halo",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 8,
+              "weight": { "value": 16, "unit": "kg" }
+            }
+          },
+          {
+            "id": "complex-rows",
+            "type": "exercise",
+            "exerciseId": "Alternating_Kettlebell_Row",
+            "stimulus": "hypertrophy",
+            "setType": "working",
+            "prescription": {
+              "reps": 8,
+              "weight": { "value": 16, "unit": "kg" }
+            }
+          },
+          {
+            "id": "complex-push-press",
+            "type": "exercise",
+            "exerciseId": "Double_Kettlebell_Push_Press",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 6,
+              "weight": { "value": 12, "unit": "kg" }
+            }
+          },
+          {
+            "id": "complex-assisted-pull-ups",
+            "type": "exercise",
+            "exerciseId": "Band_Assisted_Pull-Up",
+            "stimulus": "strength",
+            "setType": "working",
+            "prescription": {
+              "reps": 8,
+              "assistedWeight": { "value": 25, "unit": "kg" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "warmup-mobility",
+      "name": "Warmup And Mobility",
+      "notes": "Two nested sequences: a mobility flow, then light activation.",
+      "root": {
+        "id": "root",
+        "type": "container",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "mobility-flow",
+            "type": "container",
+            "name": "Mobility Flow",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "worlds-greatest-stretch",
+                "type": "exercise",
+                "exerciseId": "Worlds_Greatest_Stretch",
+                "stimulus": "mobility",
+                "setType": "warmup",
+                "prescription": { "duration": { "value": 30, "unit": "second" } }
+              },
+              {
+                "id": "cat-stretch",
+                "type": "exercise",
+                "exerciseId": "Cat_Stretch",
+                "stimulus": "mobility",
+                "setType": "warmup",
+                "prescription": { "duration": { "value": 45, "unit": "second" } }
+              },
+              {
+                "id": "inchworm",
+                "type": "exercise",
+                "exerciseId": "Inchworm",
+                "stimulus": "mobility",
+                "setType": "warmup",
+                "prescription": { "duration": { "value": 40, "unit": "second" } }
+              },
+              {
+                "id": "shoulder-round-the-world",
+                "type": "exercise",
+                "exerciseId": "Round_The_World_Shoulder_Stretch",
+                "stimulus": "mobility",
+                "setType": "warmup",
+                "prescription": { "duration": { "value": 30, "unit": "second" } }
+              }
+            ]
+          },
+          {
+            "id": "activation",
+            "type": "container",
+            "name": "Activation",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "scap-pull-ups",
+                "type": "exercise",
+                "exerciseId": "Scapular_Pull-Up",
+                "stimulus": "strength",
+                "setType": "warmup",
+                "prescription": { "reps": 8 }
+              },
+              {
+                "id": "inverted-rows",
+                "type": "exercise",
+                "exerciseId": "Inverted_Row",
+                "stimulus": "strength",
+                "setType": "warmup",
+                "prescription": { "reps": 10 }
+              },
+              {
+                "id": "monster-walks",
+                "type": "exercise",
+                "exerciseId": "Monster_Walk",
+                "stimulus": "strength",
+                "setType": "warmup",
+                "prescription": { "reps": 12 }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

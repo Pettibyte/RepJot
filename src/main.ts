@@ -3,9 +3,10 @@ import './ui/styles/index.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import {
-  consumeDriveAuthorizationResponse,
-  type DriveAuthorization
-} from './google-identity';
+  consumeCallback,
+  hasCallbackFragment,
+  type CallbackResult
+} from './auth/oauth-redirect-adapter';
 
 const target: HTMLElement | null = document.getElementById('app');
 
@@ -13,17 +14,20 @@ if (target === null) {
   throw new Error('Missing #app element.');
 }
 
-let initialAuthorization: DriveAuthorization | null = null;
-let initialAuthorizationError: string | null = null;
-try {
-  initialAuthorization = consumeDriveAuthorizationResponse();
-} catch (error: unknown) {
-  initialAuthorizationError = error instanceof Error ? error.message : String(error);
+// Parse the callback and remove the URL fragment before the app mounts. No
+// private data is read while an access token sits in the address bar.
+let initialCallback: CallbackResult | null = null;
+if (hasCallbackFragment()) {
+  try {
+    initialCallback = consumeCallback();
+  } catch {
+    initialCallback = { kind: 'error', error: 'callback_failed' };
+  }
 }
 
 mount(App, {
   target,
-  props: { initialAuthorization, initialAuthorizationError }
+  props: { initialCallback }
 });
 document.getElementById('boot-status')?.remove();
 window.__repjotBooted?.();

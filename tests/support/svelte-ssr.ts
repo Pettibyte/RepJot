@@ -16,7 +16,6 @@ plugin({
       const { js } = await compile(source, {
         filename: args.path,
         generate: 'server',
-        runes: true,
         dev: false,
       });
       return { contents: js.code, loader: 'js' };
