@@ -409,18 +409,20 @@ describe("seed: committed files", () => {
     }
     const document = JSON.parse(OUTPUT_TEXT) as { exercises: PublishedExercise[] };
     const byId = new Map(document.exercises.map((item) => [item.id, item]));
-    expect([...byId.keys()]).toEqual([
-      "Barbell_Squat",
-      "Barbell_Bench_Press_-_Medium_Grip",
-      "Barbell_Deadlift",
-    ]);
-    expect(byId.get("Barbell_Squat")?.movementPattern).toBe("squat");
-    expect(byId.get("Barbell_Bench_Press_-_Medium_Grip")?.movementPattern).toBe("horizontal_push");
-    expect(byId.get("Barbell_Deadlift")?.movementPattern).toBe("hinge");
-    for (const item of byId.values()) {
-      expect(item.equipment).toBe("barbell");
-      expect(item.loadSemantics).toBe("total");
-      expect(item.measurements).toEqual([
+    // The allowlist now holds more than the three barbell lifts, so this check
+    // scopes to them instead of asserting the whole published set.
+    const barbellLifts: [string, string][] = [
+      ["Barbell_Squat", "squat"],
+      ["Barbell_Bench_Press_-_Medium_Grip", "horizontal_push"],
+      ["Barbell_Deadlift", "hinge"],
+    ];
+    for (const [id, pattern] of barbellLifts) {
+      const item = byId.get(id);
+      expect(item).toBeDefined();
+      expect(item?.movementPattern).toBe(pattern);
+      expect(item?.equipment).toBe("barbell");
+      expect(item?.loadSemantics).toBe("total");
+      expect(item?.measurements).toEqual([
         { dimension: "reps", compatibleUnits: ["reps"] },
         { dimension: "weight", compatibleUnits: ["kg", "lb"] },
       ]);

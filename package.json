@@ -4,13 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "bun run check:schemas && bun run seed:check && bun run check:styles && vite build",
+    "build": "bun run check:schemas && bun run check:static && bun run seed:check && bun run check:styles && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:styles": "bun scripts/check-styles.ts",
     "icons:build": "bun scripts/build-icon-manifest.ts",
     "test": "bun test",
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
     "check:schemas": "bun scripts/validate-schemas.ts",
+    "check:static": "bun scripts/check-static-data.ts",
     "seed": "bun scripts/seed-exercises.ts",
     "seed:check": "bun scripts/seed-exercises.ts check",
     "seed:bump": "bun scripts/seed-exercises.ts bump"

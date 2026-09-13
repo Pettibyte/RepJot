@@ -22,5 +22,162 @@
       { "dimension": "reps", "units": ["reps"] },
       { "dimension": "weight", "units": ["kg", "lb"] }
     ]
+  },
+  {
+    "id": "Pullups",
+    "movementPattern": "vertical_pull",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "Pushups",
+    "movementPattern": "horizontal_push",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "Bodyweight_Squat",
+    "movementPattern": "squat",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "One-Arm_Kettlebell_Swings",
+    "movementPattern": "hinge",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Kettlebell_Halo",
+    "movementPattern": "rotation",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Alternating_Kettlebell_Row",
+    "movementPattern": "horizontal_pull",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Double_Kettlebell_Push_Press",
+    "movementPattern": "vertical_push",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "weight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Weighted_Pull_Ups",
+    "movementPattern": "vertical_pull",
+    "loadSemantics": "added",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "addedWeight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Band_Assisted_Pull-Up",
+    "equipment": "band",
+    "movementPattern": "vertical_pull",
+    "loadSemantics": "assisted",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "assistedWeight", "units": ["kg", "lb"] }
+    ]
+  },
+  {
+    "id": "Rowing_Stationary",
+    "movementPattern": "locomotion",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] },
+      { "dimension": "distance", "units": ["m", "km"] }
+    ]
+  },
+  {
+    "id": "Rope_Jumping",
+    "movementPattern": "locomotion",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] },
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "Knee_Tuck_Jump",
+    "movementPattern": "other",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
+  },
+  {
+    "id": "Worlds_Greatest_Stretch",
+    "equipment": null,
+    "movementPattern": "rotation",
+    "laterality": "unilateral",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
+  },
+  {
+    "id": "Cat_Stretch",
+    "equipment": null,
+    "movementPattern": "flexion",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
+  },
+  {
+    "id": "Inchworm",
+    "movementPattern": "locomotion",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
+  },
+  {
+    "id": "Round_The_World_Shoulder_Stretch",
+    "movementPattern": "rotation",
+    "measurements": [
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
+  },
+  {
+    "id": "Scapular_Pull-Up",
+    "equipment": null,
+    "movementPattern": "vertical_pull",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "Inverted_Row",
+    "equipment": null,
+    "movementPattern": "horizontal_pull",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] }
+    ]
+  },
+  {
+    "id": "Monster_Walk",
+    "movementPattern": "locomotion",
+    "measurements": [
+      { "dimension": "reps", "units": ["reps"] },
+      { "dimension": "duration", "units": ["second", "minute"] }
+    ]
   }
 ]

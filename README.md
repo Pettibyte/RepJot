@@ -26,8 +26,11 @@ The pinned source commit lives in `scripts/seed-config.json`.
 - `bun run seed:check` fails when the file on disk is out of date.
 - `bun run seed:bump` moves the pinned commit to the head of the source ref and reseeds. Review the diff before you commit.
 
-`bun run build` runs `check:schemas` and `seed:check` before Vite packages the
-site. A stale or invalid `exercises.json` fails the build instead of shipping.
+`bun run build` runs `check:schemas`, `check:static`, and `seed:check` before Vite
+packages the site. An invalid `exercises.json` or `workouts.json` fails the build
+instead of shipping. A stale file also fails the build, but only `exercises.json`
+can be detected as stale: `seed:check` compares it with the pinned seed source,
+while `workouts.json` is hand-authored and has no upstream to compare against.
 
 The seed caches each fetched source commit under `scripts/.cache/`. Pass `--source <path>` to read a local copy instead.
 
@@ -36,6 +39,40 @@ Equipment is a closed vocabulary, not a free string. `$defs.equipmentValue` in
 singular. The seed folds each equipment value into that list, so `Kettlebells`
 becomes `kettlebell` and `bands` becomes `band`. A value outside the list fails the
 build and names the field to edit.
+
+## Workout data
+
+Prescription rules live in the schema spec, not here. Read
+[`specs/rep-jot-json-schema-spec.md`](specs/rep-jot-json-schema-spec.md) section 3
+before you edit a prescription: it defines containers, strategies, result capture,
+and how an `iterations` entry overrides the fields it carries.
+
+`src/public/data/workouts.json` is hand-authored. It ships in the bundle and drives
+the workout chooser. A workout appears in the chooser when the file lists it, so the
+file holds no lifecycle flag.
+
+The committed file carries four workouts, one per authoring target:
+
+| Workout | Shapes it covers |
+| --- | --- |
+| `strength-and-cindy` | `sequence` root, `rounds` with per-iteration overrides, AMRAP scored `rounds_and_reps` with `childDetail: "optional"`, `benchmark` metadata. |
+| `emom-conditioning` | `emom` with `cycles` and `interval`, scored `intervals` with optional child detail. |
+| `kb-complex` | `complex` with `cycles` and `childDetail: "none"`, `added` and `assisted` load semantics. |
+| `warmup-mobility` | Nested `sequence` containers, `mobility` stimulus, `warmup` set type. |
+
+Run `bun run check:static` to check the file on its own. The gate reads both
+bundled data files, runs them through the document pipeline, and reports one line
+per problem: a schema fault, a duplicate node ID inside one workout, or a node that
+references an exercise the bundle does not hold. It runs those three checks and
+nothing else.
+
+`src/documents/static-loader.ts` exposes `loadStaticData`. It fetches
+`./data/exercises.json` and `./data/workouts.json` with relative URLs, so the same
+bundle works at the Pages root, under a project path, and under `bun run dev`. It
+returns the two arrays plus `exerciseById` and `workoutById` maps. A failure throws
+an `AppError`, so a caller never holds a half-valid bundle.
+
+## Build and bundle
 
 Run `bun run build` to produce the static bundle in `dist/`. Run `bun run check:compat` to apply the Kindle bundle gates. The gates require ES2019 syntax and prohibit `window.open`. The production entry also includes a `String.replaceAll`
 polyfill required by Svelte. Drive multipart uploads use Web Crypto when available and
