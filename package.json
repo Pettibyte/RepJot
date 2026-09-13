@@ -12,6 +12,7 @@
     "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
     "check:schemas": "bun scripts/validate-schemas.ts",
     "check:static": "bun scripts/check-static-data.ts",
+    "smoke:store": "bun scripts/smoke-local-store.ts",
     "seed": "bun scripts/seed-exercises.ts",
     "seed:check": "bun scripts/seed-exercises.ts check",
     "seed:bump": "bun scripts/seed-exercises.ts bump"
@@ -23,6 +24,7 @@
     "acorn": "^8.18.0",
     "ajv": "^8",
     "ajv-formats": "^3",
+    "fake-indexeddb": "^6.2.5",
     "svelte": "latest",
     "svelte-check": "latest",
     "typescript": "~6",

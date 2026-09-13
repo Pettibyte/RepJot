@@ -507,6 +507,26 @@
         testStorage('sessionStorage', safe(function () { return window.sessionStorage; }, null));
         testFirstPartyCookie();
         support('Storage', 'IndexedDB', !!window.indexedDB, 'API is present; an open/write check will follow', 'API is absent');
+        // The memory storage engine clones values with structuredClone when the
+        // host has it, and with a JSON round trip when it does not. The app
+        // ships no polyfill for it, so this row records what the device gives us.
+        var cloneRoundTrip = safe(function () {
+          return window.structuredClone({ probe: [1] }).probe[0] === 1;
+        }, false);
+        support(
+          'Storage',
+          'structuredClone (native)',
+          typeof window.structuredClone === 'function',
+          'API is present natively',
+          'API is absent natively; the memory store uses its JSON fallback'
+        );
+        support(
+          'Storage',
+          'structuredClone round trip (native)',
+          cloneRoundTrip === true,
+          'An object survived a native clone',
+          'No native clone round trip; the memory store uses its JSON fallback'
+        );
         support('Storage', 'Cache Storage', !!window.caches);
 
         support('Networking and security', 'XMLHttpRequest', typeof window.XMLHttpRequest === 'function');
