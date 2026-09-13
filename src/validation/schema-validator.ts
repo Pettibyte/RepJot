@@ -114,15 +114,37 @@ function formatIssues(errors: null | ErrorObject[] | undefined): string {
 }
 
 /**
+ * True when two schema bodies carry the same content.
+ *
+ * Ajv keys its cache by `$id`, so a second registration reaches the cache with a
+ * different object. Content comparison lets the same schema register twice and
+ * still catches a body that changed under a taken `$id`.
+ */
+function sameSchemaBody(one: unknown, two: unknown): boolean {
+  if (one === two) return true;
+  try {
+    return JSON.stringify(one) === JSON.stringify(two);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Compile one schema and cache its validator.
  *
  * Registering a version also raises that family's highest supported version when
  * the new version is higher. A build that ships a v2 schema therefore accepts v2
  * and requires a migration step from v1.
  *
+ * One `$id` holds one schema body. When the `$id` already stands in Ajv's cache,
+ * the body passed here must match the body already registered under it. Ajv would
+ * otherwise hand back the older compiled validator, and the version registry would
+ * point at rules that are not the schema it was given. A new schema therefore
+ * needs a new `$id`. A mismatch throws.
+ *
  * Exported for tests. A test registers a test-only schema this way instead of
- * adding a file under `schemas/`, which would ship in the product. Production
- * code registers only the four shipped v1 schemas, at module load.
+ * adding a file under `schemas/`, which would ship in the product.
+ * Production code registers only the four shipped v1 schemas, at module load.
  */
 export function registerValidator(family: DocFamily, version: number, schema: unknown): void {
   if (!isDocFamily(family)) {
@@ -132,16 +154,27 @@ export function registerValidator(family: DocFamily, version: number, schema: un
     throw new AppError('invalid_document', { family, reason: 'version' });
   }
 
+  const id = readSchemaId(schema);
+  const cached = id === undefined ? undefined : ajv.getSchema(id);
+  if (cached !== undefined && !sameSchemaBody(cached.schema, schema)) {
+    throw new AppError(
+      'invalid_document',
+      { family, version, reason: 'duplicate_schema_id' },
+      'Schema $id ' +
+        id +
+        ' is already registered to a different schema body. Give the new schema its own $id.'
+    );
+  }
+
   let validate: ValidateFunction;
   try {
-    const id = readSchemaId(schema);
     if (id === undefined) {
       validate = ajv.compile(schema as object);
-    } else if (ajv.getSchema(id) === undefined) {
+    } else if (cached === undefined) {
       ajv.addSchema(schema as object);
       validate = ajv.getSchema(id) as ValidateFunction;
     } else {
-      validate = ajv.getSchema(id) as ValidateFunction;
+      validate = cached as ValidateFunction;
     }
     // Force the compile now, so a strict-mode problem surfaces at registration
     // instead of inside the first caller that needs the validator.

@@ -42,6 +42,19 @@ describe('Button', () => {
     expect(out).not.toContain('<button');
   });
 
+  test('a disabled anchor drops its href so it cannot activate', () => {
+    const out = html(Button, { href: '#/delete', disabled: true });
+    expect(out).toContain('<a');
+    expect(out).not.toContain('href');
+    expect(out).toContain('aria-disabled="true"');
+  });
+
+  test('a disabled button element keeps the disabled attribute', () => {
+    const out = html(Button, { disabled: true });
+    expect(out).toContain('<button');
+    expect(out).toContain('disabled');
+  });
+
   test('renders a button with type="button" when href is not set', () => {
     const out = html(Button, {});
     expect(out).toContain('<button');

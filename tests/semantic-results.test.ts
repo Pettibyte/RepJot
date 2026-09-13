@@ -2,13 +2,19 @@
 // Spec items 1-18, 20-22. REQUIREMENTS 3.17, 3.18, 6.17, 11.5, 11.6, 22.4.9.
 
 import { describe, expect, test } from 'bun:test';
-import { validateSession, validateShard } from '../src/validation/semantic-validator';
+import {
+  validatePreferences,
+  validateSession,
+  validateShard
+} from '../src/validation/semantic-validator';
 import { ISSUE_CODES } from '../src/validation/issues';
 import {
   SESSION_KEY,
   SHARD_MONTH,
   clone,
   hasCode,
+  nestedSession,
+  nestedStaticData,
   staticData,
   validSession,
   validShard
@@ -152,6 +158,90 @@ describe('result identity and sides', () => {
   });
 });
 
+describe('status and reason code', () => {
+  const WARMUP = 'root/warmup/warmup-squat|both|1';
+  const CINDY_SCORE = 'root/cindy|1';
+
+  test('an incomplete exercise result with no reason code fails', () => {
+    const session = validSession();
+    session.exerciseResults[WARMUP].status = 'incomplete';
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.REASON_CODE_MISSING)).toBe(true);
+  });
+
+  test('an incomplete exercise result with a reason code passes', () => {
+    const session = validSession();
+    session.exerciseResults[WARMUP].status = 'incomplete';
+    session.exerciseResults[WARMUP].reasonCode = 'not_completed';
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.REASON_CODE_MISSING)).toBe(false);
+  });
+
+  test('a skipped exercise result that keeps its measured values fails', () => {
+    const session = validSession();
+    session.exerciseResults[WARMUP].status = 'skipped';
+    session.exerciseResults[WARMUP].reasonCode = 'user_skipped';
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.SKIPPED_RESULT_HAS_PAYLOAD)).toBe(true);
+  });
+
+  test('a skipped exercise result with no values passes', () => {
+    const session = validSession();
+    session.exerciseResults[WARMUP].status = 'skipped';
+    session.exerciseResults[WARMUP].reasonCode = 'user_skipped';
+    delete session.exerciseResults[WARMUP].values;
+
+    expect(check(session).issues).toEqual([]);
+  });
+
+  test('a completed result that carries a reason code fails', () => {
+    const session = validSession();
+    session.containerResults[CINDY_SCORE].reasonCode = 'other';
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.REASON_CODE_FORBIDDEN)).toBe(true);
+  });
+
+  test('a skipped container result that keeps its score fails', () => {
+    const session = validSession();
+    session.containerResults[CINDY_SCORE].status = 'skipped';
+    session.containerResults[CINDY_SCORE].reasonCode = 'time_constraint';
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.SKIPPED_RESULT_HAS_PAYLOAD)).toBe(true);
+  });
+});
+
+describe('keyed maps', () => {
+  test('an exerciseResults array fails', () => {
+    const session = validSession();
+    (session as unknown as Record<string, unknown>).exerciseResults = [];
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.KEYED_MAP_REQUIRED)).toBe(true);
+  });
+
+  test('a containerResults array fails', () => {
+    const session = validSession();
+    (session as unknown as Record<string, unknown>).containerResults = [];
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.KEYED_MAP_REQUIRED)).toBe(true);
+  });
+
+  test('a shard sessions array fails', () => {
+    const shard = validShard();
+    (shard as unknown as Record<string, unknown>).sessions = [];
+
+    const report = validateShard(shard, staticData());
+    expect(hasCode(report.issues, ISSUE_CODES.KEYED_MAP_REQUIRED)).toBe(true);
+  });
+
+  test('an exerciseUnits array fails', () => {
+    const report = validatePreferences(
+      { exerciseUnits: [] as unknown as Record<string, Record<string, string>> },
+      staticData().exercises
+    );
+    expect(hasCode(report.issues, ISSUE_CODES.KEYED_MAP_REQUIRED)).toBe(true);
+  });
+});
+
 describe('units', () => {
   test('a unit incompatible with its dimension fails', () => {
     const session = validSession();
@@ -287,6 +377,65 @@ describe('child detail', () => {
     expect(hasCode(check(session).issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(true);
   });
 
+  test('excess reps on one leaf do not cover a shortfall on another leaf', () => {
+    const session = validSession();
+    // Round 1 drops every push-up and moves the reps to the sit-ups. The round
+    // total still adds up, but the round is not full. REQUIREMENTS 10.17, 10.18.
+    session.exerciseResults['root/cindy:1/pushups|both|1'].values!.reps!.value = 0;
+    session.exerciseResults['root/cindy:1/situps|both|1'].values!.reps!.value = 25;
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(true);
+  });
+
+  test('a leaf that runs over while every other leaf meets its prescription passes', () => {
+    const session = validSession();
+    session.exerciseResults['root/cindy:1/pushups|both|1'].values!.reps!.value = 14;
+
+    expect(hasCode(check(session).issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(false);
+  });
+
+  test('an AMRAP intervals score skips the cycle-count total', () => {
+    const data = staticData();
+    const cindy = data.workouts[0]!.root.children.find((node) => node.id === 'cindy');
+    if (cindy !== undefined && cindy.type === 'container') {
+      cindy.resultCapture = { mode: 'scored', scoreType: 'intervals', childDetail: 'optional' };
+    }
+    const session = validSession();
+    // Three Cindy rounds of two children fill six slots. An AMRAP has no cycle
+    // count, so the total cannot be derived and must not fail.
+    session.containerResults[CINDY_KEY].score = {
+      type: 'intervals',
+      completedIntervals: 6,
+      totalIntervals: 6
+    };
+
+    const report = validateSession(session, data, {
+      shardYearMonthUtc: SHARD_MONTH,
+      sessionKey: SESSION_KEY
+    });
+    expect(hasCode(report.issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(false);
+  });
+
+  test('an AMRAP intervals score still rejects more completed intervals than the total', () => {
+    const data = staticData();
+    const cindy = data.workouts[0]!.root.children.find((node) => node.id === 'cindy');
+    if (cindy !== undefined && cindy.type === 'container') {
+      cindy.resultCapture = { mode: 'scored', scoreType: 'intervals', childDetail: 'optional' };
+    }
+    const session = validSession();
+    session.containerResults[CINDY_KEY].score = {
+      type: 'intervals',
+      completedIntervals: 6,
+      totalIntervals: 2
+    };
+
+    const report = validateSession(session, data, {
+      shardYearMonthUtc: SHARD_MONTH,
+      sessionKey: SESSION_KEY
+    });
+    expect(hasCode(report.issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(true);
+  });
+
   test('a rounds_and_reps container holding a non-repetition leaf fails', () => {
     const data = staticData();
     // Give the sit-up leaf no reps dimension.
@@ -300,6 +449,54 @@ describe('child detail', () => {
       sessionKey: SESSION_KEY
     });
     expect(hasCode(report.issues, ISSUE_CODES.ROUNDS_AND_REPS_NOT_REPETITIVE)).toBe(true);
+  });
+});
+
+describe('nested repeated containers', () => {
+  const RING_ONE = 'root/outer-ring:1/inner-amrap|1';
+
+  function checkNested(session: Session) {
+    return validateSession(session, nestedStaticData(), {
+      shardYearMonthUtc: SHARD_MONTH,
+      sessionKey: SESSION_KEY
+    });
+  }
+
+  test('each outer round derives its score from its own children', () => {
+    const report = checkNested(nestedSession());
+    expect(report.issues).toEqual([]);
+  });
+
+  test('a score copied from another outer round fails', () => {
+    const session = nestedSession();
+    // Round 2 holds one full inner round and three extra reps, not round 1's 2/7.
+    session.containerResults[RING_ONE.replace(':1/', ':2/')].score = {
+      type: 'rounds_and_reps',
+      completedRounds: 2,
+      additionalReps: 7
+    };
+
+    expect(hasCode(checkNested(session).issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(true);
+  });
+
+  test('children of another outer round do not fill a scored round', () => {
+    const session = nestedSession();
+    // Round 1 keeps one full inner round. Round 2 still holds two inner rounds,
+    // so a derivation that pulled them in would read two full rounds here.
+    for (const key of Object.keys(session.exerciseResults)) {
+      if (key.startsWith('root/outer-ring:1/inner-amrap:2/') ||
+          key.startsWith('root/outer-ring:1/inner-amrap:3/')) {
+        delete session.exerciseResults[key];
+      }
+    }
+    session.containerResults[RING_ONE].score = {
+      type: 'rounds_and_reps',
+      completedRounds: 1,
+      additionalReps: 0
+    };
+
+    const report = checkNested(session);
+    expect(hasCode(report.issues, ISSUE_CODES.SCORE_DERIVATION_MISMATCH)).toBe(false);
   });
 });
 

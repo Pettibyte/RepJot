@@ -40,6 +40,11 @@ export function nowUtc(): string {
  *
  * Rejects a value that does not end in `Z`, so a stored offset never enters the
  * app. ARCHITECTURE C-10.
+ *
+ * `Date` normalizes an impossible calendar value instead of rejecting it, so
+ * `2026-02-30` becomes `2026-03-02`. The round trip below compares the parsed
+ * instant with the text it came from, so a value the calendar does not hold throws
+ * rather than silently moving to another day or month. REQUIREMENTS 3.5.
  */
 export function parseUtc(value: string): Date {
   if (typeof value !== 'string' || !value.endsWith('Z')) {
@@ -61,6 +66,19 @@ export function parseUtc(value: string): Date {
   if (Number.isNaN(parsed.getTime())) {
     throw new AppError('invalid_document', { reason: 'timestamp is unparseable' });
   }
+
+  // Compare at whole-second precision. The stored fraction, when present, only
+  // adds detail the round trip keeps, so drop it from the left side first.
+  const withoutFraction = value.replace(/\.\d+Z$/, 'Z');
+  const roundTrip = `${parsed.toISOString().slice(0, 19)}Z`;
+  if (roundTrip !== withoutFraction) {
+    throw new AppError(
+      'invalid_document',
+      { reason: 'timestamp is not a real calendar date-time' },
+      'A persisted timestamp must name a date the calendar holds.'
+    );
+  }
+
   return parsed;
 }
 

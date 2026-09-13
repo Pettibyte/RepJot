@@ -65,6 +65,26 @@ describe('parseUtc', () => {
   test('rejects a string that is not a date-time', () => {
     expect(() => parseUtc('last tuesdayZ')).toThrow(AppError);
   });
+
+  test('rejects a date the calendar does not hold', () => {
+    // Date normalizes 2026-02-30 to 2026-03-02. A stored value must not move to
+    // another day, because the shard month comes from it. REQUIREMENTS 3.5.
+    expect(() => parseUtc('2026-02-30T00:00:00Z')).toThrow(AppError);
+    expect(() => parseUtc('2026-01-32T12:00:00Z')).toThrow(AppError);
+  });
+
+  test('rejects a month or hour outside its range', () => {
+    expect(() => parseUtc('2026-13-01T00:00:00Z')).toThrow(AppError);
+    expect(() => parseUtc('2026-01-01T25:00:00Z')).toThrow(AppError);
+  });
+
+  test('accepts a real leap day', () => {
+    expect(parseUtc('2024-02-29T00:00:00Z').getUTCMonth()).toBe(1);
+  });
+
+  test('never shifts the UTC month of a valid value', () => {
+    expect(yearMonthUtc('2026-02-28T23:59:59Z')).toBe('2026-02');
+  });
 });
 
 describe('yearMonthUtc', () => {

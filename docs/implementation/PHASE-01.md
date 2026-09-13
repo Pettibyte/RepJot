@@ -85,8 +85,14 @@ token, never the raw value.
 5. `position: sticky` or `position: fixed` in `src/ui/**`.
 6. Any `url(http`, `@import` of a remote URL, or CDN reference in CSS.
 7. A `.svelte` file with a `style="..."` attribute that sets color, shadow, or radius.
+   Each declaration in the attribute is tested on its own, so a legal `width` does
+   not shield a following `color`.
 8. A component that defines a `<style>` block containing a rule already present in
    `components.css` for the same class name.
+
+Rules 2, 4, 5, and 7 match ASCII case-insensitively, because CSS keywords and
+function names are case-insensitive. `position: STICKY` fails the guard exactly as
+`position: sticky` does.
 
 ## Requirements traceability
 

@@ -37,9 +37,15 @@
 </script>
 
 {#if href !== undefined}
+  <!--
+    A disabled link drops its `href`. `aria-disabled` alone reports the state and
+    leaves the navigation live, so keyboard activation and click would still leave
+    the page. With no `href` the anchor is inert and takes no tab focus.
+    `.btn[aria-disabled="true"]` carries the disabled look.
+  -->
   <a
     class={classes}
-    {href}
+    href={disabled ? undefined : href}
     aria-disabled={disabled ? 'true' : undefined}
     {...rest}
   >

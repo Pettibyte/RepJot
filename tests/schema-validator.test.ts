@@ -194,4 +194,29 @@ describe('registerValidator', () => {
       'version'
     );
   });
+
+  test('rejects a different schema body under an $id already in use', () => {
+    registerValidator('repjot/preferences', 2, preferencesV2Schema());
+
+    // Same $id, different rules. Reusing the cached validator here would leave the
+    // version registry pointing at rules the supplied schema does not hold.
+    const stale = JSON.parse(JSON.stringify(preferencesV2Schema())) as Record<string, unknown>;
+    stale.properties = {
+      ...(stale.properties as Record<string, unknown>),
+      schemaVersion: { const: 3 }
+    };
+
+    const error = captureError(() => registerValidator('repjot/preferences', 3, stale));
+    expect(error?.kind).toBe('invalid_document');
+    expect(error?.detail.reason).toBe('duplicate_schema_id');
+    expect(highestSupportedVersion('repjot/preferences')).toBe(2);
+  });
+
+  test('accepts the same schema body registered again under the same $id', () => {
+    registerValidator('repjot/preferences', 2, preferencesV2Schema());
+
+    expect(() =>
+      registerValidator('repjot/preferences', 2, JSON.parse(JSON.stringify(preferencesV2Schema())))
+    ).not.toThrow();
+  });
 });

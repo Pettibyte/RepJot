@@ -132,6 +132,14 @@ const ALLOWED_KEYWORDS: Set<string> = new Set([
   'unset',
 ]);
 
+/**
+ * One inline style declaration that sets a banned visual property. Rule 7.
+ *
+ * Tested per declaration, so a legal `width` in the same style attribute cannot
+ * shield a following `color`, `shadow`, or `radius`.
+ */
+const BANNED_INLINE = /color|shadow|radius|gradient|background|fill|stroke|blur/i;
+
 function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, (match) => ' '.repeat(match.length));
 }
@@ -220,10 +228,10 @@ export function lintCss(css: string, options: ScanOptions): Violation[] {
       if (/\bbox-shadow\b|\btext-shadow\b/.test(decl.prop)) {
         push(decl.index, 2, `"${decl.prop}" is banned. Build hierarchy with scale, weight, inversion, and borders.`);
       }
-      if (/linear-gradient|radial-gradient/.test(decl.value)) {
+      if (/linear-gradient|radial-gradient/i.test(decl.value)) {
         push(decl.index, 2, 'Gradients are banned.');
       }
-      if (decl.prop === 'filter' && /\bblur\(/.test(decl.value)) {
+      if (decl.prop === 'filter' && /\bblur\(/i.test(decl.value)) {
         push(decl.index, 2, 'filter: blur() is banned.');
       }
 
@@ -236,13 +244,13 @@ export function lintCss(css: string, options: ScanOptions): Violation[] {
       }
 
       if (options.inUi) {
-        // Rule 4: grid.
-        if (decl.prop === 'display' && /\b(inline-)?grid\b/.test(decl.value)) {
+        // Rule 4: grid. CSS keywords are ASCII case-insensitive, so the test is too.
+        if (decl.prop === 'display' && /\b(inline-)?grid\b/i.test(decl.value)) {
           push(decl.index, 4, 'display: grid is banned under src/ui/. Use flex.');
         }
 
         // Rule 5: sticky and fixed.
-        if (decl.prop === 'position' && /\b(sticky|fixed)\b/.test(decl.value)) {
+        if (decl.prop === 'position' && /\b(sticky|fixed)\b/i.test(decl.value)) {
           push(decl.index, 5, `position: ${decl.value.trim()} is banned under src/ui/.`);
         }
 
@@ -298,15 +306,24 @@ export function lintMarkup(markup: string, options: ScanOptions): Violation[] {
   };
 
   // Rule 7: inline style attributes that set color, shadow, or radius.
+  //
+  // Each declaration is tested on its own. A width-only style is legal, as in
+  // `style="width: {percent}%"`, but a second declaration in the same attribute
+  // must not slip past the exemption.
   const styleAttr = /\sstyle\s*=\s*"([^"]*)"|\sstyle\s*=\s*'([^']*)'/gi;
   let match: RegExpExecArray | null = styleAttr.exec(markup);
   while (match !== null) {
     const value = (match[1] ?? match[2] ?? '').toLowerCase();
-    const bad =
-      /color|shadow|radius|gradient|background|fill|stroke|blur/.test(value) &&
-      !/^width:/.test(value);
-    if (bad) {
-      push(match.index, 7, `Inline style "${value.trim()}" may not set color, shadow, or radius.`);
+    const banned = value
+      .split(';')
+      .map((declaration) => declaration.trim())
+      .filter((declaration) => declaration !== '' && BANNED_INLINE.test(declaration));
+    if (banned.length > 0) {
+      push(
+        match.index,
+        7,
+        `Inline style may not set color, shadow, or radius: "${banned.join('; ')}".`
+      );
     }
     match = styleAttr.exec(markup);
   }

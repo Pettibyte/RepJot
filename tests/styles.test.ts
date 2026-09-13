@@ -132,6 +132,36 @@ describe('style guard', () => {
     expect(await runGuard(root)).toEqual([]);
   });
 
+  test('flags a banned inline declaration that follows a width', async () => {
+    const root = fixture({
+      'src/ui/styles/components.css': '.bar { height: 12px; }\n',
+      'src/ui/components/Bar.svelte': '<div class="bar" style="width: 40%; color: red"></div>\n',
+    });
+    expect(rules(await runGuard(root))).toContain(7);
+  });
+
+  test('flags a banned inline radius that follows a width', async () => {
+    const root = fixture({
+      'src/ui/styles/components.css': '.bar { height: 12px; }\n',
+      'src/ui/components/Bar.svelte':
+        '<div class="bar" style="width: 40%; border-radius: 6px"></div>\n',
+    });
+    expect(rules(await runGuard(root))).toContain(7);
+  });
+
+  test('catches banned CSS keywords written in upper case', async () => {
+    // CSS keywords and function names are ASCII case-insensitive.
+    const root = fixture({
+      'src/ui/styles/components.css':
+        '.a { display: GRID; }\n.b { position: STICKY; }\n.c { position: FIXED; }\n.d { background: LINEAR-GRADIENT(var(--color-bg), var(--color-on-bg)); }\n.e { filter: BLUR(2px); }\n',
+    });
+    const found = rules(await runGuard(root));
+    expect(found).toContain(2);
+    expect(found).toContain(4);
+    expect(found).toContain(5);
+    expect(found.filter((rule) => rule === 5)).toHaveLength(2);
+  });
+
   test('fails when a component redeclares a shared class', async () => {
     const root = fixture({
       'src/ui/styles/components.css': '.btn { min-height: 56px; }\n',

@@ -5,7 +5,15 @@
 // another. `validShard()` is the baseline: a fixture that fails a check the test
 // did not touch means the fixture is wrong, not the validator.
 
-import type { Exercise, ResultsShard, Session, StaticData, Workout } from '../../src/domain/types';
+import type {
+  Exercise,
+  ExerciseResult,
+  ResultsShard,
+  Session,
+  StaticData,
+  Workout
+} from '../../src/domain/types';
+import { exerciseResultKey } from '../../src/domain/execution-path';
 
 export const SESSION_KEY = 'session-11111111-2222-4333-8444-555555555555';
 export const WORKOUT_ID = 'demo';
@@ -278,6 +286,131 @@ export function workout(): Workout {
 
 export function staticData(): StaticData {
   return { exercises: exercises(), workouts: [workout()] };
+}
+
+/**
+ * The demo workout plus two repeated containers nested on one path.
+ *
+ * ```text
+ * root (sequence)
+ *   ... every `workout()` child ...
+ *   outer-ring (rounds 2)
+ *     inner-amrap (amrap, rounds_and_reps, childDetail optional)
+ *       ring-pushups  exercise, 10 reps
+ *       ring-situps   exercise, 15 reps
+ * ```
+ *
+ * The pair puts two repeated containers on one path, so a test can store a child
+ * under one outer round and score another.
+ */
+export function nestedWorkout(): Workout {
+  const base = workout();
+  base.root.children.push({
+    id: 'outer-ring',
+    type: 'container',
+    strategy: 'rounds',
+    strategyConfig: { rounds: 2 },
+    children: [
+      {
+        id: 'inner-amrap',
+        type: 'container',
+        strategy: 'amrap',
+        strategyConfig: { duration: { value: 10, unit: 'minute' } },
+        resultCapture: { mode: 'scored', scoreType: 'rounds_and_reps', childDetail: 'optional' },
+        children: [
+          {
+            id: 'ring-pushups',
+            type: 'exercise',
+            exerciseId: 'push-up',
+            stimulus: 'conditioning',
+            prescription: { reps: 10 }
+          },
+          {
+            id: 'ring-situps',
+            type: 'exercise',
+            exerciseId: 'sit-up',
+            stimulus: 'conditioning',
+            prescription: { reps: 15 }
+          }
+        ]
+      }
+    ]
+  });
+  return base;
+}
+
+/** Static bundle for the nested workout. */
+export function nestedStaticData(): StaticData {
+  return { exercises: exercises(), workouts: [nestedWorkout()] };
+}
+
+/** One nested child result: outer round `outer`, inner round `inner`. */
+export function ringResult(
+  outer: number,
+  inner: number,
+  nodeId: 'ring-pushups' | 'ring-situps',
+  exerciseId: 'push-up' | 'sit-up',
+  reps: number
+): readonly [string, ExerciseResult] {
+  const path = [
+    { nodeId: 'root' },
+    { nodeId: 'outer-ring', iteration: outer },
+    { nodeId: 'inner-amrap', iteration: inner },
+    { nodeId }
+  ];
+  return [
+    exerciseResultKey(path, 'both', 1),
+    {
+      workoutId: WORKOUT_ID,
+      executionPath: path,
+      exerciseId,
+      side: 'both',
+      attempt: 1,
+      status: 'completed',
+      values: { reps: { value: reps, unit: 'reps' } }
+    }
+  ];
+}
+
+/**
+ * A session whose nested container holds its own child detail in both outer
+ * rounds: round 1 runs two full inner rounds plus a partial, round 2 runs one
+ * full inner round plus a partial.
+ */
+export function nestedSession(): Session {
+  const session = validSession();
+  const ring: Record<string, ExerciseResult> = {};
+
+  for (let inner = 1; inner <= 3; inner += 1) {
+    const full = inner < 3;
+    const push = ringResult(1, inner, 'ring-pushups', 'push-up', full ? 10 : 3);
+    const sit = ringResult(1, inner, 'ring-situps', 'sit-up', full ? 15 : 4);
+    ring[push[0]] = push[1];
+    ring[sit[0]] = sit[1];
+  }
+  for (let inner = 1; inner <= 2; inner += 1) {
+    const full = inner < 2;
+    const push = ringResult(2, inner, 'ring-pushups', 'push-up', full ? 10 : 1);
+    const sit = ringResult(2, inner, 'ring-situps', 'sit-up', full ? 15 : 2);
+    ring[push[0]] = push[1];
+    ring[sit[0]] = sit[1];
+  }
+
+  const scored = (outer: number, completedRounds: number, additionalReps: number) => ({
+    workoutId: WORKOUT_ID,
+    executionPath: [{ nodeId: 'root' }, { nodeId: 'outer-ring', iteration: outer }, { nodeId: 'inner-amrap' }],
+    attempt: 1,
+    status: 'completed' as const,
+    score: { type: 'rounds_and_reps' as const, completedRounds, additionalReps }
+  });
+
+  session.exerciseResults = { ...session.exerciseResults, ...ring };
+  session.containerResults = {
+    ...session.containerResults,
+    'root/outer-ring:1/inner-amrap|1': scored(1, 2, 7),
+    'root/outer-ring:2/inner-amrap|1': scored(2, 1, 3)
+  };
+  return session;
 }
 
 /** A completed session whose every result passes every check. */

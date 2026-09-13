@@ -28,6 +28,7 @@ import type {
   Workout,
   WorkoutNode
 } from '../domain/types';
+import type { ResultStatus } from '../domain/enums';
 import type { PathSegment } from '../domain/execution-path';
 import { containerResultKey, encodePath, exerciseResultKey } from '../domain/execution-path';
 import { isIntegerLikeKey } from '../domain/ids';
@@ -120,6 +121,74 @@ function checkKeyNotIntegerLike(report: SemanticReport, key: string, path: strin
 }
 
 /**
+ * Report a fatal issue when a multi-writer collection is an array.
+ *
+ * Every collection two devices can change is a keyed map, so a merge matches one
+ * entry to one key. An array merges by position and loses entries. The shipped
+ * schemas ask for a record; this check catches the same fault in values the
+ * editor built in memory. Spec item 23.
+ */
+function checkKeyedMap(report: SemanticReport, value: unknown, path: string, label: string): void {
+  if (Array.isArray(value)) {
+    report.issues.push(
+      issue(ISSUE_CODES.KEYED_MAP_REQUIRED, path, `${label} must be a keyed map, not an array.`)
+    );
+  }
+}
+
+/**
+ * Report a fatal issue when `status` and `reasonCode` disagree.
+ *
+ * A result the user did not complete names why with a controlled reason code.
+ * A completed result carries none. A skipped result carries no measured value and
+ * no score, because nothing was attempted. Free text belongs in notes, never in a
+ * reason. REQUIREMENTS 11.4.
+ *
+ * @param payload The field a skipped result must not hold: `values` or `score`.
+ */
+function checkStatusReason(
+  report: SemanticReport,
+  path: string,
+  status: ResultStatus,
+  reasonCode: string | undefined,
+  payload: unknown,
+  payloadLabel: string
+): void {
+  if (status === 'completed') {
+    if (reasonCode !== undefined) {
+      report.issues.push(
+        issue(
+          ISSUE_CODES.REASON_CODE_FORBIDDEN,
+          `${path}.reasonCode`,
+          'A completed result must not record a reason code.'
+        )
+      );
+    }
+    return;
+  }
+
+  if (reasonCode === undefined) {
+    report.issues.push(
+      issue(
+        ISSUE_CODES.REASON_CODE_MISSING,
+        `${path}.reasonCode`,
+        `A ${status} result must record a reason code.`
+      )
+    );
+  }
+
+  if (status === 'skipped' && payload !== undefined) {
+    report.issues.push(
+      issue(
+        ISSUE_CODES.SKIPPED_RESULT_HAS_PAYLOAD,
+        `${path}.${payloadLabel}`,
+        `A skipped result must not record ${payloadLabel}.`
+      )
+    );
+  }
+}
+
+/**
  * Report a fatal issue when a persisted `*Utc` value is not RFC 3339 UTC.
  *
  * An absent optional field is legal and reports nothing. Spec item 25.
@@ -200,7 +269,7 @@ type ResolvedPath =
   | { ok: true; node: WorkoutNode }
   | { ok: false; reason: 'broken_path'; depth: number };
 
-function isRepeatedContainer(node: WorkoutNode): boolean {
+function isRepeatedContainer(node: WorkoutNode): node is ContainerNode {
   return node.type === 'container' && node.strategy !== 'sequence';
 }
 
@@ -210,6 +279,12 @@ function isRepeatedContainer(node: WorkoutNode): boolean {
  * A segment may carry an `iteration` only on a repeated container: `rounds`,
  * `amrap`, `emom`, or `complex`. A `sequence` runs once, so an iteration on it
  * does not resolve.
+ *
+ * Every repeated container segment below the last one must carry an `iteration`.
+ * The value is one-based and cannot exceed the container's configured count, so a
+ * round 999 of a three-round container does not resolve. An AMRAP has no ceiling.
+ * The last segment is exempt: a container result addresses the whole container,
+ * not one of its iterations. Spec items 12, 13. REQUIREMENTS 10.8.
  */
 function resolvePath(workout: Workout, segments: PathSegment[] | undefined): ResolvedPath {
   if (!Array.isArray(segments) || segments.length === 0) {
@@ -233,6 +308,18 @@ function resolvePath(workout: Workout, segments: PathSegment[] | undefined): Res
     }
     if (segment.iteration !== undefined && !isRepeatedContainer(next)) {
       return { ok: false, reason: 'broken_path', depth };
+    }
+    if (depth < segments.length - 1 && isRepeatedContainer(next)) {
+      const max = iterationCount(next);
+      const iteration = segment.iteration;
+      if (
+        iteration === undefined ||
+        !Number.isInteger(iteration) ||
+        iteration < 1 ||
+        iteration > max
+      ) {
+        return { ok: false, reason: 'broken_path', depth };
+      }
     }
     current = next;
   }
@@ -276,10 +363,14 @@ type ExerciseNodeLike = Extract<WorkoutNode, { type: 'exercise' }>;
  * Report duplicate node IDs inside one workout.
  *
  * Node IDs are scoped to one workout, so the same ID in two workouts is legal.
+ * A duplicate does not end the descent: a second duplicate can sit inside the
+ * first one's subtree, and the check claims the whole workout. A node object is
+ * visited once, so a graph that points back at itself stops instead of looping.
  * REQUIREMENTS 6.20.
  */
 function checkDuplicateNodeIds(workout: Workout, report: SemanticReport): void {
   const seen = new Set<string>();
+  const visited = new Set<WorkoutNode>();
   const walk = (node: WorkoutNode): void => {
     if (seen.has(node.id)) {
       report.issues.push(
@@ -289,9 +380,10 @@ function checkDuplicateNodeIds(workout: Workout, report: SemanticReport): void {
           'Two nodes in one workout share a node ID.'
         )
       );
-      return;
     }
     seen.add(node.id);
+    if (visited.has(node)) return;
+    visited.add(node);
     if (node.type === 'container') {
       for (const child of node.children) walk(child);
     }
@@ -486,6 +578,8 @@ export function validatePreferences(
   const report = createReport();
   const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
+  checkKeyedMap(report, prefs.exerciseUnits, 'exerciseUnits', 'The exerciseUnits map');
+
   for (const [exerciseId, dimensions] of Object.entries(prefs.exerciseUnits)) {
     const exercisePath = `exerciseUnits.${exerciseId}`;
     checkKeyNotIntegerLike(report, exerciseId, 'exerciseUnits', 'preference');
@@ -603,6 +697,8 @@ function checkExerciseResult(
     );
   }
 
+  checkStatusReason(report, path, result.status, result.reasonCode, result.values, 'values');
+
   checkUtc(report, result.startedAtUtc, `${path}.startedAtUtc`, 'result start');
   checkUtc(report, result.endedAtUtc, `${path}.endedAtUtc`, 'result end');
 
@@ -713,12 +809,23 @@ interface ChildEntry {
   result: ExerciseResult;
 }
 
+/** True when two segments name one node in one iteration. */
+function sameSegment(one: PathSegment | undefined, other: PathSegment): boolean {
+  return one !== undefined && one.nodeId === other.nodeId && one.iteration === other.iteration;
+}
+
 /**
  * Collect the exercise results stored beneath `containerPath`.
  *
  * A child path repeats the container segment with its own `iteration`, so the
  * container's iteration sits at `containerPath.length - 1` on the child path, and
  * the container's direct child sits one step later.
+ *
+ * Every segment above the container must match in node ID **and** iteration. A
+ * match on node ID alone pulls a child of another outer round into this
+ * container's derivation: `root/outer:2/inner:1/...` would otherwise read as a
+ * child of `root/outer:1/inner`. Spec items 12, 13. REQUIREMENTS 10.8, 10.12,
+ * 10.13.
  */
 function collectChildResults(
   exerciseResults: Record<string, ExerciseResult>,
@@ -726,22 +833,30 @@ function collectChildResults(
   container: ContainerNode
 ): ChildEntry[] {
   const entries: ChildEntry[] = [];
-  const containerSegmentIndex = containerPath.length - 1;
+  const ownIndex = containerPath.length - 1;
+  const ownSegment = containerPath[ownIndex];
 
   for (const result of Object.values(exerciseResults)) {
     const path = result.executionPath;
     if (!Array.isArray(path) || path.length <= containerPath.length) continue;
+    if (path[ownIndex]?.nodeId !== ownSegment.nodeId) continue;
 
     let matches = true;
-    for (let index = 0; index < containerPath.length; index += 1) {
-      if (path[index]?.nodeId !== containerPath[index].nodeId) {
+    for (let index = 0; index < ownIndex; index += 1) {
+      if (!sameSegment(path[index], containerPath[index])) {
         matches = false;
         break;
       }
     }
     if (!matches) continue;
 
-    const iteration = path[containerSegmentIndex]?.iteration ?? 1;
+    // A child of a repeated container names its round on the container segment.
+    // A child that omits it is already unresolved, so skip it rather than guess.
+    const own = path[ownIndex];
+    if (isRepeatedContainer(container) && own.iteration === undefined) continue;
+    const iteration = own.iteration ?? 1;
+    if (!Number.isInteger(iteration) || iteration < 1) continue;
+
     const childId = path[containerPath.length]?.nodeId;
     const childPosition = container.children.findIndex((child) => child.id === childId);
     if (childPosition === -1) continue;
@@ -781,6 +896,8 @@ function prescribedReps(node: ExerciseNodeLike, iteration: number): number | und
  *   `totalIntervals` must equal cycles x direct children. One slot is
  *   (iteration, direct-child position) in cycle-major order. A slot counts once
  *   when a completed child result fills it, and filled slots must form a prefix.
+ *   When the cycle count is not finite, as in an AMRAP, the total is not
+ *   derivable, so that comparison is skipped and the rest still holds.
  *
  * `rounds_and_reps`
  *   A round is full when every leaf under the container holds a completed result
@@ -838,8 +955,9 @@ function deriveAndCompare(
   if (score.type === 'intervals') {
     const cycles = iterationCount(container);
     const childCount = container.children.length;
-    const expectedTotal = cycles * childCount;
-    if (score.totalIntervals !== expectedTotal) {
+    // An AMRAP has no fixed cycle count, so `totalIntervals` cannot be derived.
+    // Skip that one comparison and still check what the child detail decides.
+    if (Number.isFinite(cycles) && score.totalIntervals !== cycles * childCount) {
       mismatch('totalIntervals does not equal the cycle count times the child count');
       return;
     }
@@ -856,6 +974,9 @@ function deriveAndCompare(
     }
     if (prefix !== score.completedIntervals) {
       mismatch('the derived completed-interval count differs from the stored count');
+    }
+    if (typeof score.totalIntervals === 'number' && prefix > score.totalIntervals) {
+      mismatch('more intervals are complete than the stored total');
     }
     return;
   }
@@ -907,7 +1028,10 @@ function deriveAndCompare(
       const actual = repsAt(iteration);
       if (actual === undefined) break;
 
-      if (sum(actual) < sum(prescribed)) {
+      // A round is full only when every leaf meets its own prescription. One
+      // leaf's surplus cannot cover another leaf's shortfall. REQUIREMENTS 10.17,
+      // 10.18.
+      if (!actual.every((reps, index) => reps >= prescribed[index])) {
         partialReps = sum(actual);
         hasPartial = true;
         break;
@@ -1006,6 +1130,8 @@ export function validateSession(
   }
 
   const raw = session as unknown as Record<string, unknown>;
+  checkKeyedMap(report, session.exerciseResults, `${path}.exerciseResults`, 'A session exerciseResults map');
+  checkKeyedMap(report, session.containerResults, `${path}.containerResults`, 'A session containerResults map');
   if ('executionPlan' in raw) {
     report.issues.push(
       issue(
@@ -1127,6 +1253,8 @@ function checkContainerResult(
   checkUtc(report, result.startedAtUtc, `${path}.startedAtUtc`, 'container start');
   checkUtc(report, result.endedAtUtc, `${path}.endedAtUtc`, 'container end');
 
+  checkStatusReason(report, path, result.status, result.reasonCode, result.score, 'score');
+
   // Spec item 13: one container result per execution path and attempt. Compare
   // the recomputed key, so a mismatched key cannot hide a second claimant.
   let canonical: string | undefined;
@@ -1227,6 +1355,8 @@ export function validateShard(
   opts: { fileName?: string } = {}
 ): SemanticReport {
   const report = createReport();
+
+  checkKeyedMap(report, shard.sessions, 'sessions', 'A shard sessions map');
 
   if (opts.fileName !== undefined) {
     const expected = `results-${shard.yearMonthUtc}.json`;

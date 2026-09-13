@@ -91,6 +91,11 @@ Fatal for a document:
 19. A prescription uses only dimensions the referenced exercise declares.
 20. Each iteration number appears at most once in one prescription, is one-based, and
     stays within the nearest repeated container's iteration count.
+21. A result status and its `reasonCode` agree. A non-completed result records a
+    reason code. A completed result records none. A skipped result records no
+    measured value and no score.
+22. Every collection two devices can change is a keyed map. None is an array.
+    Spec item 23.
 
 Nonfatal for stored results, reported as `UnresolvedResult`:
 
@@ -109,10 +114,10 @@ Nonfatal for stored results, reported as `UnresolvedResult`:
 | REQUIREMENTS 6.19–6.22 | `validateStaticData` runs exactly the three required identity checks. |
 | REQUIREMENTS 10.4, 10.5 | Checks 20 enforces unique, one-based, in-range iteration numbers. |
 | REQUIREMENTS 10.12, 10.13, 10.18 | Checks 10–13 govern `rounds_and_reps`, aggregate-only entry, and `nonstandard`. |
-| REQUIREMENTS 11.4 | Reason-code presence is checked with status. |
+| REQUIREMENTS 11.4 | Check 21 ties `reasonCode` to `status` on both result kinds. |
 | REQUIREMENTS 11.5, 11.6 | Check 8 enforces `startingSide` only for `alternating`. |
 | REQUIREMENTS 22.4.4, 22.4.9 | Checks 4 and 5 tie every key to its value. |
-| SPEC rep-jot-json-schema-spec §8 | Items 1–26 map to the fatal and nonfatal lists above. |
+| SPEC rep-jot-json-schema-spec §8 | Items 1–26 map to the fatal and nonfatal lists above. Item 23 is check 22. |
 | SPEC schema-versioning "Result references" | A migration never repairs a reference; this module only reports. |
 
 ## Checklist
@@ -186,8 +191,18 @@ checks.
    | Score | Derivation |
    | --- | --- |
    | `cycles` | Iteration i counts when one completed child result sits at i. Present iterations must run 1..N with no gap. |
-   | `intervals` | `totalIntervals` must equal cycles x direct children. A slot is (iteration, direct-child position) in cycle-major order. Filled slots must form a prefix. |
-   | `rounds_and_reps` | A round is full when every leaf holds a completed result whose reps meet that leaf's prescribed reps. The next iteration may hold a partial round; its reps sum to `additionalReps`. Nothing may appear past it. |
+   | `intervals` | `totalIntervals` must equal cycles x direct children. A slot is (iteration, direct-child position) in cycle-major order. Filled slots must form a prefix, and may not exceed the stored total. When the cycle count is not finite, as in an AMRAP, `totalIntervals` is not derivable, so that one comparison is skipped and the rest still holds. |
+   | `rounds_and_reps` | A round is full when every leaf holds a completed result whose reps meet that leaf's prescribed reps. One leaf's surplus cannot cover another leaf's shortfall. The next iteration may hold a partial round; its reps sum to `additionalReps`. Nothing may appear past it. |
+
+   A child enters one container's derivation only when every path segment above it
+   matches in node ID and iteration. A match on node ID alone would pull a child
+   of another outer round into the derivation.
+
+   A container result addresses the whole container, so its own last path segment
+   carries no iteration. Every repeated container segment below the last one must
+   carry an iteration, one-based and within the container's configured count. An
+   AMRAP sets no ceiling. A path that fails that rule resolves as `broken_path`,
+   the nonfatal outcome for a path the current bundle cannot resolve.
 
    A `rounds_and_reps` leaf that prescribes no reps is not deterministic, so the
    derivation is skipped rather than guessed. A later UI phase that changes these

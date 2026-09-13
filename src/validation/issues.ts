@@ -129,7 +129,15 @@ export const ISSUE_CODES = {
   /** One prescription repeats an iteration number. REQUIREMENTS 10.4. */
   ITERATION_DUPLICATE: 'iteration_duplicate',
   /** An iteration number is below 1 or past the container's count. REQUIREMENTS 10.5. */
-  ITERATION_OUT_OF_RANGE: 'iteration_out_of_range'
+  ITERATION_OUT_OF_RANGE: 'iteration_out_of_range',
+  /** A non-completed result records no reason code. REQUIREMENTS 11.4. */
+  REASON_CODE_MISSING: 'reason_code_missing',
+  /** A completed result records a reason code. REQUIREMENTS 11.4. */
+  REASON_CODE_FORBIDDEN: 'reason_code_forbidden',
+  /** A skipped result carries measured values or a score. REQUIREMENTS 11.4. */
+  SKIPPED_RESULT_HAS_PAYLOAD: 'skipped_result_has_payload',
+  /** A collection two devices can change is an array, not a keyed map. Spec item 23. */
+  KEYED_MAP_REQUIRED: 'keyed_map_required'
 } as const;
 
 /** Build a fatal issue. */

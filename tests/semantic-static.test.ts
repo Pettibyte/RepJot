@@ -23,6 +23,19 @@ describe('validateStaticData', () => {
     expect(hasCode(issues, ISSUE_CODES.DUPLICATE_NODE_ID)).toBe(true);
   });
 
+  test('a duplicate nested inside a duplicate is also reported', () => {
+    const target = workout();
+    // Put a copy of `warmup` inside `warmup`. The outer copy repeats its ID, and
+    // the inner copy repeats it again one level down. Both must report.
+    const warmup = target.root.children[0];
+    warmup.children.push(clone(warmup));
+
+    const duplicates = validateStaticData(exercises(), [target]).filter(
+      (issue) => issue.code === ISSUE_CODES.DUPLICATE_NODE_ID
+    );
+    expect(duplicates.length).toBe(2);
+  });
+
   test('the same node ID in two different workouts passes', () => {
     const first = workout();
     const second = workout();

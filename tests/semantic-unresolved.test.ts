@@ -164,6 +164,37 @@ describe('broken path', () => {
     expect(hasReason(check(session).unresolved, 'broken_path')).toBe(true);
   });
 
+  test('a repeated container segment with no iteration does not resolve', () => {
+    const session = singleResultSession();
+    moveExerciseResult(session, WARMUP_KEY, [
+      { nodeId: 'root' },
+      { nodeId: 'squat-sets' },
+      { nodeId: 'back-squat-set' }
+    ]);
+
+    expect(hasReason(check(session).unresolved, 'broken_path')).toBe(true);
+  });
+
+  test('a repeated container segment past the container count does not resolve', () => {
+    const session = singleResultSession();
+    // squat-sets runs three rounds.
+    moveExerciseResult(session, WARMUP_KEY, [
+      { nodeId: 'root' },
+      { nodeId: 'squat-sets', iteration: 4 },
+      { nodeId: 'back-squat-set' }
+    ]);
+
+    expect(hasReason(check(session).unresolved, 'broken_path')).toBe(true);
+  });
+
+  test('a container result addresses the whole container, so its own segment needs no iteration', () => {
+    const session = validSession();
+
+    const report = check(session);
+    expect(report.issues).toEqual([]);
+    expect(report.unresolved).toEqual([]);
+  });
+
   test('a container result whose path no longer reaches a container is unresolved', () => {
     const session = validSession();
     moveContainerResult(session, CINDY_KEY, [{ nodeId: 'root' }, { nodeId: 'pushups' }]);
