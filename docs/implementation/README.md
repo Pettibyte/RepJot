@@ -100,3 +100,35 @@ the ES2019 claim and the size figures above hold for that version.
 If the Phase 10 growth breaks the Phase 20 budget, drop `jsondiffpatch` and write
 the keyed-map merge by hand. The merge needs only `diff` and `patch` from the
 library, and it uses them on keyed maps only.
+
+## Index build cost
+
+Phase 12 rebuilds the in-memory read model at every start and never persists it.
+`bun run bench:index` measures that rebuild against the real bundled exercise and
+workout files and 24 months of synthetic shards at 16 sessions a month. Run it
+again after any change to `src/indexes/`.
+
+| Item                                   | Count |
+| -------------------------------------- | ----- |
+| Exercises in the bundle                | 22    |
+| Workouts in the bundle                 | 4     |
+| Months of shards                       | 24    |
+| Sessions                               | 384   |
+| Exercise occurrences                   | 1,920 |
+| Container occurrences                  | 384   |
+| Workout node lookups                   | 30    |
+| Muscle-to-exercise pairs               | 83    |
+| Capped recent occurrences (limit 50)   | 250   |
+| Recent sessions                        | 5     |
+| Active sessions                        | 0     |
+| Build time                             | 12 ms |
+
+The rebuild fits the Kindle budget at this volume. The number to watch is exercise
+occurrences: the build is linear in that count, so a tenfold history costs about
+ten times as long.
+
+The `recent*` cap bounds the size of those views, not total retained memory. The
+full `occurrencesByExerciseId` and `sessionsByWorkoutId` lists stay in memory,
+because `getExerciseHistory` must page over them for `Load older`. Total retained
+rows equal every result in every loaded shard, plus the capped slices on top. The
+shard loading policy, not the cap, is what limits memory.

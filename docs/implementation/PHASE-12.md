@@ -113,52 +113,52 @@ export function createLookupService(input: {
 
 ### Implementation
 
-- [ ] Create `src/indexes/types.ts` with `DataIndex`, `SessionSummary`, and
+- [x] Create `src/indexes/types.ts` with `DataIndex`, `SessionSummary`, and
       `ExerciseOccurrence`.
-- [ ] Build `exerciseById`, `workoutById`, and `nodeByWorkoutAndId` from static data.
-- [ ] Build `exerciseIdsByMuscleGroup` from primary and secondary muscles.
-- [ ] Traverse loaded shards newest month first and index exercise results by direct
+- [x] Build `exerciseById`, `workoutById`, and `nodeByWorkoutAndId` from static data.
+- [x] Build `exerciseIdsByMuscleGroup` from primary and secondary muscles.
+- [x] Traverse loaded shards newest month first and index exercise results by direct
       `exerciseId`.
-- [ ] Index container results separately for summary views.
-- [ ] Build `recentSessions` and `activeSessionsByUpdatedAtUtc` with explicit sorts.
-- [ ] Cap per-exercise occurrence lists at `recentLimit`.
-- [ ] Copy `unresolved` into the index without sorting it away.
-- [ ] Implement `createLookupService` with paging helpers `Page` and `PageResult`.
-- [ ] Implement `getLastTime` to skip sessions whose status is `in_progress`.
-- [ ] Implement `extendHistory` to merge new shards into the existing index without a
+- [x] Index container results separately for summary views.
+- [x] Build `recentSessions` and `activeSessionsByUpdatedAtUtc` with explicit sorts.
+- [x] Cap per-exercise occurrence lists at `recentLimit`.
+- [x] Copy `unresolved` into the index without sorting it away.
+- [x] Implement `createLookupService` with paging helpers `Page` and `PageResult`.
+- [x] Implement `getLastTime` to skip sessions whose status is `in_progress`.
+- [x] Implement `extendHistory` to merge new shards into the existing index without a
       full rebuild.
-- [ ] Implement the encoded-path fallback ordering for unresolved entries.
+- [x] Implement the encoded-path fallback ordering for unresolved entries.
 
 ### Tests
 
-- [ ] `tests/index-builder.test.ts`: sessions across three shards produce
+- [x] `tests/index-builder.test.ts`: sessions across three shards produce
       `activeSessionsByUpdatedAtUtc` sorted newest first.
-- [ ] `tests/index-builder.test.ts`: `recentSessions` returns at most five and
+- [x] `tests/index-builder.test.ts`: `recentSessions` returns at most five and
       excludes `in_progress`.
-- [ ] `tests/index-builder.test.ts`: `nodeByWorkoutAndId` keeps the same node ID in
+- [x] `tests/index-builder.test.ts`: `nodeByWorkoutAndId` keeps the same node ID in
       two workouts as two distinct entries.
-- [ ] `tests/index-builder.test.ts`: `exerciseIdsByMuscleGroup` includes secondary
+- [x] `tests/index-builder.test.ts`: `exerciseIdsByMuscleGroup` includes secondary
       muscles.
-- [ ] `tests/index-builder.test.ts`: an integer-like key in a fixture does not affect
+- [x] `tests/index-builder.test.ts`: an integer-like key in a fixture does not affect
       the sorted output.
-- [ ] `tests/lookup-service.test.ts`: `getLastTime` returns the newest completed
+- [x] `tests/lookup-service.test.ts`: `getLastTime` returns the newest completed
       occurrence and ignores a newer `in_progress` occurrence.
-- [ ] `tests/lookup-service.test.ts`: `getLastTime` returns `null` for an exercise
+- [x] `tests/lookup-service.test.ts`: `getLastTime` returns `null` for an exercise
       with no completed result.
-- [ ] `tests/lookup-service.test.ts`: `getExerciseHistory` pages newest first with no
+- [x] `tests/lookup-service.test.ts`: `getExerciseHistory` pages newest first with no
       gap and no duplicate across page boundaries.
-- [ ] `tests/lookup-service.test.ts`: `extendHistory` adds older entries and keeps
+- [x] `tests/lookup-service.test.ts`: `extendHistory` adds older entries and keeps
       the ordering invariant.
-- [ ] `tests/lookup-service.test.ts`: unresolved entries appear from
+- [x] `tests/lookup-service.test.ts`: unresolved entries appear from
       `getUnresolved` and sort by encoded path.
 
 ### Verification
 
-- [ ] `bun test` passes.
-- [ ] `bun run check` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
-- [ ] Manual: build an index from a seeded account with 24 months of shards and record
+- [x] `bun test` passes.
+- [x] `bun run check` passes.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
+- [x] Manual: build an index from a seeded account with 24 months of shards and record
       the build time and entry count in `docs/implementation/README.md`.
 
 ## Exit criteria

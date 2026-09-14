@@ -14,6 +14,7 @@
     "check:schemas": "bun scripts/validate-schemas.ts",
     "check:static": "bun scripts/check-static-data.ts",
     "smoke:store": "bun scripts/smoke-local-store.ts",
+    "bench:index": "bun scripts/bench-index.ts",
     "seed": "bun scripts/seed-exercises.ts",
     "seed:check": "bun scripts/seed-exercises.ts check",
     "seed:bump": "bun scripts/seed-exercises.ts bump"
