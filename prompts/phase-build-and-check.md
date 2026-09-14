@@ -6,10 +6,7 @@ When build complete, produce a one-paragraph build summary in `.agent-work/phase
 
 ```
 Review staged changes. They represent work for Phases ${CURRENT_PHASE} as defined in @docs/implementation/PHASE-${CURRENT_PHASE}.md 
-Judge work on three dimensions. 
-1. Assess for correctness. Any correctness issues you report must cite specific requirements violated and steps to reproduce. 
-2. Look for common errors or anti patterns.
-3. Nothing is security critical, so doesn't need nitpicking; look only for glaring security flaws.
+Assess for correctness. Any correctness issues you report must cite specific requirements violated and steps to reproduce. 
 Save your findings to `.agent-work/phase-${CURRENT_PHASE}/audit.md`
 ```
 
