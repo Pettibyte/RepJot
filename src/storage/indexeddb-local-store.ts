@@ -74,6 +74,21 @@ export async function createIndexedDbLocalStore(accountKey: string): Promise<Loc
     setMany: (entries: Array<LocalStoreEntry>): Promise<void> =>
       write((store) => {
         for (const entry of entries) store.put(entry.value, entry.name);
-      })
+      }),
+    async listKeys(prefix: string): Promise<string[]> {
+      let keys: string[] = [];
+      await withStore(db, 'readonly', (store) => {
+        // One range read, not a full cursor walk. `getAllKeys` returns keys in
+        // the store's own ascending order, so the sort below is a no-op for
+        // IndexedDB and keeps the contract explicit for other engines.
+        const request = store.getAllKeys(IDBKeyRange.lowerBound(prefix));
+        request.onsuccess = () => {
+          keys = request.result
+            .filter((key): key is string => typeof key === 'string' && key.startsWith(prefix))
+            .sort();
+        };
+      });
+      return keys;
+    }
   };
 }

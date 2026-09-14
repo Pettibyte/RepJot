@@ -29,6 +29,10 @@ locally first, reconciles with Drive, retries, and commits cache state.
 
 ### Signatures
 
+`edit` resolves after the local write becomes durable. It returns a handle. The
+handle carries the network result separately, so a caller that only saves can
+ignore it.
+
 ```ts
 // src/sync/sync-coordinator.ts
 export interface SyncDeps {
@@ -36,28 +40,61 @@ export interface SyncDeps {
   drive: DriveAdapter;
   staticData: LoadedStaticData;
   accountKey: string;
+  /** Duplicate-name consolidation. Phase 11 supplies this. */
+  consolidate?: ConsolidateHook;
+  /** Quiet period for `queueEdit`. */
+  debounceMs?: number;
+  /** Timer pair. Injectable so tests need no wall clock. */
+  timers?: TimerSet;
+  /** `pagehide` target. Defaults to `window` when the host has one. */
+  pagehideTarget?: EventTargetLike | null;
 }
+
+/** Durable now, synchronized later. */
+export interface EditHandle {
+  /** Always `true` when `edit` resolves. The local write landed. */
+  localDurable: true;
+  /** Resolves when this edit commits to Drive. Rejects with the sync failure. */
+  synced: Promise<void>;
+}
+
 export interface Coordinator {
   /** Load one logical file into memory, downloading and migrating when needed. */
   ensureLoaded(logicalName: string): Promise<unknown>;
   /** Apply a pure edit, persist it locally, then synchronize. */
-  edit(logicalName: string, mutate: (doc: unknown) => unknown): Promise<void>;
+  edit(logicalName: string, mutate: (doc: unknown) => unknown): Promise<EditHandle>;
+  /** Queue one debounced edit. Normal typing goes through here. */
+  queueEdit(logicalName: string, mutate: (doc: unknown) => unknown): void;
   /** Reconcile every known logical file for this account. */
   syncAll(): Promise<void>;
   /** Flush pending local edits. Called on pagehide. */
   flush(): Promise<void>;
-  /** Forget in-memory state for this account. */
-  reset(): void;
+  /**
+   * Forget in-memory state for this account. The local rows stay.
+   *
+   * `reset` flushes the edit queue first, so every queued mutator reaches
+   * local storage before the maps clear. A reset that cannot flush rejects
+   * instead of discarding an edit. REQUIREMENTS 4.4.
+   */
+  reset(): Promise<void>;
+  /** Read the in-memory working document. `undefined` when not loaded. */
+  peek(logicalName: string): unknown;
 }
+
+export type ConsolidateHook = (catalog: DriveFileMeta[]) => Promise<DriveFileMeta[]>;
 export function createCoordinator(deps: SyncDeps): Coordinator;
 export function logicalNameForShard(startedAtUtc: string): string;  // 'results-2026-09.json'
+export const MAX_UPLOAD_ATTEMPTS = 3;
+export const PREFERENCES_NAME = 'preferences.json';
 ```
 
 ### Reconciliation sequence
 
 1. Acquire the in-memory mutex for `(accountKey, logicalName)`.
 2. List the Drive catalog.
-3. Drop cache and base records whose `driveFileId` no longer appears in the catalog.
+3. Drop the cached record whose `driveFileId` no longer appears in the catalog.
+   Keep the base record while a pending delta exists, because a `patch` envelope
+   cannot replay without its base.
 4. Read the cached, base, and pending records.
 5. Reuse the cached document when its remote metadata is unchanged and it has no
    pending delta.
@@ -77,10 +114,28 @@ export function logicalNameForShard(startedAtUtc: string): string;  // 'results-
 ### Save path
 
 1. `edit` applies the mutation to the in-memory working document.
-2. Compute the pending delta from base to local.
-3. One `setMany` writes working, base, and pending. Set `saved`.
+2. Compute the pending delta from base to local. With no base, the delta is a
+   `replace` envelope that carries the whole local document.
+3. One `setMany` writes working and pending, and rewrites the base only when a
+   base already exists. Set `saved`.
 4. Start the reconciliation for that logical file.
 5. A Drive error leaves all three records in place and sets `sync_failed`.
+6. A failure in the local half sets `idle` and rethrows. The edit never became
+   durable, so `sync_failed` would be wrong.
+
+## Deferred work
+
+### Save on blur
+
+REQUIREMENTS 4.2 requires save-on-blur end to end. `src/sync/debounce.ts`
+exports `flushOnBlur`, and `tests/sync-debounce.test.ts` covers it. No screen
+calls it yet, because this phase has no editing controls. `src/` holds
+`App.svelte` and presentational components only.
+
+The UI phase that adds the editing controls must wire `flushOnBlur` to each
+editable control. Pass the control element and `coordinator.flush`. Do not
+lose this requirement: the `pagehide` flush alone does not satisfy
+REQUIREMENTS 4.2.
 
 ## Requirements traceability
 
@@ -122,7 +177,19 @@ export function logicalNameForShard(startedAtUtc: string): string;  // 'results-
 - [ ] Set `saveStatus` to `saving` before the local write and `saved` after it
       resolves.
 - [ ] Set `sync_failed` after the third failed attempt and keep the pending delta.
-- [ ] Register the `pagehide` flush in the coordinator constructor.
+- [ ] Register the `pagehide` flush in the coordinator constructor, and
+      re-register it in `reset`.
+- [ ] Leave the base row absent when no synchronization has produced one. The
+      pending `replace` envelope carries the local intent.
+- [ ] Start a brand-new logical file from the family empty document in the
+      `edit` path.
+- [ ] Keep the base row while a pending delta exists, even when its Drive file
+      vanishes from the catalog.
+- [ ] Set a terminal save status when the local half of `edit` fails. A local
+      failure is not `sync_failed`.
+- [ ] Flush the edit queue before `reset` clears it.
+- [ ] Rethrow the Drive adapter error kind unchanged. Use `ambiguous_upload`
+      only when the write got no answer.
 - [ ] Log one diagnostic per attempt with the logical name, attempt number, and error
       kind.
 

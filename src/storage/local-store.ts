@@ -44,6 +44,20 @@ export interface LocalStore {
    * REQUIREMENTS 3.14.
    */
   setMany(entries: Array<LocalStoreEntry>): Promise<void>;
+  /**
+   * List every stored key that starts with `prefix`, sorted ascending.
+   *
+   * The sync coordinator needs this one enumeration and no other query. It
+   * holds the pending delta and the base copy under prefixed keys, so after a
+   * reload it must find which logical files still carry unsynchronized local
+   * intent. REQUIREMENTS 4.15. A prefix scan is the whole request; the façade
+   * still runs no index, no sort by value, and no partial read.
+   * REQUIREMENTS 3.13, 3.16.
+   *
+   * An empty prefix lists every key. A prefix that matches nothing resolves to
+   * an empty array, never an error.
+   */
+  listKeys(prefix: string): Promise<string[]>;
 }
 
 /** Prefix for a cached document record. */

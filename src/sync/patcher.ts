@@ -15,7 +15,7 @@
 // Without it, a delta holds live references into the caller's document, and a
 // merged document could alias the caller's remote copy and change it later.
 
-import { DiffPatcher } from 'jsondiffpatch';
+import { DiffPatcher, type Delta } from 'jsondiffpatch';
 
 /**
  * The shared differ and patcher.
@@ -25,6 +25,19 @@ import { DiffPatcher } from 'jsondiffpatch';
 export const patcher = new DiffPatcher({
   cloneDiffValues: true
 });
+
+/**
+ * Apply a delta of unknown provenance to a document.
+ *
+ * `jsondiffpatch` types its delta as a union of the shapes it produces. A
+ * delta read back from local storage arrives as `unknown`, and re-deriving the
+ * union here would mean trusting a stored value the way an in-memory one is
+ * trusted. This wrapper is the one place that cast happens, so callers pass
+ * `unknown` and never import the library type.
+ */
+export function applyDelta(base: unknown, delta: unknown): unknown {
+  return patcher.patch(base, delta as Delta);
+}
 
 /**
  * Deep copy a JSON value.

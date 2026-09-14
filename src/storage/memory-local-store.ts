@@ -68,6 +68,13 @@ export function createMemoryLocalStore(): LocalStore {
     async setMany(entries: Array<LocalStoreEntry>): Promise<void> {
       const staged: Array<[string, unknown]> = entries.map((entry) => [entry.name, clone(entry.value)]);
       for (const [name, value] of staged) records.set(name, value);
+    },
+    async listKeys(prefix: string): Promise<string[]> {
+      const matches: string[] = [];
+      for (const key of records.keys()) {
+        if (key.startsWith(prefix)) matches.push(key);
+      }
+      return matches.sort();
     }
   };
 }
