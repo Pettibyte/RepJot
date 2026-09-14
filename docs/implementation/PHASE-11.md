@@ -94,55 +94,59 @@ export function consolidateGroup(
 
 ### Implementation
 
-- [ ] Create `src/sync/recognized-names.ts` with `recognize` for
+- [x] Create `src/sync/recognized-names.ts` with `recognize` for
       `preferences.json` and the `results-YYYY-MM.json` pattern.
-- [ ] Implement `findDuplicateGroups` over the catalog, grouping by recognized name.
-- [ ] Implement the tuple comparator for `(updatedAtUtc, driveFileId)`.
-- [ ] Implement the session-map union with the tuple rule.
-- [ ] Implement the preference-mapping merge with the tuple rule.
-- [ ] Implement steps 8 through 12 in that order. Never delete before the read-back
+- [x] Implement `findDuplicateGroups` over the catalog, grouping by recognized name.
+- [x] Implement the tuple comparator for `(updatedAtUtc, driveFileId)`.
+- [x] Implement the session-map union with the tuple rule.
+- [x] Implement the preference-mapping merge with the tuple rule.
+- [x] Implement steps 8 through 12 in that order. Never delete before the read-back
       comparison passes.
-- [ ] Return the blocked outcome without deleting anything when any guard fails.
-- [ ] Call `consolidateGroup` from the coordinator between the catalog list and any
+- [x] Return the blocked outcome without deleting anything when any guard fails.
+- [x] Call `consolidateGroup` from the coordinator between the catalog list and any
       normal write.
-- [ ] Report unknown files in the catalog as diagnostics only. Never delete them.
-- [ ] Leave the local cache untouched for a blocked group so the next sync retries.
+- [x] Report unknown files in the catalog as diagnostics only. Never delete them.
+- [x] Leave the local cache untouched for a blocked group so the next sync retries.
 
 ### Tests
 
-- [ ] `tests/recognized-names.test.ts`: `results-2026-09.json` recognizes as a shard
+- [x] `tests/recognized-names.test.ts`: `results-2026-09.json` recognizes as a shard
       with `yearMonthUtc: '2026-09'`. An unknown name returns `null`.
-- [ ] `tests/consolidate-duplicates.test.ts`: two valid shard copies with disjoint
+- [x] `tests/consolidate-duplicates.test.ts`: two valid shard copies with disjoint
       sessions consolidate to the union, keep the smallest ID as primary, and delete
       the other.
-- [ ] `tests/consolidate-duplicates.test.ts`: the same session ID in two copies keeps
+- [x] `tests/consolidate-duplicates.test.ts`: the same session ID in two copies keeps
       the copy with the greater `updatedAtUtc`.
-- [ ] `tests/consolidate-duplicates.test.ts`: equal `updatedAtUtc` resolves by the
+- [x] `tests/consolidate-duplicates.test.ts`: equal `updatedAtUtc` resolves by the
       greater Drive file ID.
-- [ ] `tests/consolidate-duplicates.test.ts`: preferences with different mappings
+- [x] `tests/consolidate-duplicates.test.ts`: preferences with different mappings
       merge. A conflicting mapping follows the tuple rule.
-- [ ] `tests/consolidate-duplicates.test.ts`: one corrupt copy blocks the group and
+- [x] `tests/consolidate-duplicates.test.ts`: one corrupt copy blocks the group and
       produces zero delete calls.
-- [ ] `tests/consolidate-duplicates.test.ts`: a future schema version in one copy
+- [x] `tests/consolidate-duplicates.test.ts`: a future schema version in one copy
       blocks with `unsupported_version`.
-- [ ] `tests/consolidate-duplicates.test.ts`: a copy whose metadata changed at step 8
+- [x] `tests/consolidate-duplicates.test.ts`: a copy whose metadata changed at step 8
       blocks with `changed_during_cleanup` and produces zero delete calls.
-- [ ] `tests/consolidate-duplicates.test.ts`: a read-back mismatch blocks and
+- [x] `tests/consolidate-duplicates.test.ts`: a read-back mismatch blocks and
       produces zero delete calls.
-- [ ] `tests/consolidate-duplicates.test.ts`: the relist step records one remaining
+- [x] `tests/consolidate-duplicates.test.ts`: the relist step records one remaining
       file ID only when exactly one recognized file remains.
-- [ ] `tests/consolidate-duplicates.test.ts`: an unknown Drive file in the folder is
+- [x] `tests/consolidate-duplicates.test.ts`: an unknown Drive file in the folder is
       never deleted.
 
 ### Verification
 
-- [ ] `bun test` passes.
-- [ ] `bun run check` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
+- [x] `bun test` passes.
+- [x] `bun run check` passes.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
 - [ ] Manual against a live account: create a duplicate `preferences.json` in
       `appDataFolder` by hand, run a sync, and confirm the client consolidates to one
-      file and deletes the other.
+      file and deletes the other. **Not done.** Needs a real Google account, and the
+      sync layer is not yet imported by the app entry, so it cannot be exercised from
+      the shipped bundle. Same gap as Phases 09 and 10. See `duplicate_drive_file`
+      wiring in `src/sync/sync-coordinator.ts` and audit finding F-5 in
+      `.agent-work/phase-11/audit.md`.
 
 ## Exit criteria
 

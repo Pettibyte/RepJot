@@ -159,77 +159,86 @@ REQUIREMENTS 4.2.
 
 ### Implementation
 
-- [ ] Create `src/sync/cache-records.ts` with typed read and write helpers over the
+- [x] Create `src/sync/cache-records.ts` with typed read and write helpers over the
       Phase 06 key scheme.
-- [ ] Create `src/sync/debounce.ts` with `debouncedEdit`, `flushOnBlur`, and
+- [x] Create `src/sync/debounce.ts` with `debouncedEdit`, `flushOnBlur`, and
       `flushOnPagehide` helpers.
-- [ ] Implement `createCoordinator` with a `Map<string, Promise<void>>` mutex keyed
+- [x] Implement `createCoordinator` with a `Map<string, Promise<void>>` mutex keyed
       by `(accountKey, logicalName)`.
-- [ ] Implement `ensureLoaded` with steps 3–6.
-- [ ] Implement `edit` with the save path above.
-- [ ] Implement `reconcileOne` with steps 1–15.
-- [ ] Implement the read-back comparison as an exact string compare of the serialized
+- [x] Implement `ensureLoaded` with steps 3–6.
+- [x] Implement `edit` with the save path above.
+- [x] Implement `reconcileOne` with steps 1–15.
+- [x] Implement the read-back comparison as an exact string compare of the serialized
       document.
-- [ ] Implement the retry loop with attempt counting, a fresh base each attempt, and a
+- [x] Implement the retry loop with attempt counting, a fresh base each attempt, and a
       cap of three.
-- [ ] Treat a lost response after a committed write as `ambiguous_upload`: read Drive
+- [x] Treat a lost response after a committed write as `ambiguous_upload`: read Drive
       before retrying.
-- [ ] Set `saveStatus` to `saving` before the local write and `saved` after it
+- [x] Set `saveStatus` to `saving` before the local write and `saved` after it
       resolves.
-- [ ] Set `sync_failed` after the third failed attempt and keep the pending delta.
-- [ ] Register the `pagehide` flush in the coordinator constructor, and
+- [x] Set `sync_failed` after the third failed attempt and keep the pending delta.
+- [x] Register the `pagehide` flush in the coordinator constructor, and
       re-register it in `reset`.
-- [ ] Leave the base row absent when no synchronization has produced one. The
+- [x] Leave the base row absent when no synchronization has produced one. The
       pending `replace` envelope carries the local intent.
-- [ ] Start a brand-new logical file from the family empty document in the
+- [x] Start a brand-new logical file from the family empty document in the
       `edit` path.
-- [ ] Keep the base row while a pending delta exists, even when its Drive file
+- [x] Keep the base row while a pending delta exists, even when its Drive file
       vanishes from the catalog.
-- [ ] Set a terminal save status when the local half of `edit` fails. A local
+- [x] Set a terminal save status when the local half of `edit` fails. A local
       failure is not `sync_failed`.
-- [ ] Flush the edit queue before `reset` clears it.
-- [ ] Rethrow the Drive adapter error kind unchanged. Use `ambiguous_upload`
+- [x] Flush the edit queue before `reset` clears it.
+- [x] Rethrow the Drive adapter error kind unchanged. Use `ambiguous_upload`
       only when the write got no answer.
-- [ ] Log one diagnostic per attempt with the logical name, attempt number, and error
+- [x] Log one diagnostic per attempt with the logical name, attempt number, and error
       kind.
 
 ### Tests
 
-- [ ] Add `tests/fakes/fake-drive.ts`: an in-memory Drive that can pause before
+- [x] Add `tests/fakes/fake-drive.ts`: an in-memory Drive that can pause before
       upload and before read-back, can commit a write and lose the response, and can
       reject with any `AppErrorKind`.
-- [ ] `tests/sync-coordinator.test.ts`: a local edit writes working, base, and
+- [x] `tests/sync-coordinator.test.ts`: a local edit writes working, base, and
       pending in one `setMany` before any Drive call. Assert call order.
-- [ ] `tests/sync-coordinator.test.ts`: a clean cached file with unchanged metadata
+- [x] `tests/sync-coordinator.test.ts`: a clean cached file with unchanged metadata
       and no pending delta causes no download.
-- [ ] `tests/sync-coordinator.test.ts`: changed remote metadata triggers a download
+- [x] `tests/sync-coordinator.test.ts`: changed remote metadata triggers a download
       and a pipeline run.
-- [ ] `tests/sync-coordinator.test.ts`: a cache record whose file ID vanished from
+- [x] `tests/sync-coordinator.test.ts`: a cache record whose file ID vanished from
       the catalog is dropped.
-- [ ] `tests/sync-coordinator.test.ts`: a successful cycle writes confirmed content as
+- [x] `tests/sync-coordinator.test.ts`: a successful cycle writes confirmed content as
       both working and base and clears pending.
-- [ ] `tests/sync-coordinator.test.ts`: a read-back mismatch triggers a re-read, a
+- [x] `tests/sync-coordinator.test.ts`: a read-back mismatch triggers a re-read, a
       fresh merge, and a second upload.
-- [ ] `tests/sync-coordinator.test.ts`: three failed attempts set `sync_failed` and
+- [x] `tests/sync-coordinator.test.ts`: three failed attempts set `sync_failed` and
       leave the pending delta intact.
-- [ ] `tests/sync-coordinator.test.ts`: a lost response after a committed write is
+- [x] `tests/sync-coordinator.test.ts`: a lost response after a committed write is
       classified `ambiguous_upload` and resolved by a Drive read.
-- [ ] `tests/sync-coordinator.test.ts`: two concurrent `edit` calls on one logical
+- [x] `tests/sync-coordinator.test.ts`: two concurrent `edit` calls on one logical
       file serialize through the mutex.
-- [ ] `tests/sync-coordinator.test.ts`: a reload simulation restores the pending
+- [x] `tests/sync-coordinator.test.ts`: a reload simulation restores the pending
       delta from the store and completes the merge.
-- [ ] `tests/sync-convergence.test.ts`: two fake clients with different session edits
+- [x] `tests/sync-convergence.test.ts`: two fake clients with different session edits
       converge after both synchronize.
 
 ### Verification
 
-- [ ] `bun test` passes.
-- [ ] `bun run check` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
+- [x] `bun test` passes.
+- [x] `bun run check` passes.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
 - [ ] Manual against a live account: edit, kill the network before upload, confirm
       `Sync failed` with local data intact, restore the network, and confirm the
       pending delta commits.
+
+The four automated gates above ran against the current tree and pass: `bun test`
+680 pass / 0 fail, `bun run check` 0 errors, `bun run build` exit 0, and
+`bun run check:compat` reports the bundle ES2019 safe.
+
+The live-account item stays unchecked on purpose. It needs a real Google account
+and a real network cut, which no automated probe can stand in for. The fake
+Drive covers the same sequence in tests, but a test double cannot prove the
+real adapter's behavior under a genuine dropped connection.
 
 ## Exit criteria
 
