@@ -3,7 +3,7 @@
 You are orchestrator. Your job is to coordinate the remaining build phases of this project.
 
 ## Roles per session
-Builder-Verifier-Commiter. Builds the code, assesses technical claims from Judge, and ultimately commits the code.
+Builder-Verifier-Commiter. Builds the code, verifies technical claims from Judge, and ultimately commits the code.
 Judge. Reviews staged changes and saves an audit file with correctness issues.
 Fixer. A fresh session to fix verified correctness issues.
 
@@ -51,6 +51,8 @@ Set `phase` to the current phase number. This JSON file models only the phase st
 
 ### State advancement guards
 
+Treat every idle/stopped/completion notification as untrusted. Before reporting a phase state or starting another role, read the phase `status.json` and check the prior session result. Report only the state confirmed by that JSON; never infer a state from a notification.
+
 After every `yield_to_subsessions`, before starting another role, read the phase `status.json`. Advance only when:
 
 - the current role is `complete`;
@@ -91,5 +93,5 @@ Fix all issues identified in `.agent-work/phase-${CURRENT_PHASE}/to-fix.md` and 
 Finally, return control to Builder-Verifier, reusing the session ID from before. *Important*: Be certain you reuse Builder's session ID. Use this prompt:
 
 ```
-In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `committer` to `complete` and `state` to `complete`. Preserve all other values, keep the file valid JSON, and stage it. Commit the work with a commit message in this exact format: first line, the headline commit message (for example, `Phase {CURRENT_PHASE}: phase title`); then a blank line; then a Markdown list of significant simplifications and changes.
+In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `committer` to `complete` and `state` to `complete`. Preserve all other values, keep the file valid JSON, and stage it. Commit the work with a commit message in this exact format: first line, the headline commit message (for example, `Phase ${CURRENT_PHASE}: phase title`); then a blank line; then a Markdown list of significant simplifications and changes.
 ```

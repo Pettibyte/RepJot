@@ -91,7 +91,7 @@ export interface SyncDeps {
   drive: DriveAdapter;
   /** Validated static bundle, for the semantic stage. */
   staticData: LoadedStaticData;
-  /** Account namespace key. Scopes the mutex and the store. */
+  /** Account namespace key. Scopes the locks and the store. */
   accountKey: string;
   /** Duplicate-name consolidation. Phase 11 supplies this. */
   consolidate?: ConsolidateHook;
@@ -276,10 +276,9 @@ function classifyAttempt(error: unknown): { kind: AppErrorKind; retryable: boole
 /**
  * Create the coordinator for one account.
  *
- * The coordinator holds two maps, the in-memory documents and the per-file
- * mutex, plus the debounced edit queue. Nothing crosses an account boundary,
- * because `accountKey` scopes every mutex key and the store is already
- * per-account.
+ * The coordinator holds the in-memory documents, the two per-file locks, and
+ * the debounced edit queue. Nothing crosses an account boundary, because
+ * `accountKey` scopes every lock key and the store is already per-account.
  */
 export function createCoordinator(deps: SyncDeps): Coordinator {
   const consolidate = deps.consolidate === undefined ? noConsolidation : deps.consolidate;
@@ -312,51 +311,116 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   const docs = new Map<string, LoadedDoc>();
 
   /**
-   * The mutex, one entry per `(accountKey, logicalName)`.
+   * The two locks, one entry per `(accountKey, logicalName)`.
    *
-   * Two reconciliations of one file must not overlap: both would read the
-   * base, merge, and write the same three records. The mutex serializes
-   * them. REQUIREMENTS 4.16.
+   * `localLock` guards the in-memory map and the three local rows. Nothing
+   * that runs inside it touches the network, so a slow or stalled Drive
+   * cannot delay a local save. `syncLock` serializes reconciliations, which
+   * is where every Drive call lives. Two reconciliations of one file must
+   * not overlap: both would read the base, merge, and write the same three
+   * records. REQUIREMENTS 4.1, 4.16.
+   *
+   * The nesting rule is always sync then local. No path takes the sync lock
+   * while it holds the local lock, so the pair cannot deadlock. REQUIREMENTS
+   * 4.4.
    */
-  const mutex = new Map<string, Promise<void>>();
-  const mutexKey = (logicalName: string): string => `${deps.accountKey} ${logicalName}`;
-
-  /** Reconciliations started and not finished, so `flush` can await them. */
-  const inFlight = new Map<string, Promise<void>>();
-
-  /** Detach for the `pagehide` listener registered at the bottom. */
-  let detachPagehide: () => void = () => undefined;
-
-  /** Debounced edit queue. Normal typing lands here. */
-  const queue: EditQueue = debouncedEdit(
-    async (logicalName: string, mutate: (doc: unknown) => unknown): Promise<void> => {
-      const handle = await edit(logicalName, mutate);
-      await handle.synced;
-    },
-    { delayMs: deps.debounceMs, timers: deps.timers }
-  );
+  const localLock = new Map<string, Promise<void>>();
+  const syncLock = new Map<string, Promise<void>>();
+  const lockKey = (logicalName: string): string => `${deps.accountKey} ${logicalName}`;
 
   /**
-   * Run `task` after the previous task for this logical file settles.
+   * Run `task` after the previous task in this lock for this file settles.
    *
-   * The map keeps a never-rejecting tail, so one failed reconciliation
-   * cannot wedge the file forever, while the caller still sees the real
-   * result.
+   * The map keeps a never-rejecting tail, so one failed task cannot wedge
+   * the file forever, while the caller still sees the real result.
    */
-  async function withMutex<T>(logicalName: string, task: () => Promise<T>): Promise<T> {
-    const key = mutexKey(logicalName);
-    const previous = mutex.get(key) ?? Promise.resolve();
+  function runQueued<T>(
+    locks: Map<string, Promise<void>>,
+    logicalName: string,
+    task: () => Promise<T>
+  ): Promise<T> {
+    const key = lockKey(logicalName);
+    const previous = locks.get(key) ?? Promise.resolve();
     const result = previous.then(task, task);
     const tail = result.then(
       () => undefined,
       () => undefined
     );
-    mutex.set(key, tail);
+    locks.set(key, tail);
     void tail.then(() => {
-      if (mutex.get(key) === tail) mutex.delete(key);
+      if (locks.get(key) === tail) locks.delete(key);
     });
     return result;
   }
+
+  /** Serialize a local-state change. Never put a network call inside. */
+  function withLocal<T>(logicalName: string, task: () => Promise<T>): Promise<T> {
+    return runQueued(localLock, logicalName, task);
+  }
+
+  /**
+   * Serialize one reconciliation, network included.
+   *
+   * Every owner of the sync lock registers here, so `flush` and `reset` can
+   * wait for all of them. A lock cleared while one of its owners still runs
+   * lets a later upload overlap an older one. REQUIREMENTS 4.4, 4.16.
+   */
+  function withSync<T>(logicalName: string, task: () => Promise<T>): Promise<T> {
+    const result = runQueued(syncLock, logicalName, task);
+    const tracked: Promise<void> = result.then(
+      () => undefined,
+      () => undefined
+    );
+    inFlight.add(tracked);
+    void tracked.then(
+      () => {
+        inFlight.delete(tracked);
+      },
+      () => {
+        inFlight.delete(tracked);
+      }
+    );
+    return result;
+  }
+
+  /**
+   * Counts the local writes that carry user intent, per logical file.
+   *
+   * A load captures the count before it reads Drive. When it comes back and
+   * the count moved, a newer local save landed in between, so the load must
+   * drop its remote view instead of writing it back. REQUIREMENTS 4.4.
+   */
+  const localWrites = new Map<string, number>();
+  const writeCount = (logicalName: string): number => localWrites.get(logicalName) ?? 0;
+  const countLocalWrite = (logicalName: string): void => {
+    localWrites.set(logicalName, writeCount(logicalName) + 1);
+  };
+
+  /**
+   * Reconciliations started and not finished, so `flush` and `reset` can
+   * await them. One entry per started reconciliation, because several can
+   * queue for one file.
+   */
+  const inFlight = new Set<Promise<void>>();
+
+  /** Detach for the `pagehide` listener registered at the bottom. */
+  let detachPagehide: () => void = () => undefined;
+
+  /**
+   * Debounced edit queue. Normal typing lands here.
+   *
+   * The runner stops at local durability. It never waits for the network,
+   * because a stalled upload must not hold the next queued input: on
+   * `pagehide` the whole queue has milliseconds to reach storage. The
+   * reconciliation each edit started is tracked by the sync lock and
+   * awaited once, at the end of the flush. REQUIREMENTS 4.1, 4.2, 4.4.
+   */
+  const queue: EditQueue = debouncedEdit(
+    async (logicalName: string, mutate: (doc: unknown) => unknown): Promise<void> => {
+      await edit(logicalName, mutate);
+    },
+    { delayMs: deps.debounceMs, timers: deps.timers }
+  );
 
   /** Read the three local slots for one logical file. */
   function readSlots(logicalName: string): Promise<RecordSet> {
@@ -414,79 +478,142 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   }
 
   /**
+   * True when the cached row still matches Drive and nothing is pending.
+   *
+   * A row that passes this test needs no download: the cached text is the
+   * remote text, and no local edit is waiting. REQUIREMENTS 4.15.
+   */
+  function isCleanRow(slots: RecordSet, entry: DriveFileMeta | null): boolean {
+    return (
+      slots.cached !== null &&
+      slots.pending === null &&
+      entry !== null &&
+      remoteMarker(entry) === slots.cached.remoteEtag
+    );
+  }
+
+  /**
+   * The in-memory state for a logical file this device has never held.
+   *
+   * The base holds the same empty document, not nothing. A three-way merge
+   * with no base at all takes the local document whole and replaces whatever
+   * another device already wrote, so an offline first save could erase a
+   * shard another device created. With the empty document as the base, the
+   * local content reads as an addition and the remote content survives.
+   * REQUIREMENTS 4.1, 4.9.
+   */
+  function emptyLoaded(logicalName: string, family: MergeFamily): LoadedDoc {
+    const emptyText = JSON.stringify(emptyDocumentFor(family, logicalName));
+    const parsed = parseDoc(logicalName, family, emptyText);
+    return {
+      logicalName,
+      family,
+      doc: parsed.doc,
+      workingText: emptyText,
+      baseText: emptyText,
+      driveFileId: null,
+      remoteEtag: null,
+      schemaVersion: parsed.schemaVersion,
+      pending: null
+    };
+  }
+
+  /**
    * Load one logical file. Steps 2 through 7 of the reconciliation list.
    *
    * A clean cached row whose marker still matches the catalog needs no
    * download. A changed, missing, or pending file is downloaded and run
    * through the pipeline. REQUIREMENTS 4.15.
+   *
+   * The Drive reads run outside the local lock, and the result is applied
+   * inside it. Applying re-reads the local rows, so a save that landed
+   * while this load was on the network wins over the remote view the load
+   * brought back. REQUIREMENTS 4.4.
    */
   async function loadDoc(logicalName: string): Promise<LoadedDoc> {
     const family = familyFor(logicalName);
     const catalog = await loadCatalog(logicalName);
-    await dropVanished(logicalName, catalog);
-    const slots = await readSlots(logicalName);
     const entry = catalogEntry(catalog, logicalName);
 
-    // Step 6: clean cached row, unchanged marker, no pending delta.
-    if (
-      slots.cached !== null &&
-      slots.pending === null &&
-      entry !== null &&
-      remoteMarker(entry) === slots.cached.remoteEtag
-    ) {
-      const parsed = parseDoc(logicalName, family, slots.cached.contentText);
-      const loaded: LoadedDoc = {
-        logicalName,
-        family,
-        doc: parsed.doc,
-        workingText: slots.cached.contentText,
-        baseText: slots.cached.contentText,
-        driveFileId: slots.cached.driveFileId,
-        remoteEtag: slots.cached.remoteEtag,
-        schemaVersion: parsed.schemaVersion,
-        pending: null
-      };
-      docs.set(logicalName, loaded);
-      return loaded;
-    }
+    // Decide before the network whether the cached row is still clean, so a
+    // clean file costs no download. The check runs again inside the lock on
+    // fresh rows. REQUIREMENTS 4.15.
+    const cleanBefore = isCleanRow(await readSlots(logicalName), entry);
+    const writesBefore = writeCount(logicalName);
+    const remote = cleanBefore || entry === null ? null : await deps.drive.readFile(entry.id);
 
-    // Step 7: download the changed or missing file.
-    if (entry !== null) {
-      const remote = await deps.drive.readFile(entry.id);
-      const loaded = remember(
-        restoreFrom(logicalName, family, slots, remote.text, remote.meta)
-      );
-      // Persist the read so the next load can reuse it. Only a file with no
-      // pending delta is cached, because a local edit must not be overwritten
-      // by the remote view. REQUIREMENTS 4.4.
-      if (loaded.pending === null) {
-        await deps.store.setMany([
-          {
-            name: cacheKey(logicalName),
-            value: makeCachedRecord(
-              logicalName,
-              loaded.driveFileId,
-              loaded.remoteEtag,
-              loaded.workingText,
-              loaded.schemaVersion,
-              new Date().toISOString()
-            )
-          },
-          { name: baseKey(logicalName), value: makeBaseRecord(loaded.baseText ?? '', loaded.driveFileId) }
-        ]);
+    return withLocal(logicalName, async (): Promise<LoadedDoc> => {
+      // A local save landed while this load read Drive. That save is newer
+      // than anything in the remote view, so the view is dropped and the
+      // current local state is returned untouched. REQUIREMENTS 4.4.
+      if (writeCount(logicalName) !== writesBefore) {
+        const current = docs.get(logicalName);
+        return current ?? (await restoreLocal(logicalName, family));
       }
-      return loaded;
-    }
 
-    // No remote file and no local row: there is nothing to load.
-    if (slots.cached === null && slots.base === null && slots.pending === null) {
-      throw new AppError(
-        'invalid_document',
-        { reason: 'nothing_to_load' },
-        'This logical file exists neither on Drive nor in local storage.'
-      );
-    }
-    return remember(restoreFrom(logicalName, family, slots, null, null));
+      await dropVanished(logicalName, catalog);
+      const slots = await readSlots(logicalName);
+
+      // Step 6: clean cached row, unchanged marker, no pending delta.
+      const cached = slots.cached;
+      if (cached !== null && isCleanRow(slots, entry)) {
+        const parsed = parseDoc(logicalName, family, cached.contentText);
+        const loaded: LoadedDoc = {
+          logicalName,
+          family,
+          doc: parsed.doc,
+          workingText: cached.contentText,
+          baseText: cached.contentText,
+          driveFileId: cached.driveFileId,
+          remoteEtag: cached.remoteEtag,
+          schemaVersion: parsed.schemaVersion,
+          pending: null
+        };
+        return remember(loaded);
+      }
+
+      // Step 7: the file changed or is missing, so use the content read
+      // above. Only a file with no pending delta is cached, because a local
+      // edit must not be overwritten by the remote view. REQUIREMENTS 4.4.
+      if (entry !== null) {
+        const loaded = remember(
+          restoreFrom(
+            logicalName,
+            family,
+            slots,
+            remote === null ? null : remote.text,
+            remote === null ? null : remote.meta
+          )
+        );
+        if (loaded.pending === null) {
+          await deps.store.setMany([
+            {
+              name: cacheKey(logicalName),
+              value: makeCachedRecord(
+                logicalName,
+                loaded.driveFileId,
+                loaded.remoteEtag,
+                loaded.workingText,
+                loaded.schemaVersion,
+                new Date().toISOString()
+              )
+            },
+            { name: baseKey(logicalName), value: makeBaseRecord(loaded.baseText ?? '', loaded.driveFileId) }
+          ]);
+        }
+        return loaded;
+      }
+
+      // No remote file and no local row: there is nothing to load.
+      if (slots.cached === null && slots.base === null && slots.pending === null) {
+        throw new AppError(
+          'invalid_document',
+          { reason: 'nothing_to_load' },
+          'This logical file exists neither on Drive nor in local storage.'
+        );
+      }
+      return remember(restoreFrom(logicalName, family, slots, null, null));
+    });
   }
 
   /**
@@ -638,9 +765,17 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     // accepts.
     const text = JSON.stringify(parseDoc(logicalName, family, JSON.stringify(candidate)).doc);
 
-    // Step 12: recheck Drive metadata immediately before the upload.
+    // Step 12: recheck Drive metadata immediately before the upload. Any
+    // change since the preflight read restarts the attempt, because this
+    // attempt has not read the file it would now write to. A file that
+    // appeared was never read, so writing to it would drop its content.
+    // A file that vanished leaves no target. REQUIREMENTS 4.6, 4.8, 4.9.
     const fresh = catalogEntry(await loadCatalog(logicalName), logicalName);
-    if (remoteMeta !== null && fresh !== null && remoteMarker(fresh) !== remoteMarker(remoteMeta)) {
+    const appeared = remoteMeta === null && fresh !== null;
+    const vanished = remoteMeta !== null && fresh === null;
+    const changedMarker =
+      remoteMeta !== null && fresh !== null && remoteMarker(fresh) !== remoteMarker(remoteMeta);
+    if (appeared || vanished || changedMarker) {
       throw new AppError(
         'network',
         { reason: 'remote_changed_before_upload' },
@@ -701,6 +836,112 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   }
 
   /**
+   * Commit content Drive confirmed, under the local lock. REQUIREMENTS 3.14.
+   *
+   * When this device made no local edit while the upload ran, the confirmed
+   * content becomes working, base, and remote state, and the pending row
+   * clears.
+   *
+   * When it did, the newer edits are reapplied onto the confirmed content
+   * by the conflict-unit merge. The older working document is never kept
+   * as-is: it holds none of the remote entries the merge just brought in,
+   * so keeping it would turn every remote addition into a local deletion.
+   * REQUIREMENTS 4.4, 4.8, 4.9.
+   */
+  async function commitConfirmed(
+    logicalName: string,
+    family: MergeFamily,
+    confirmed: { text: string; meta: DriveFileMeta },
+    attempt: number,
+    localTextAtUpload: string
+  ): Promise<'committed' | 'superseded'> {
+    return withLocal(logicalName, async (): Promise<'committed' | 'superseded'> => {
+      const confirmedDoc = parseDoc(logicalName, family, confirmed.text);
+      const uploadDoc = parseDoc(logicalName, family, localTextAtUpload);
+      const current = docs.get(logicalName) ?? (await restoreLocal(logicalName, family));
+      const nowIso = new Date().toISOString();
+
+      const currentDoc =
+        current.workingText === localTextAtUpload
+          ? uploadDoc
+          : parseDoc(logicalName, family, current.workingText);
+
+      let workingText = confirmed.text;
+      let workingDoc = confirmedDoc;
+      let pending: PendingDelta | null = null;
+
+      if (!sameJson(current.workingText, localTextAtUpload)) {
+        // Reapply this device's edits onto the confirmed content through the
+        // conflict-unit merge. The base is the text this upload started
+        // with, the local side is this device's newer text, and the remote
+        // side is the confirmed content. A session this device touched is
+        // then replaced with its complete local version, never field-merged
+        // with the remote version, and entries only the remote side holds
+        // stay. REQUIREMENTS 4.7, 4.8, 4.11.
+        const rebased = mergeDocuments({
+          family,
+          base: uploadDoc.doc,
+          local: currentDoc.doc,
+          remote: confirmedDoc.doc
+        });
+        if (rebased.needsUpload) {
+          // Validate the result before any row changes hands. A result this
+          // build rejects leaves the stored records as they were.
+          const rebasedDoc = parseDoc(
+            logicalName,
+            family,
+            JSON.stringify(rebased.merged)
+          );
+          pending = computePendingDelta(confirmedDoc.doc, rebasedDoc.doc, (
+            base: unknown,
+            local: unknown
+          ): unknown => patcher.diff(base, local));
+          if (pending !== null) {
+            workingText = JSON.stringify(rebasedDoc.doc);
+            workingDoc = rebasedDoc;
+          }
+        }
+      }
+
+      await deps.store.setMany([
+        {
+          name: cacheKey(logicalName),
+          value: makeCachedRecord(
+            logicalName,
+            confirmed.meta.id,
+            remoteMarker(confirmed.meta),
+            workingText,
+            workingDoc.schemaVersion,
+            nowIso
+          )
+        },
+        { name: baseKey(logicalName), value: makeBaseRecord(confirmed.text, confirmed.meta.id) },
+        { name: pendingKey(logicalName), value: pending === null ? null : makePendingRecord(pending, nowIso) }
+      ]);
+      countLocalWrite(logicalName);
+
+      remember({
+        logicalName,
+        family,
+        doc: workingDoc.doc,
+        workingText,
+        baseText: confirmed.text,
+        driveFileId: confirmed.meta.id,
+        remoteEtag: remoteMarker(confirmed.meta),
+        schemaVersion: workingDoc.schemaVersion,
+        pending
+      });
+
+      logDiagnostic({
+        severity: 'info',
+        code: pending === null ? 'sync_committed' : 'sync_base_advanced',
+        context: { logicalName, attempt }
+      });
+      return pending === null ? 'committed' : 'superseded';
+    });
+  }
+
+  /**
    * Reconcile one logical file. Steps 1 through 15 with the retry loop.
    *
    * Three attempts, each with a fresh read of Drive. After the third failure
@@ -725,43 +966,16 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
 
         const confirmed = await attemptOnce(logicalName, family, loaded);
 
-        // Step 15: one transaction commits the confirmed content as both
-        // working and base and clears the pending delta. REQUIREMENTS 3.14.
-        const nowIso = new Date().toISOString();
-        await deps.store.setMany([
-          {
-            name: cacheKey(logicalName),
-            value: makeCachedRecord(
-              logicalName,
-              confirmed.meta.id,
-              remoteMarker(confirmed.meta),
-              confirmed.text,
-              parseDoc(logicalName, family, confirmed.text).schemaVersion,
-              nowIso
-            )
-          },
-          { name: baseKey(logicalName), value: makeBaseRecord(confirmed.text, confirmed.meta.id) },
-          { name: pendingKey(logicalName), value: null }
-        ]);
-
-        const confirmedDoc = parseDoc(logicalName, family, confirmed.text);
-        remember({
-          logicalName,
-          family,
-          doc: confirmedDoc.doc,
-          workingText: confirmed.text,
-          baseText: confirmed.text,
-          driveFileId: confirmed.meta.id,
-          remoteEtag: remoteMarker(confirmed.meta),
-          schemaVersion: confirmedDoc.schemaVersion,
-          pending: null
-        });
-
-        logDiagnostic({
-          severity: 'info',
-          code: 'sync_committed',
-          context: { logicalName, attempt }
-        });
+        // Step 15: commit the confirmed content. A newer local edit that
+        // landed while this upload was in flight keeps its own working text
+        // and its own pending delta, and its own reconciliation carries it
+        // to Drive. The commit never rolls a newer edit back.
+        // REQUIREMENTS 4.4, 4.5.
+        await commitConfirmed(logicalName, family, confirmed, attempt, loaded.workingText);
+        // A successful reconciliation supersedes an earlier failure for this
+        // file. The newest edit is durable and its pending delta has either
+        // committed or remains represented by a newer queued reconciliation.
+        setSaveStatus('saved');
         return;
       } catch (error: unknown) {
         lastError = error;
@@ -778,8 +992,11 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         });
         if (!classified.retryable) break;
         // Drop the in-memory copy so the next attempt rebuilds from a fresh
-        // read of Drive. REQUIREMENTS 4.19.
-        docs.delete(logicalName);
+        // read of Drive. The drop runs under the local lock, because that
+        // lock owns the map. REQUIREMENTS 4.19.
+        await withLocal(logicalName, async (): Promise<void> => {
+          docs.delete(logicalName);
+        });
       }
     }
 
@@ -792,24 +1009,28 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   /**
    * The save path. Local write first, then reconciliation.
    *
-   * The read-modify-write half runs under the mutex. Two edits to one file
-   * that both read the same base and then both wrote would lose the first,
-   * so the whole read-modify-write must be atomic, not just the upload.
-   * REQUIREMENTS 4.16.
+   * The read-modify-write half runs under the local lock, which holds no
+   * network call. Two edits to one file that both read the same base and
+   * then both wrote would lose the first, so the whole read-modify-write
+   * must be atomic, not just the upload. Because the local lock stays free
+   * of Drive, a stalled upload cannot stop the next edit from becoming
+   * durable. REQUIREMENTS 4.1, 4.16.
    */
   async function edit(logicalName: string, mutate: (doc: unknown) => unknown): Promise<EditHandle> {
     const family = familyFor(logicalName);
 
     setSaveStatus('saving');
 
-    // Phase one: read, modify, and write the three local records, under the
-    // mutex, with no network call inside. A failure here is a local-layer
-    // failure: the edit never became durable, so the badge must not stay at
-    // `saving`, and it must not read as a sync failure either. The caller
-    // sees the thrown error. REQUIREMENTS 4.3, 4.4.
+    // The save path reads local state only: the in-memory document, the
+    // local rows, or the family empty document. No network call sits inside
+    // the local lock, so a stalled Drive cannot delay durability, and a
+    // first save of a brand-new shard lands offline. A failure here is a
+    // local-layer failure: the edit never became durable, so the badge must
+    // not stay at `saving`, and it must not read as a sync failure either.
+    // The caller sees the thrown error. REQUIREMENTS 4.1, 4.3, 4.4.
     try {
-      await withMutex(logicalName, async (): Promise<unknown> => {
-        const loaded = docs.get(logicalName) ?? (await loadDocNoWrite(logicalName));
+      await withLocal(logicalName, async (): Promise<unknown> => {
+        const loaded = docs.get(logicalName) ?? (await restoreLocal(logicalName, family));
 
         const localDoc = mutate(clone(loaded.doc));
         const localText = JSON.stringify(localDoc);
@@ -861,6 +1082,9 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         });
 
         await deps.store.setMany(entries);
+        // Record the write, so a load that is still on the network learns
+        // that its remote view went stale. REQUIREMENTS 4.4.
+        countLocalWrite(logicalName);
 
         return remember({
           ...loaded,
@@ -892,75 +1116,33 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     // The local write is durable. The user's intent is safe from here on.
     setSaveStatus('saved');
 
-    const synced = withMutex(logicalName, async (): Promise<void> => {
+    const synced = withSync(logicalName, async (): Promise<void> => {
       await reconcileOne(logicalName);
     });
-    inFlight.set(logicalName, synced);
-    const forget = (): void => {
-      if (inFlight.get(logicalName) === synced) inFlight.delete(logicalName);
-    };
-    void synced.then(forget, forget);
 
     return { localDurable: true, synced };
   }
 
   /**
-   * Load one logical file without the cache-write side effect.
+   * Rebuild one logical file from the local rows alone. No network.
    *
-   * `edit` calls this inside the mutex, where the caller writes the records
-   * itself. Caching inside that call would be a second write of the same
-   * rows inside one critical section.
+   * The save path calls this when the in-memory copy is gone, so a device
+   * with no connection still writes the edit to local storage first. The
+   * reconciliation that follows reads Drive and merges against whatever it
+   * finds there. REQUIREMENTS 4.1, 4.4.
+   *
+   * The caller holds the local lock. This function reads rows and returns a
+   * value. It writes nothing, so it cannot fight the caller's own write.
    */
-  async function loadDocNoWrite(logicalName: string): Promise<LoadedDoc> {
-    const family = familyFor(logicalName);
-    const catalog = await loadCatalog(logicalName);
-    await dropVanished(logicalName, catalog);
+  async function restoreLocal(logicalName: string, family: MergeFamily): Promise<LoadedDoc> {
     const slots = await readSlots(logicalName);
-    const entry = catalogEntry(catalog, logicalName);
-
-    if (
-      slots.cached !== null &&
-      slots.pending === null &&
-      entry !== null &&
-      remoteMarker(entry) === slots.cached.remoteEtag
-    ) {
-      const parsed = parseDoc(logicalName, family, slots.cached.contentText);
-      return {
-        logicalName,
-        family,
-        doc: parsed.doc,
-        workingText: slots.cached.contentText,
-        baseText: slots.cached.contentText,
-        driveFileId: slots.cached.driveFileId,
-        remoteEtag: slots.cached.remoteEtag,
-        schemaVersion: parsed.schemaVersion,
-        pending: null
-      };
-    }
-
-    if (entry !== null) {
-      const remote = await deps.drive.readFile(entry.id);
-      return restoreFrom(logicalName, family, slots, remote.text, remote.meta);
-    }
 
     if (slots.cached === null && slots.base === null && slots.pending === null) {
       // A brand-new logical file. The first workout of a new month names a
       // shard that exists neither on Drive nor in local storage, so the
       // save path starts from the family's empty document. Throwing here
       // would block the first save of every new file. REQUIREMENTS 4.1.
-      const emptyText = JSON.stringify(emptyDocumentFor(family, logicalName));
-      const parsed = parseDoc(logicalName, family, emptyText);
-      return {
-        logicalName,
-        family,
-        doc: parsed.doc,
-        workingText: emptyText,
-        baseText: null,
-        driveFileId: null,
-        remoteEtag: null,
-        schemaVersion: parsed.schemaVersion,
-        pending: null
-      };
+      return emptyLoaded(logicalName, family);
     }
     return restoreFrom(logicalName, family, slots, null, null);
   }
@@ -989,7 +1171,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     let failed = false;
     for (const name of names) {
       try {
-        await withMutex(name, async (): Promise<void> => {
+        await withSync(name, async (): Promise<void> => {
           await reconcileOne(name);
         });
       } catch {
@@ -997,6 +1179,31 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       }
     }
     if (!failed && names.length > 0) setSaveStatus('saved');
+  }
+
+  /**
+   * Wait for every reconciliation this coordinator started.
+   *
+   * Failures are swallowed, because the caller is draining, not reporting.
+   * The loop repeats while new work appears, so work a drained edit starts
+   * is waited out too.
+   */
+  async function drainInFlight(): Promise<void> {
+    for (;;) {
+      // Examine network work and local writes together, and examine them
+      // again after each wait. A local write that finishes during the drain
+      // starts its own reconciliation, and that work must be drained too,
+      // or reset could clear a lock that an upload still owns.
+      // REQUIREMENTS 4.4, 4.16.
+      const network = Array.from(inFlight);
+      const local = Array.from(localLock.values());
+      if (network.length === 0 && local.length === 0) return;
+      await Promise.all(
+        network
+          .concat(local)
+          .map((p: Promise<void>): Promise<unknown> => p.catch((error: unknown): unknown => error))
+      );
+    }
   }
 
   /**
@@ -1008,28 +1215,26 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    */
   async function flush(): Promise<void> {
     await queue.flush();
-    const pending = Array.from(inFlight.values());
-    if (pending.length > 0) {
-      await Promise.all(
-        pending.map((p: Promise<void>): Promise<unknown> =>
-          p.catch((error: unknown): unknown => error)
-        )
-      );
-    }
+    await drainInFlight();
   }
 
   /**
    * Forget in-memory state. The local rows stay.
    *
-   * The queue flushes first, so every queued mutator reaches local storage
-   * before the maps clear. A reset that cannot flush rejects instead of
-   * dropping the edit. The `pagehide` flush is re-registered, so a
-   * coordinator reused after sign-out still flushes. REQUIREMENTS 4.2, 4.4.
+   * The queue flushes first, then every started reconciliation is drained.
+   * A reset that cleared the locks while an upload still owned one would
+   * let a later edit start beside it, and the older upload would then write
+   * over the newer content. Draining closes that window. A reset that
+   * cannot flush rejects instead of dropping the edit. The `pagehide`
+   * flush is re-registered, so a coordinator reused after sign-out still
+   * flushes. REQUIREMENTS 4.2, 4.4, 4.5.
    */
   async function reset(): Promise<void> {
     await queue.flush();
+    await drainInFlight();
     docs.clear();
-    mutex.clear();
+    localLock.clear();
+    syncLock.clear();
     inFlight.clear();
     detachPagehide();
     registerPagehide();
@@ -1048,7 +1253,11 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   registerPagehide();
 
   return {
-    ensureLoaded: async (logicalName: string): Promise<unknown> => (await loadDoc(logicalName)).doc,
+    // A load takes the sync lock, so it cannot land beside a reconciliation
+    // of the same file and replace newer local rows with an older remote
+    // view. REQUIREMENTS 4.4.
+    ensureLoaded: async (logicalName: string): Promise<unknown> =>
+      (await withSync(logicalName, async (): Promise<LoadedDoc> => await loadDoc(logicalName))).doc,
     edit,
     queueEdit: (logicalName: string, mutate: (doc: unknown) => unknown): void => {
       queue.schedule(logicalName, mutate);

@@ -124,6 +124,88 @@ describe('debouncedEdit', () => {
     expect(queue.pending()).toEqual([]);
   });
 
+  test('a failed run keeps that mutator and the ones behind it queued', async () => {
+    const ran: string[] = [];
+    const clock = manualTimer();
+    let attempts = 0;
+    const queue = debouncedEdit(
+      async (name: string): Promise<void> => {
+        attempts += 1;
+        // The first run fails before it reaches storage, so nothing applied.
+        if (attempts === 1) throw new Error('local write failed');
+        ran.push(name);
+      },
+      { timers: clock.timers }
+    );
+
+    queue.schedule('a.json', (doc: unknown) => doc);
+    queue.schedule('a.json', (doc: unknown) => doc);
+
+    // The flush reports the local failure, and the queue still holds work.
+    await expect(queue.flush()).rejects.toThrow('local write failed');
+    expect(ran).toEqual([]);
+    expect(queue.pending()).toEqual(['a.json']);
+
+    // The next flush applies both mutators, in the original order.
+    await queue.flush();
+    expect(ran).toEqual(['a.json', 'a.json']);
+    expect(queue.pending()).toEqual([]);
+  });
+
+  test('a failed run keeps its place ahead of later schedules', async () => {
+    const order: string[] = [];
+    const clock = manualTimer();
+    let attempts = 0;
+    const queue = debouncedEdit(
+      async (_name: string, mutate: (doc: unknown) => unknown): Promise<void> => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('local write failed');
+        order.push(String(mutate('')));
+      },
+      { timers: clock.timers }
+    );
+
+    queue.schedule('a.json', (): string => 'first');
+    await expect(queue.flush()).rejects.toThrow('local write failed');
+    expect(order).toEqual([]);
+
+    // This mutator arrives after the failure, so it must run last.
+    queue.schedule('a.json', (): string => 'later');
+    await queue.flush();
+    expect(order).toEqual(['first', 'later']);
+  });
+
+  test('an edit queued during a running timer batch keeps its own delay', async () => {
+    const clock = manualTimer();
+    const order: string[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve: () => void): void => {
+      release = resolve;
+    });
+    const queue = debouncedEdit(
+      async (_name: string, mutate: (doc: unknown) => unknown): Promise<void> => {
+        const value = String(mutate(''));
+        if (value === 'first') await gate;
+        order.push(value);
+      },
+      { timers: clock.timers }
+    );
+
+    queue.schedule('a.json', (): string => 'first');
+    clock.fireAll();
+    await Promise.resolve();
+    queue.schedule('a.json', (): string => 'later');
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(order).toEqual(['first']);
+    expect(clock.count()).toBe(1);
+    clock.fireAll();
+    await queue.flush();
+    expect(order).toEqual(['first', 'later']);
+  });
+
   test('cancel drops the queue', async () => {
     const ran: string[] = [];
     const clock = manualTimer();

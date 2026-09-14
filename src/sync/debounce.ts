@@ -58,9 +58,10 @@ export interface EditQueue {
   /**
    * Run every queued edit now, skipping the remaining wait.
    *
-   * Edits for one logical file apply in queue order. Files are applied one at
-   * a time, because each file's edit starts a reconciliation that must not
-   * overlap another write of the same records.
+   * Edits for one logical file apply in queue order. One file drains at a
+   * time, so a batch that fails and returns its mutators cannot be jumped
+   * by a newer batch for the same file. A file whose drain stopped on a
+   * failure keeps its mutators queued for a later flush.
    */
   flush(): Promise<void>;
   /** Drop every queued edit without running it. */
@@ -81,38 +82,69 @@ export function debouncedEdit(
 ): EditQueue {
   const delayMs = opts.delayMs === undefined ? DEFAULT_DEBOUNCE_MS : opts.delayMs;
   const timers = opts.timers === undefined ? wallClock : opts.timers;
-
   /** Queued mutators per logical file, oldest first. */
   const queues = new Map<string, Mutator[]>();
   /** One timer per logical file. */
   const handles = new Map<string, unknown>();
-  /** The flush already running, so a second flush waits instead of racing. */
-  let running: Promise<void> | null = null;
-  /** Waves started by the timer, so a later `flush` still waits for them. */
-  const inFlight = new Set<Promise<void>>();
+  /**
+   * The batch running for one logical file, if any.
+   *
+   * One batch per file keeps the queue as the source of input order. A timer
+   * consumes only the inputs that were ready at its deadline. Inputs queued
+   * while that batch runs keep their own quiet period. REQUIREMENTS 4.2, 12.9.
+   */
+  const drainers = new Map<string, Promise<void>>();
 
-  const fire = (logicalName: string): Promise<void> => {
-    handles.delete(logicalName);
-    const queued = queues.get(logicalName);
-    if (queued === undefined || queued.length === 0) return Promise.resolve();
-    // Take the whole queue. The timer collapsed the wait, not the edits.
-    queues.set(logicalName, []);
-    // Sequential, so two edits to one file cannot both hold the records.
-    const wave = queued.reduce(
-      (chain: Promise<void>, mutate: Mutator): Promise<void> =>
-        chain.then(() => run(logicalName, mutate)),
-      Promise.resolve()
-    );
-    inFlight.add(wave);
-    void wave.then(
-      () => {
-        inFlight.delete(wave);
-      },
-      () => {
-        inFlight.delete(wave);
+  /**
+   * Apply one batch of mutators in order.
+   *
+   * When one run fails, that mutator and every mutator behind it go back
+   * into the queue ahead of anything scheduled later. A dropped mutator is
+   * a dropped user edit, which REQUIREMENTS 4.4 forbids.
+   */
+  const runBatch = async (logicalName: string, batch: Mutator[]): Promise<void> => {
+    for (let index = 0; index < batch.length; index += 1) {
+      try {
+        await run(logicalName, batch[index]);
+      } catch (error: unknown) {
+        const leftover = batch.slice(index);
+        const later = queues.get(logicalName) ?? [];
+        queues.set(logicalName, leftover.concat(later));
+        throw error;
       }
-    );
-    return wave;
+    }
+  };
+
+  /** Run one snapshot of this file's queue. */
+  const drainOne = (logicalName: string): Promise<void> => {
+    const already = drainers.get(logicalName);
+    if (already !== undefined) return already;
+
+    // An explicit drain consumes the work for this timer, so cancel the
+    // callback too. Otherwise it can consume a later input at the old deadline.
+    const armed = handles.get(logicalName);
+    if (armed !== undefined) {
+      timers.clearTimeout(armed);
+      handles.delete(logicalName);
+    }
+
+    const batch = queues.get(logicalName) ?? [];
+    if (batch.length === 0) return Promise.resolve();
+    queues.set(logicalName, []);
+    const promise = runBatch(logicalName, batch);
+    drainers.set(logicalName, promise);
+    const forget = (): void => {
+      if (drainers.get(logicalName) === promise) drainers.delete(logicalName);
+    };
+    void promise.then(forget, forget);
+    return promise;
+  };
+
+  /** Run the batch whose quiet period expired, after any older batch. */
+  const drainAtDeadline = async (logicalName: string): Promise<void> => {
+    const older = drainers.get(logicalName);
+    if (older !== undefined) await older;
+    await drainOne(logicalName);
   };
 
   const schedule = (logicalName: string, mutate: Mutator): void => {
@@ -122,38 +154,46 @@ export function debouncedEdit(
 
     const existing = handles.get(logicalName);
     if (existing !== undefined) timers.clearTimeout(existing);
-    handles.set(logicalName, timers.setTimeout(() => void fire(logicalName), delayMs));
+    handles.set(
+      logicalName,
+      timers.setTimeout((): void => {
+        handles.delete(logicalName);
+        // The edit path logs a local failure and keeps the batch queued.
+        // A timer has no caller to receive that failure.
+        void drainAtDeadline(logicalName).catch((): void => undefined);
+      }, delayMs)
+    );
   };
 
-  const flush = (): Promise<void> => {
-    const names = Array.from(handles.keys());
-    const fires: Array<Promise<unknown>> = names.map((name) => fire(name));
-    // Include waves the timer already started. A flush that only looked at
-    // the queue would report success while a timer wave was still running.
-    const settled = Array.from(inFlight).map((p: Promise<void>): Promise<unknown> =>
-      p.catch((error: unknown): unknown => error)
-    );
-    const wave = Promise.all<unknown>(fires.concat(settled)).then(
-      () => undefined,
-      () => undefined
-    );
-    // Chain on any wave already running, so callers of flush() all wait for
-    // everything queued up to their call.
-    const chained = running === null ? wave : running.then(() => wave);
-    running = chained;
-    void chained.then(() => {
-      if (running === chained) running = null;
-    });
-    return chained;
+  /** Names with mutators still waiting, whether or not a timer is armed. */
+  const queuedNames = (): string[] =>
+    Array.from(queues.keys()).filter((name: string): boolean => (queues.get(name)?.length ?? 0) > 0);
+
+  const flush = async (): Promise<void> => {
+    // Explicit flush ignores quiet periods and drains through inputs queued
+    // while an older batch runs. A local failure rejects this flush and leaves
+    // the failed input at the queue head for a later retry.
+    for (;;) {
+      const names = new Set<string>(
+        Array.from(handles.keys()).concat(queuedNames(), Array.from(drainers.keys()))
+      );
+      if (names.size === 0) return;
+      await Promise.all(Array.from(names).map((name: string): Promise<void> => drainOne(name)));
+    }
   };
 
   const cancel = (): void => {
     for (const handle of handles.values()) timers.clearTimeout(handle);
     handles.clear();
     queues.clear();
+    drainers.clear();
   };
 
-  const pending = (): string[] => Array.from(handles.keys());
+  const pending = (): string[] => {
+    const names = new Set<string>(Array.from(handles.keys()));
+    for (const name of queuedNames()) names.add(name);
+    return Array.from(names);
+  };
 
   return { schedule, flush, cancel, pending };
 }
