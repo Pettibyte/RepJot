@@ -9,7 +9,8 @@
     "check:styles": "bun scripts/check-styles.ts",
     "icons:build": "bun scripts/build-icon-manifest.ts",
     "test": "bun test",
-    "check:compat": "bun run build && bun scripts/check-browser-compat.ts",
+    "check:compat": "bun run build && bun scripts/check-browser-compat.ts && bun run check:merge-compat",
+    "check:merge-compat": "bun scripts/check-merge-compat.ts",
     "check:schemas": "bun scripts/validate-schemas.ts",
     "check:static": "bun scripts/check-static-data.ts",
     "smoke:store": "bun scripts/smoke-local-store.ts",
@@ -31,6 +32,7 @@
     "vite": "latest"
   },
   "dependencies": {
-    "core-js": "^3.50.0"
+    "core-js": "^3.50.0",
+    "jsondiffpatch": "0.7.6"
   }
 }

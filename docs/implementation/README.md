@@ -68,3 +68,35 @@ This plan does not restate them.
 
 Phases 01 through 14 add library code and tests. The existing Phase 0 prototype page
 keeps the build green during those phases. Phase 15 replaces it with the real shell.
+
+## Bundle budget
+
+Phase 20 owns the release gate for bundle size. This section records what a phase
+adds, so the next phase sees the cost before it depends on a library.
+
+Run `bun run check:merge-compat` to reprint the merge figures. The script builds
+each item with Vite at `target: 'es2019'`, minified, and gzips at level 9. Each
+row is a direct measurement of that build. Gzip is not additive, so the combined
+row is smaller than the sum of its parts.
+
+| Item                                                    | Minified     | Gzipped      |
+| ------------------------------------------------------- | ------------ | ------------ |
+| `dist/app.js` before Phase 09                            | 84,131 bytes | 30,649 bytes |
+| `jsondiffpatch` 0.7.6 alone                              | 16,084 bytes | 5,082 bytes  |
+| `src/sync/merge-documents.ts` alone, library external   | 6,650 bytes  | 2,807 bytes  |
+| `src/sync/merge-documents.ts` with `jsondiffpatch`       | 22,649 bytes | 7,615 bytes  |
+
+Phase 09 adds no import to the app entry point, so `dist/app.js` keeps its size.
+When Phase 10 imports `mergeDocuments`, expect `dist/app.js` to grow by about
+7.6 KB gzipped, to about 38 KB gzipped.
+
+The merge bundle parses as ES2019. `jsondiffpatch` 0.7.6 ships ES2019-safe
+output: no optional chaining, no nullish coalescing, and no post-ES2019 runtime
+API. The text differ stays out of the bundle because nothing imports
+`jsondiffpatch/with-text-diffs`, and `check:merge-compat` fails if it ever
+appears. `package.json` pins `jsondiffpatch` to the exact version 0.7.6, because
+the ES2019 claim and the size figures above hold for that version.
+
+If the Phase 10 growth breaks the Phase 20 budget, drop `jsondiffpatch` and write
+the keyed-map merge by hand. The merge needs only `diff` and `patch` from the
+library, and it uses them on keyed maps only.

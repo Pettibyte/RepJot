@@ -25,7 +25,8 @@ and edit-beats-delete. This phase is pure logic with no I/O.
 | --- | --- |
 | `src/sync/merge-documents.ts` | The merge entry point and the conflict-unit logic. |
 | `src/sync/patcher.ts` | One configured `jsondiffpatch` instance and clone helper. |
-| `package.json` | Adds the `jsondiffpatch` dependency. |
+| `scripts/check-merge-compat.ts` | Proves the merge bundle parses as ES2019 and prints its size. |
+| `package.json` | Adds the `jsondiffpatch` dependency, pinned to the exact version. |
 
 ### Signatures
 
@@ -40,12 +41,20 @@ export interface MergeInput {
   remote: unknown;    // latest content read from Drive
 }
 export interface MergeResult {
-  merged: unknown;
+  merged: unknown;             // a clone; shares no node with base, local, or remote
   needsUpload: boolean;
   conflictedUnits: string[];   // session ids, or 'exerciseId/dimension'
 }
 
-export function mergeDocuments(input: MergeInput): MergeResult;
+export interface MergeConflictEvent {
+  family: MergeFamily;
+  unit: string;
+}
+export type ConflictObserver = (event: MergeConflictEvent) => void;
+
+// `onConflict` is optional. The default observer writes one event per conflicted
+// unit to the in-memory diagnostic ring.
+export function mergeDocuments(input: MergeInput, onConflict?: ConflictObserver): MergeResult;
 export function conflictUnitsFor(family: MergeFamily, doc: unknown): string[];
 export function unitsTouchedBy(family: MergeFamily, delta: unknown): Set<string>;
 ```
@@ -55,8 +64,8 @@ export function unitsTouchedBy(family: MergeFamily, delta: unknown): Set<string>
 ```ts
 const localDelta  = patcher.diff(base, local);
 const remoteDelta = patcher.diff(base, remote);
-if (!localDelta) return { merged: remote, needsUpload: false, conflictedUnits: [] };
-if (!remoteDelta) return { merged: local, needsUpload: true, conflictedUnits: [] };
+if (!localDelta) return { merged: clone(remote), needsUpload: false, conflictedUnits: [] };
+if (!remoteDelta) return { merged: clone(local), needsUpload: true, conflictedUnits: [] };
 
 const merged = patcher.patch(clone(base), remoteDelta);
 const localUnits  = unitsTouchedBy(family, localDelta);
@@ -67,6 +76,13 @@ const conflicted  = intersection(localUnits, remoteUnits);
 // An edit beats a delete: a unit present in one side and absent in the other keeps
 // the side that holds content.
 ```
+
+The implementation applies the local side one conflict unit at a time. It does not
+patch the whole local delta onto the remote-applied document. A local operation that
+replaces one exercise's whole unit map would then wipe a remote edit to a different
+dimension of that exercise, and two different mappings never conflict.
+REQUIREMENTS 4.8. Paths outside the unit namespace, such as a top-level field, take
+the local value.
 
 Rules the implementation must encode:
 
@@ -98,54 +114,58 @@ Rules the implementation must encode:
 
 ### Implementation
 
-- [ ] Add `jsondiffpatch` with `bun add jsondiffpatch`.
-- [ ] Create `src/sync/patcher.ts` exporting one configured instance and a
+- [x] Add `jsondiffpatch` with `bun add jsondiffpatch`.
+- [x] Create `src/sync/patcher.ts` exporting one configured instance and a
       structured `clone` helper.
-- [ ] Implement `conflictUnitsFor` for results: the keys of `shard.sessions`.
-- [ ] Implement `conflictUnitsFor` for preferences: each `exerciseId/dimension` pair.
-- [ ] Implement `unitsTouchedBy` by walking delta paths and mapping each path to its
+- [x] Implement `conflictUnitsFor` for results: the keys of `shard.sessions`.
+- [x] Implement `conflictUnitsFor` for preferences: each `exerciseId/dimension` pair.
+- [x] Implement `unitsTouchedBy` by walking delta paths and mapping each path to its
       owning unit.
-- [ ] Implement `mergeDocuments` with the algorithm above.
-- [ ] Implement the delete-versus-edit resolution as an explicit branch, not as an
+- [x] Implement `mergeDocuments` with the algorithm above.
+- [x] Implement the delete-versus-edit resolution as an explicit branch, not as an
       accident of delta shape.
-- [ ] Record one diagnostic per conflicted unit with the unit key and the family.
-- [ ] Measure the gzipped bundle contribution and record the number in
+- [x] Record one diagnostic per conflicted unit with the unit key and the family.
+- [x] Add `scripts/check-merge-compat.ts` and wire it into `check:compat`, so the
+      ES2019 claim has a gate that covers the merge module itself.
+- [x] Measure the gzipped bundle contribution and record the number in
       `docs/implementation/README.md` under a "Bundle budget" heading.
 
 ### Tests
 
-- [ ] `tests/merge-results.test.ts`: two devices add different sessions. Both
+- [x] `tests/merge-results.test.ts`: two devices add different sessions. Both
       survive and no session content shifts.
-- [ ] `tests/merge-results.test.ts`: the same session changed on both sides. The
+- [x] `tests/merge-results.test.ts`: the same session changed on both sides. The
       local full session wins and the merged entry equals the local entry.
-- [ ] `tests/merge-results.test.ts`: a local edit against a remote delete restores the
+- [x] `tests/merge-results.test.ts`: a local edit against a remote delete restores the
       session with local content.
-- [ ] `tests/merge-results.test.ts`: a local delete against a remote edit restores the
+- [x] `tests/merge-results.test.ts`: a local delete against a remote edit restores the
       session with remote content.
-- [ ] `tests/merge-results.test.ts`: a session deleted on both sides stays deleted.
-- [ ] `tests/merge-results.test.ts`: no merge produces a new session ID or any
+- [x] `tests/merge-results.test.ts`: a session deleted on both sides stays deleted.
+- [x] `tests/merge-results.test.ts`: no merge produces a new session ID or any
       `conflictOf*` field.
-- [ ] `tests/merge-results.test.ts`: a merge inside a session's `exerciseResults`
+- [x] `tests/merge-results.test.ts`: a merge inside a session's `exerciseResults`
       map keeps unrelated results intact.
-- [ ] `tests/merge-preferences.test.ts`: different exercise and dimension mappings
+- [x] `tests/merge-preferences.test.ts`: different exercise and dimension mappings
       merge cleanly.
-- [ ] `tests/merge-preferences.test.ts`: the same mapping changed on both sides
+- [x] `tests/merge-preferences.test.ts`: the same mapping changed on both sides
       resolves to the local value.
-- [ ] `tests/merge-properties.test.ts`: array-drift guard. Build a base with three
+- [x] `tests/merge-properties.test.ts`: array-drift guard. Build a base with three
       sessions, delete the first on one side and append on the other, and assert no
       surviving session changed its fields.
-- [ ] `tests/merge-properties.test.ts`: convergence. Apply the merge twice from the
+- [x] `tests/merge-properties.test.ts`: convergence. Apply the merge twice from the
       same inputs and get identical output.
-- [ ] `tests/merge-properties.test.ts`: `needsUpload` is false when the local side
+- [x] `tests/merge-properties.test.ts`: `needsUpload` is false when the local side
       has no delta.
 
 ### Verification
 
-- [ ] `bun test` passes.
-- [ ] `bun run check` passes.
-- [ ] `bun run build` passes with the new dependency.
-- [ ] `bun run check:compat` passes, which proves the library transpiles to ES2019.
-- [ ] Record the bundle size delta. If it breaks the Phase 20 budget, stop and
+- [x] `bun test` passes.
+- [x] `bun run check` passes.
+- [x] `bun run build` passes with the new dependency.
+- [x] `bun run check:compat` passes. It now runs `check:merge-compat`, which
+      builds the merge module at `target: 'es2019'` and parses it with acorn at
+      `ecmaVersion: 2019`.
+- [x] Record the bundle size delta. If it breaks the Phase 20 budget, stop and
       resolve before Phase 10 starts.
 
 ## Exit criteria
