@@ -9,15 +9,17 @@
     "check:styles": "bun scripts/check-styles.ts",
     "icons:build": "bun scripts/build-icon-manifest.ts",
     "test": "bun test",
-    "check:compat": "bun run build && bun scripts/check-browser-compat.ts && bun run check:merge-compat",
+    "check:compat": "bun run build && bun scripts/check-browser-compat.ts && bun run check:merge-compat && bun run check:units-compat",
     "check:merge-compat": "bun scripts/check-merge-compat.ts",
+    "check:units-compat": "bun scripts/check-units-compat.ts",
     "check:schemas": "bun scripts/validate-schemas.ts",
     "check:static": "bun scripts/check-static-data.ts",
     "smoke:store": "bun scripts/smoke-local-store.ts",
     "bench:index": "bun scripts/bench-index.ts",
     "seed": "bun scripts/seed-exercises.ts",
     "seed:check": "bun scripts/seed-exercises.ts check",
-    "seed:bump": "bun scripts/seed-exercises.ts bump"
+    "seed:bump": "bun scripts/seed-exercises.ts bump",
+    "deploy": "bun run build && rsync -a --delete --exclude='.git' dist/ ../RepJot-pages/"
   },
   "devDependencies": {
     "@iconify-json/material-symbols": "1.2.92",

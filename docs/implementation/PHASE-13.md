@@ -31,22 +31,38 @@ both use.
 
 ```ts
 // src/units/conversion.ts
+export type Dimension = MeasurementDimension;
+
 export function isCompatible(dimension: Dimension, unit: string): boolean;
 export function convert(q: Quantity, targetUnit: string): Quantity;  // full precision
 export function roundDisplay(value: number, step?: number): number;  // step default 0.1, half rounds up
-export function formatEditable(q: Quantity): string;                 // rounded display string
-export function defaultUnit(exercise: Exercise, dimension: Dimension): string;
+export function formatEditable(q: Quantity): string;                 // rounded number, no unit
+export function defaultUnit(exercise: Exercise | undefined, dimension: Dimension): string | undefined;
 export function nextCompatibleUnit(
-  exercise: Exercise, dimension: Dimension, current: string): string;
+  exercise: Exercise | undefined, dimension: Dimension, current: string): string | undefined;
+```
+
+```ts
+// src/units/format.ts
+export function unitLabel(unit: string): string;                     // compact token, `min`
+export function formatQuantity(q: Quantity): string;                 // `220.5 lb`
+export function splitAlternating(total: number, startingSide: StartingSide):
+  { left: number; right: number; evenSplit: boolean };
+export function formatAlternating(total: number, startingSide: StartingSide): string;
+export function formatAlternatingReps(
+  reps: Quantity | undefined, startingSide: StartingSide | undefined): string;
 ```
 
 ```ts
 // src/preferences/preference-service.ts
+export interface ExerciseUnitMapping {
+  exerciseId: string; exerciseName: string;
+  dimension: Dimension; unit: string;
+}
 export interface PreferenceService {
-  getUnit(exerciseId: string, dimension: Dimension): string;
+  getUnit(exerciseId: string, dimension: Dimension): string | undefined;
   setUnit(exerciseId: string, dimension: Dimension, unit: string): Promise<void>;
-  listMappings(): Array<{ exerciseId: string; exerciseName: string;
-                        dimension: Dimension; unit: string }>;
+  listMappings(): ExerciseUnitMapping[];
   ensureDoc(): Promise<PreferencesDoc>;
 }
 export function createPreferenceService(deps: {
@@ -82,55 +98,101 @@ Conversion goes base-in, base-out. No pairwise factor table.
 
 ## Checklist
 
+### Resolved decisions
+
+The builder raised six ambiguities. The user chose these, and the code follows them.
+
+1. **Who stamps `revision` and `updatedAtUtc`.** The coordinator owns the stamp, in
+   `bumpPreferences` on the upload candidate. `setUnit` writes the mapping only, so
+   one toggle advances the counter once, not twice.
+2. **Unit labels.** Compact tokens: `kg`, `lb`, `m`, `km`, `ft`, `mi`, `s`, `min`,
+   `kcal`, `reps`. Ninety seconds renders `1.5 min`.
+3. **`formatEditable` shape.** Number only, `220.5`. `formatQuantity` in `format.ts`
+   adds the label, `220.5 lb`. This matches the Phase 17 `FieldModel`, which keeps
+   `value` and `unit` as separate fields.
+4. **Missing exercise or dimension.** `getUnit` and `defaultUnit` return
+   `string | undefined` instead of a string. A screen that cannot resolve a unit has
+   a broken reference and shows the data-error path rather than an invented unit.
+   This widens the signature above.
+5. **Alternating split input.** `formatAlternating(total, startingSide)`. The split
+   is derived: an even total splits evenly, an odd total gives the extra rep to the
+   starting side, which is the side named first.
+6. **`listMappings` order.** Exercise name A-Z, then the fixed dimension order in
+   `DIMENSION_ORDER`. Never the keyed-map key order.
+
 ### Implementation
 
-- [ ] Create `src/units/conversion.ts` with the factor table and base-in, base-out
+- [x] Create `src/units/conversion.ts` with the factor table and base-in, base-out
       `convert`.
-- [ ] Implement `roundDisplay` with half-up rounding at the `0.1` step.
-- [ ] Implement `defaultUnit` returning the first `compatibleUnits` entry.
-- [ ] Implement `nextCompatibleUnit` cycling the compatible list.
-- [ ] Create `src/units/format.ts` with quantity formatting and the alternating
+- [x] Implement `roundDisplay` with half-up rounding at the `0.1` step.
+- [x] Implement `defaultUnit` returning the first `compatibleUnits` entry.
+- [x] Implement `nextCompatibleUnit` cycling the compatible list.
+- [x] Create `src/units/format.ts` with quantity formatting and the alternating
       total-and-per-side rendering.
-- [ ] Create `src/preferences/preference-service.ts` with the coordinator-backed
+- [x] Create `src/preferences/preference-service.ts` with the coordinator-backed
       `getUnit` and `setUnit`.
-- [ ] In `setUnit`, reject a unit incompatible with the exercise and dimension. Throw
+- [x] In `setUnit`, reject a unit incompatible with the exercise and dimension. Throw
       `AppError('invalid_document')`.
-- [ ] In `setUnit`, increment `revision` and set `updatedAtUtc` on the final
-      candidate only.
-- [ ] Keep `revision` informational. Add a comment that it never selects a migration
+- [x] Stamp `revision` and `updatedAtUtc` on the final candidate only. The
+      coordinator's `bumpPreferences` does this, so `setUnit` does not stamp again.
+      See decision 1.
+- [x] Keep `revision` informational. Add a comment that it never selects a migration
       and never resolves a conflict.
-- [ ] Do not rewrite saved historical results when a preference changes.
+- [x] Do not rewrite saved historical results when a preference changes.
+- [x] Read every unit, dimension, and exercise-ID table through a `Map` or an
+      own-property check. A bracket read on a plain object walks the prototype
+      chain, so a key like `toString` or `__proto__` passes an `=== undefined`
+      guard and the inherited member is used as data.
+- [x] In `setUnit`, build the `exerciseUnits` map through a `Map` and serialize
+      with `Object.fromEntries`. A direct `map[exerciseId] =` write of the ID
+      `__proto__` sets the object's prototype, so the mapping serializes away:
+      accepted, never stored, no error raised.
+- [x] `formatAlternating` prints the total the caller passed, including on the
+      path where `splitAlternating` refuses to split. Printing `left + right`
+      showed `0 total` and dropped the recorded number.
+- [x] `roundDisplay` documents its rule as toward positive infinity. The value
+      domain is non-negative, which is what makes that and away-from-zero agree.
+- [x] Add `scripts/check-units-compat.ts`. It builds the three new modules at
+      `target: 'es2019'`, minified, and parses each with acorn `ecmaVersion:
+      2019`. Nothing imports these modules into `dist/app.js` yet, so
+      `check-browser-compat.ts` cannot see them. Wired into `check:compat`.
 
 ### Tests
 
-- [ ] `tests/conversion.test.ts`: 100 kg converts to about 220.462 lb and
+- [x] `tests/conversion.test.ts`: 100 kg converts to about 220.462 lb and
       `formatEditable` returns `220.5`.
-- [ ] `tests/conversion.test.ts`: 5 km displays `3.1 mi`.
-- [ ] `tests/conversion.test.ts`: 90 seconds displays `1.5 minute`.
-- [ ] `tests/conversion.test.ts`: 1 second in minutes displays `0.0` and the stored
+- [x] `tests/conversion.test.ts`: 5 km displays `3.1 mi`.
+- [x] `tests/conversion.test.ts`: 90 seconds displays `1.5 minute`. The label is
+      `min`, so the rendered string is `1.5 min`.
+- [x] `tests/conversion.test.ts`: 1 second in minutes displays `0.0` and the stored
       value stays positive.
-- [ ] `tests/conversion.test.ts`: `roundDisplay` rounds an exact half upward.
-- [ ] `tests/conversion.test.ts`: `convert` is identity for `reps` and `kcal`.
-- [ ] `tests/conversion.test.ts`: converting to an incompatible unit throws.
-- [ ] `tests/conversion.test.ts`: round-trip kg to lb to kg stays within full
+- [x] `tests/conversion.test.ts`: `roundDisplay` rounds an exact half upward.
+- [x] `tests/conversion.test.ts`: `convert` is identity for `reps` and `kcal`.
+- [x] `tests/conversion.test.ts`: converting to an incompatible unit throws.
+- [x] `tests/conversion.test.ts`: round-trip kg to lb to kg stays within full
       floating-point precision, not within `0.1`.
-- [ ] `tests/preference-service.test.ts`: with no saved preference, `getUnit` returns
+- [x] `tests/preference-service.test.ts`: with no saved preference, `getUnit` returns
       the first `compatibleUnits` entry.
-- [ ] `tests/preference-service.test.ts`: `setUnit` writes the mapping and leaves
+- [x] `tests/preference-service.test.ts`: `setUnit` writes the mapping and leaves
       other mappings untouched.
-- [ ] `tests/preference-service.test.ts`: `setUnit` with an incompatible unit throws
+- [x] `tests/preference-service.test.ts`: `setUnit` with an incompatible unit throws
       and writes nothing.
-- [ ] `tests/preference-service.test.ts`: `listMappings` returns one row per stored
+- [x] `tests/preference-service.test.ts`: `listMappings` returns one row per stored
       mapping with the exercise name resolved.
-- [ ] `tests/preference-service.test.ts`: a preference change does not modify any
+- [x] `tests/preference-service.test.ts`: a preference change does not modify any
       stored result.
+- [x] `tests/format.test.ts`: unit labels, `formatQuantity`, and the alternating
+      split for every total from 0 through 30.
 
 ### Verification
 
-- [ ] `bun test` passes.
-- [ ] `bun run check` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
+- [x] `bun test` passes. 803 pass, 0 fail.
+- [x] `bun run check` passes. 0 errors, 0 warnings.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes. It now runs `check-units-compat.ts`, so
+      the ES2019 claim for the new modules is gated, not just asserted.
+- [x] `.agent-work/phase-13/repro-1-prototype-chain-unit.ts` prints `PASS` and
+      exits 0. Before the fix it reported 15 failures.
 
 ## Exit criteria
 
