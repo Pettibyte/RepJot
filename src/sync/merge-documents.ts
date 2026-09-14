@@ -76,6 +76,16 @@ const recordConflict: ConflictObserver = (event) => {
 /** A JSON object with unknown values. */
 type PlainObject = Record<string, unknown>;
 
+/** Define one own enumerable JSON property without invoking `__proto__` setters. */
+function setOwn(root: PlainObject, key: string, value: unknown): void {
+  Object.defineProperty(root, key, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value
+  });
+}
+
 /** True for a JSON object. Arrays and `null` are values, not maps. */
 function isPlainObject(value: unknown): value is PlainObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -177,16 +187,20 @@ function sessionKeysIn(value: unknown): string[] {
 }
 
 /** `exerciseId/dimension` pairs in one preferences map. */
-function preferencePairsIn(value: unknown): string[] {
+function preferencePairsIn(
+  value: unknown,
+  decodeExerciseId: (exerciseId: string) => string
+): string[] {
   const units: string[] = [];
   if (!isPlainObject(value)) {
     return units;
   }
-  for (const exerciseId of Object.keys(value)) {
-    const dimensions = value[exerciseId];
+  for (const storedExerciseId of Object.keys(value)) {
+    const dimensions = value[storedExerciseId];
     if (!isPlainObject(dimensions)) {
       continue;
     }
+    const exerciseId = decodeExerciseId(storedExerciseId);
     for (const dimension of Object.keys(dimensions)) {
       units.push(preferenceUnit(exerciseId, dimension));
     }
@@ -195,7 +209,11 @@ function preferencePairsIn(value: unknown): string[] {
 }
 
 /** Map a delta path to its scope for one family. */
-function scopeFor(family: MergeFamily, path: string[]): UnitScope {
+function scopeFor(
+  family: MergeFamily,
+  path: string[],
+  decodeExerciseId: (exerciseId: string) => string
+): UnitScope {
   if (family === 'repjot/results') {
     if (path[0] !== 'sessions') {
       return { kind: 'loose' };
@@ -210,17 +228,20 @@ function scopeFor(family: MergeFamily, path: string[]): UnitScope {
     return { kind: 'loose' };
   }
   if (path.length >= 3) {
-    return { kind: 'unit', unit: preferenceUnit(path[1], path[2]) };
+    return { kind: 'unit', unit: preferenceUnit(decodeExerciseId(path[1]), path[2]) };
   }
   if (path.length === 2) {
-    const exerciseId = path[1];
+    const exerciseId = decodeExerciseId(path[1]);
     return {
       kind: 'expand',
       unitsIn: (value: unknown): string[] =>
         isPlainObject(value) ? Object.keys(value).map((d) => preferenceUnit(exerciseId, d)) : []
     };
   }
-  return { kind: 'expand', unitsIn: preferencePairsIn };
+  return {
+    kind: 'expand',
+    unitsIn: (value: unknown): string[] => preferencePairsIn(value, decodeExerciseId)
+  };
 }
 
 /** One delta walk: the units it touches and the paths outside the unit namespace. */
@@ -234,15 +255,20 @@ interface DeltaWalk {
  *
  * A delta node that is an array is one operation on the property above it, so the
  * walk stops there and classifies that property path. A delta node that is a plain
- * object is a nested object delta, so the walk descends. The `__t` marker belongs
- * to the text differ, which REP JOT does not use, and is skipped.
+ * object is a nested object delta, so the walk descends. Domain map keys are not
+ * treated as delta metadata. During a preferences merge, exercise IDs have already
+ * been encoded before diffing and the supplied decoder restores their public names.
  */
-function walkDelta(family: MergeFamily, delta: unknown): DeltaWalk {
+function walkDelta(
+  family: MergeFamily,
+  delta: unknown,
+  decodeExerciseId: (exerciseId: string) => string = (exerciseId) => exerciseId
+): DeltaWalk {
   const walk: DeltaWalk = { units: new Set<string>(), loosePaths: [] };
 
   const step = (node: unknown, path: string[]): void => {
     if (Array.isArray(node)) {
-      const scope = scopeFor(family, path);
+      const scope = scopeFor(family, path, decodeExerciseId);
       if (scope.kind === 'unit') {
         walk.units.add(scope.unit);
       } else if (scope.kind === 'expand') {
@@ -258,9 +284,6 @@ function walkDelta(family: MergeFamily, delta: unknown): DeltaWalk {
     }
     if (isPlainObject(node)) {
       for (const key of Object.keys(node)) {
-        if (key === '__t') {
-          continue;
-        }
         step(node[key], path.concat(key));
       }
     }
@@ -371,10 +394,13 @@ const preferenceStore: UnitStore = {
       root.exerciseUnits = {};
     }
     const maps = root.exerciseUnits as PlainObject;
-    if (!isPlainObject(maps[exerciseId])) {
-      maps[exerciseId] = {};
+    if (
+      !Object.prototype.hasOwnProperty.call(maps, exerciseId) ||
+      !isPlainObject(maps[exerciseId])
+    ) {
+      setOwn(maps, exerciseId, {});
     }
-    (maps[exerciseId] as PlainObject)[dimension] = value;
+    setOwn(maps[exerciseId] as PlainObject, dimension, value);
   },
   remove(root: PlainObject, unit: string): void {
     const { exerciseId, dimension } = splitPreferenceUnit(unit);
@@ -382,6 +408,9 @@ const preferenceStore: UnitStore = {
       return;
     }
     const maps = root.exerciseUnits as PlainObject;
+    if (!Object.prototype.hasOwnProperty.call(maps, exerciseId)) {
+      return;
+    }
     const dimensions = maps[exerciseId];
     if (!isPlainObject(dimensions)) {
       return;
@@ -397,6 +426,55 @@ const preferenceStore: UnitStore = {
 /** The store for one family. */
 function storeFor(family: MergeFamily): UnitStore {
   return family === 'repjot/results' ? resultsStore : preferenceStore;
+}
+
+// jsondiffpatch reserves object keys such as `_t` and filters `__proto__`. Encode
+// exercise IDs before they enter its delta namespace. Encoding every ID makes the
+// representation reversible without needing a reserved domain prefix.
+const encodedExercisePrefix = 'e';
+
+function encodeExerciseId(exerciseId: string): string {
+  let encoded = encodedExercisePrefix;
+  for (let index = 0; index < exerciseId.length; index += 1) {
+    encoded += exerciseId.charCodeAt(index).toString(16).padStart(4, '0');
+  }
+  return encoded;
+}
+
+function decodeExerciseId(encoded: string): string {
+  let exerciseId = '';
+  for (let index = encodedExercisePrefix.length; index < encoded.length; index += 4) {
+    exerciseId += String.fromCharCode(parseInt(encoded.slice(index, index + 4), 16));
+  }
+  return exerciseId;
+}
+
+/** Clone a preferences document and replace its exercise IDs with library-safe keys. */
+function encodePreferencesDocument(doc: unknown): unknown {
+  const encoded = clone(doc);
+  if (!isPlainObject(encoded) || !isPlainObject(encoded.exerciseUnits)) {
+    return encoded;
+  }
+  const encodedUnits: PlainObject = {};
+  for (const exerciseId of Object.keys(encoded.exerciseUnits)) {
+    setOwn(encodedUnits, encodeExerciseId(exerciseId), encoded.exerciseUnits[exerciseId]);
+  }
+  encoded.exerciseUnits = encodedUnits;
+  return encoded;
+}
+
+/** Restore domain exercise IDs after jsondiffpatch has finished. */
+function decodePreferencesDocument(doc: unknown): unknown {
+  const decoded = clone(doc);
+  if (!isPlainObject(decoded) || !isPlainObject(decoded.exerciseUnits)) {
+    return decoded;
+  }
+  const decodedUnits: PlainObject = {};
+  for (const encodedId of Object.keys(decoded.exerciseUnits)) {
+    setOwn(decodedUnits, decodeExerciseId(encodedId), decoded.exerciseUnits[encodedId]);
+  }
+  decoded.exerciseUnits = decodedUnits;
+  return decoded;
 }
 
 /**
@@ -437,8 +515,11 @@ function storeFor(family: MergeFamily): UnitStore {
 export function mergeDocuments(input: MergeInput, onConflict?: ConflictObserver): MergeResult {
   const { family, base, local, remote } = input;
   const observer = onConflict ?? recordConflict;
-  const localDelta = patcher.diff(base, local);
-  const remoteDelta = patcher.diff(base, remote);
+  const patchBase = family === 'repjot/preferences' ? encodePreferencesDocument(base) : base;
+  const patchLocal = family === 'repjot/preferences' ? encodePreferencesDocument(local) : local;
+  const patchRemote = family === 'repjot/preferences' ? encodePreferencesDocument(remote) : remote;
+  const localDelta = patcher.diff(patchBase, patchLocal);
+  const remoteDelta = patcher.diff(patchBase, patchRemote);
 
   // No local change means nothing to push. The remote document is the answer.
   if (!localDelta) {
@@ -453,8 +534,10 @@ export function mergeDocuments(input: MergeInput, onConflict?: ConflictObserver)
     return wholeLocalResult(family, local, remote, observer);
   }
 
-  const localWalk = walkDelta(family, localDelta);
-  const remoteUnits = unitsTouchedBy(family, remoteDelta);
+  const exerciseIdDecoder =
+    family === 'repjot/preferences' ? decodeExerciseId : (exerciseId: string): string => exerciseId;
+  const localWalk = walkDelta(family, localDelta, exerciseIdDecoder);
+  const remoteUnits = walkDelta(family, remoteDelta, exerciseIdDecoder).units;
   const conflictedSet = new Set<string>();
   for (const unit of localWalk.units) {
     if (remoteUnits.has(unit)) {
@@ -465,7 +548,9 @@ export function mergeDocuments(input: MergeInput, onConflict?: ConflictObserver)
 
   // Step 3. The clone keeps the merged document free of references into the
   // caller's base, local, or remote values.
-  const patched = clone(patcher.patch(clone(base), remoteDelta));
+  const libraryPatched = clone(patcher.patch(clone(patchBase), remoteDelta));
+  const patched =
+    family === 'repjot/preferences' ? decodePreferencesDocument(libraryPatched) : libraryPatched;
   if (!isPlainObject(patched)) {
     return wholeLocalResult(family, local, remote, observer);
   }

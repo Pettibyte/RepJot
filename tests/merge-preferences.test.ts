@@ -148,6 +148,72 @@ describe('a mapping deleted on one side and edited on the other', () => {
   });
 });
 
+describe('exercise IDs that overlap jsondiffpatch metadata', () => {
+  for (const exerciseId of ['__t', '_t', '__proto__']) {
+    test(`${exerciseId} keeps both independent edits and untouched mappings`, () => {
+      const base = preferencesDoc({
+        [exerciseId]: { weight: 'kg', distance: 'm' },
+        squat: { weight: 'kg' }
+      });
+      const local = clone(base);
+      const remote = clone(base);
+      const localUnits = local.exerciseUnits as Record<string, Record<string, string>>;
+      const remoteUnits = remote.exerciseUnits as Record<string, Record<string, string>>;
+      localUnits[exerciseId].weight = 'lb';
+      remoteUnits[exerciseId].distance = 'km';
+
+      const result = mergeDocuments({ family: PREFERENCES, base, local, remote });
+      const merged = unitsOf(result.merged);
+
+      expect(merged).toEqual({
+        [exerciseId]: { weight: 'lb', distance: 'km' },
+        squat: { weight: 'kg' }
+      });
+      expect(Object.prototype.hasOwnProperty.call(merged, exerciseId)).toBe(true);
+      expect(result.conflictedUnits).toEqual([]);
+      expect(result.needsUpload).toBe(true);
+    });
+  }
+
+  test('unitsTouchedBy treats __t as an exercise ID, not metadata', () => {
+    const delta = { exerciseUnits: { __t: { weight: ['kg', 'lb'] } } };
+    expect(Array.from(unitsTouchedBy(PREFERENCES, delta))).toEqual(['__t/weight']);
+  });
+
+  test('conflicts are reported with the original exercise ID', () => {
+    const base = preferencesDoc({ _t: { weight: 'kg' } });
+    const local = preferencesDoc({ _t: { weight: 'lb' } });
+    const remote = preferencesDoc({ _t: { weight: 'stone' } });
+
+    const result = mergeDocuments({ family: PREFERENCES, base, local, remote });
+
+    expect(result.conflictedUnits).toEqual(['_t/weight']);
+    expect(unitsOf(result.merged)._t.weight).toBe('lb');
+  });
+
+  test('a locally added __proto__ mapping is an own property', () => {
+    const base = preferencesDoc({ squat: { weight: 'kg' } });
+    const local = clone(base);
+    const remote = clone(base);
+    const localUnits = local.exerciseUnits as Record<string, Record<string, string>>;
+    const remoteUnits = remote.exerciseUnits as Record<string, Record<string, string>>;
+    Object.defineProperty(localUnits, '__proto__', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: { weight: 'lb' }
+    });
+    remoteUnits.squat.distance = 'm';
+
+    const result = mergeDocuments({ family: PREFERENCES, base, local, remote });
+    const merged = unitsOf(result.merged);
+
+    expect(merged.squat).toEqual({ weight: 'kg', distance: 'm' });
+    expect(merged.__proto__).toEqual({ weight: 'lb' });
+    expect(Object.prototype.hasOwnProperty.call(merged, '__proto__')).toBe(true);
+  });
+});
+
 describe('an exercise ID that breaks the ID rule', () => {
   // REQUIREMENTS 22.4.6 forbids `/` in an ID, and the schema enforces it. The
   // merge still must not corrupt a document that carries one, because the merge
