@@ -32,13 +32,21 @@ import { AppError, type AppErrorKind } from '../domain/errors';
 import type { ResultsShard } from '../domain/types';
 import { shardName } from '../domain/time';
 import type { LoadedStaticData } from '../documents/static-loader';
+import { semanticStageFor } from '../documents/semantic-stage';
 import { processDocument, type SemanticStage } from '../documents/document-pipeline';
 import type { DriveAdapter, DriveFileMeta } from '../drive/drive-interface';
 import { setSaveStatus } from '../state/app-state';
 import { baseKey, cacheKey, pendingKey, type LocalStore, type LocalStoreEntry } from '../storage/local-store';
 import { highestSupportedVersion, type DocFamily } from '../validation/schema-validator';
 import { validatePreferences, validateShard } from '../validation/semantic-validator';
+import {
+  createConsolidateHook,
+  type BlockedLogicalFile,
+  type ConsolidateResult,
+  type RemainingFile
+} from './consolidate-duplicates';
 import { mergeDocuments, type MergeFamily } from './merge-documents';
+import { PREFERENCES_FILE_NAME, familyForName } from './recognized-names';
 import { clone, patcher, applyDelta } from './patcher';
 import {
   applyPendingDelta,
@@ -65,23 +73,23 @@ import {
 export const MAX_UPLOAD_ATTEMPTS = 3;
 
 /** The preferences logical file name. */
-export const PREFERENCES_NAME = 'preferences.json';
+export const PREFERENCES_NAME = PREFERENCES_FILE_NAME;
 
 /**
  * The Phase 11 consolidation seam.
  *
  * ARCHITECTURE section 11 step 3 consolidates duplicate Drive names before
- * any normal write. Phase 11 owns that module. The coordinator hands the
- * hook the catalog it just listed and works from whatever the hook returns,
- * so Phase 11 wires in without a change here. The default returns the
- * catalog untouched, which is correct while no duplicate exists.
+ * any normal write. Phase 11 owns that module, and `createCoordinator` builds
+ * the real hook from the coordinator's own `drive` and `staticData`, so every
+ * coordinator consolidates with no extra wiring. A caller can still pass its
+ * own hook through `SyncDeps.consolidate`.
+ *
+ * The hook returns the catalog plus the groups it could not consolidate. A
+ * blocked group is the coordinator's signal to refuse that logical file: the
+ * copies stay on Drive untouched and the pending local edit stays durable.
+ * REQUIREMENTS 4.23.
  */
-export type ConsolidateHook = (catalog: DriveFileMeta[]) => Promise<DriveFileMeta[]>;
-
-/** The default hook: no consolidation. */
-const noConsolidation: ConsolidateHook = async (
-  catalog: DriveFileMeta[]
-): Promise<DriveFileMeta[]> => catalog;
+export type ConsolidateHook = (catalog: DriveFileMeta[]) => Promise<ConsolidateResult>;
 
 /** Everything the coordinator needs. */
 export interface SyncDeps {
@@ -170,18 +178,20 @@ export function logicalNameForShard(startedAtUtc: string): string {
 /**
  * Map a logical file name to its merge family.
  *
- * `preferences.json` is the preferences family and `results-YYYY-MM.json` is
- * the results family. Any other name is not a REP JOT logical file, so the
- * coordinator refuses it instead of guessing a family for it.
+ * The rule is the one in `recognized-names.ts`, so the coordinator and
+ * duplicate consolidation can never disagree about what a REP JOT logical
+ * file is. Any other name is refused instead of guessing a family for it.
  */
 function familyFor(logicalName: string): MergeFamily {
-  if (logicalName === PREFERENCES_NAME) return 'repjot/preferences';
-  if (/^results-\d{4}-\d{2}\.json$/.test(logicalName)) return 'repjot/results';
-  throw new AppError(
-    'invalid_document',
-    { reason: 'unrecognized_logical_name' },
-    'This file name is not a REP JOT logical file.'
-  );
+  const family = familyForName(logicalName);
+  if (family === null) {
+    throw new AppError(
+      'invalid_document',
+      { reason: 'unrecognized_logical_name' },
+      'This file name is not a REP JOT logical file.'
+    );
+  }
+  return family;
 }
 
 /** True when `catalog` holds this stable Drive file ID. */
@@ -189,12 +199,43 @@ function catalogHas(catalog: DriveFileMeta[], id: string): boolean {
   return catalog.some((meta: DriveFileMeta): boolean => meta.id === id);
 }
 
-/** The catalog entry for one logical name. Phase 10 assumes at most one. */
+/** The catalog entry for one logical name. Consolidation ran first, so at most
+ * one recognized file with this name should remain by the time we read here. */
 function catalogEntry(catalog: DriveFileMeta[], logicalName: string): DriveFileMeta | null {
   for (const meta of catalog) {
     if (meta.name === logicalName) return meta;
   }
   return null;
+}
+
+/**
+ * The blocked entry for one logical name, if consolidation reported one.
+ *
+ * A blocked duplicate group is not a transport fault, so retrying cannot fix
+ * it. The coordinator turns it into a `duplicate_drive_file` error, which
+ * `classifyAttempt` stops on, and the `DataError` component names the file.
+ * REQUIREMENTS 4.23, 22.2.10.
+ */
+function blockedFor(
+  result: ConsolidateResult,
+  logicalName: string
+): BlockedLogicalFile | null {
+  for (const entry of result.blocked) {
+    if (entry.logicalName === logicalName) return entry;
+  }
+  return null;
+}
+
+/** Throw the blocked error for one logical name when consolidation reported it. */
+function guardBlocked(result: ConsolidateResult, logicalName: string): void {
+  const blocked = blockedFor(result, logicalName);
+  if (blocked !== null) {
+    throw new AppError(
+      'duplicate_drive_file',
+      { reason: blocked.reason, fileId: blocked.fileId },
+      'Drive holds duplicate copies this client cannot safely consolidate.'
+    );
+  }
 }
 
 /**
@@ -264,7 +305,8 @@ function classifyAttempt(error: unknown): { kind: AppErrorKind; retryable: boole
       error.kind === 'unsupported_schema' ||
       error.kind === 'semantic_reference' ||
       error.kind === 'migration' ||
-      error.kind === 'storage'
+      error.kind === 'storage' ||
+      error.kind === 'duplicate_drive_file'
     ) {
       return { kind: error.kind, retryable: false };
     }
@@ -281,31 +323,10 @@ function classifyAttempt(error: unknown): { kind: AppErrorKind; retryable: boole
  * `accountKey` scopes every lock key and the store is already per-account.
  */
 export function createCoordinator(deps: SyncDeps): Coordinator {
-  const consolidate = deps.consolidate === undefined ? noConsolidation : deps.consolidate;
-  const semantic = (logicalName: string): SemanticStage => (doc: unknown, family: DocFamily): void => {
-    if (family === 'repjot/results') {
-      const report = validateShard(doc as ResultsShard, deps.staticData, { fileName: logicalName });
-      if (report.issues.length > 0) {
-        throw new AppError(
-          'semantic_reference',
-          { reason: 'semantic_invalid', code: report.issues[0].code },
-          'The document failed semantic validation.'
-        );
-      }
-      return;
-    }
-    if (family === 'repjot/preferences') {
-      const units = (doc as { exerciseUnits?: Record<string, Record<string, string>> }).exerciseUnits;
-      const report = validatePreferences({ exerciseUnits: units ?? {} }, deps.staticData.exercises);
-      if (report.issues.length > 0) {
-        throw new AppError(
-          'semantic_reference',
-          { reason: 'semantic_invalid', code: report.issues[0].code },
-          'The preferences document failed semantic validation.'
-        );
-      }
-    }
-  };
+  const consolidate: ConsolidateHook =
+    deps.consolidate ?? createConsolidateHook({ drive: deps.drive, staticData: deps.staticData });
+  const semantic = (logicalName: string): SemanticStage =>
+    semanticStageFor(logicalName, deps.staticData);
 
   /** In-memory working documents by logical name. */
   const docs = new Map<string, LoadedDoc>();
@@ -428,11 +449,14 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   }
 
   /** List the catalog and run the consolidation hook over it. */
-  async function loadCatalog(logicalName: string): Promise<DriveFileMeta[]> {
+  async function loadCatalog(logicalName: string): Promise<ConsolidateResult> {
     const catalog = await deps.drive.listCatalog();
-    const after = await consolidate(catalog);
-    void logicalName;
-    return after;
+    const result = await consolidate(catalog);
+    // A blocked duplicate group stops this logical file before any read or
+    // write of it. Other logical files keep their own entries and keep
+    // synchronizing. REQUIREMENTS 4.23.
+    guardBlocked(result, logicalName);
+    return result;
   }
 
   /**
@@ -444,23 +468,79 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    * stays while a pending delta exists, because that delta is a `patch`
    * against the base and cannot replay without it. Dropping the base would
    * strand the pending edit forever. REQUIREMENTS 4.4, 4.20.
+   *
+   * A consolidation records its surviving file ID instead of dropping the
+   * row. When step 12 of consolidation proved exactly one recognized file
+   * remains, the cached and base rows are repointed to that ID and keep the
+   * content they already hold, so this device does not re-download a document
+   * it just wrote. REQUIREMENTS 4.25.
    */
-  async function dropVanished(logicalName: string, catalog: DriveFileMeta[]): Promise<void> {
+  async function dropVanished(
+    logicalName: string,
+    catalog: DriveFileMeta[],
+    survivor: RemainingFile | null
+  ): Promise<void> {
     const slots = await readSlots(logicalName);
     const dropped: string[] = [];
-    if (slots.cached !== null && slots.cached.driveFileId !== null && !catalogHas(catalog, slots.cached.driveFileId)) {
-      await deps.store.delete(cacheKey(logicalName));
-      dropped.push('cached');
+    const repointed: string[] = [];
+
+    const cachedGone =
+      slots.cached !== null &&
+      slots.cached.driveFileId !== null &&
+      !catalogHas(catalog, slots.cached.driveFileId);
+    if (cachedGone && slots.cached !== null) {
+      if (survivor === null) {
+        await deps.store.delete(cacheKey(logicalName));
+        dropped.push('cached');
+      } else {
+        // With nothing pending the row is a plain remote cache, so it takes the
+        // content and the marker the consolidation read back. Carrying the
+        // deleted file's marker instead would let `isCleanRow` mistake stale
+        // local text for a clean copy of the survivor and skip the download.
+        // With a pending delta the row holds this device's working text, which
+        // Drive has never seen, so replacing it would discard an edit. Only the
+        // file ID moves. REQUIREMENTS 4.4, 4.5, 4.15, 4.20, 4.25.
+        const carryConfirmed = slots.pending === null;
+        await deps.store.set(
+          cacheKey(logicalName),
+          makeCachedRecord(
+            logicalName,
+            survivor.driveFileId,
+            carryConfirmed ? survivor.remoteEtag : slots.cached.remoteEtag,
+            carryConfirmed ? survivor.contentText : slots.cached.contentText,
+            carryConfirmed ? survivor.schemaVersion : slots.cached.schemaVersion,
+            new Date().toISOString()
+          )
+        );
+        repointed.push('cached');
+      }
     }
+
     const keepBase = slots.pending !== null;
-    if (
+    const baseGone =
       !keepBase &&
       slots.base !== null &&
       slots.base.driveFileId !== null &&
-      !catalogHas(catalog, slots.base.driveFileId)
-    ) {
-      await deps.store.delete(baseKey(logicalName));
-      dropped.push('base');
+      !catalogHas(catalog, slots.base.driveFileId);
+    if (baseGone && slots.base !== null) {
+      if (survivor !== null) {
+        await deps.store.set(
+          baseKey(logicalName),
+          makeBaseRecord(survivor.contentText, survivor.driveFileId)
+        );
+        repointed.push('base');
+      } else {
+        await deps.store.delete(baseKey(logicalName));
+        dropped.push('base');
+      }
+    }
+
+    if (repointed.length > 0 && survivor !== null) {
+      logDiagnostic({
+        severity: 'info',
+        code: 'sync_records_repointed',
+        context: { logicalName, repointed: repointed.join(','), driveFileId: survivor.driveFileId }
+      });
     }
     if (dropped.length > 0) {
       logDiagnostic({
@@ -532,7 +612,9 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    */
   async function loadDoc(logicalName: string): Promise<LoadedDoc> {
     const family = familyFor(logicalName);
-    const catalog = await loadCatalog(logicalName);
+    const result = await loadCatalog(logicalName);
+    const catalog = result.catalog;
+    const survivor = result.remaining[logicalName] ?? null;
     const entry = catalogEntry(catalog, logicalName);
 
     // Decide before the network whether the cached row is still clean, so a
@@ -551,7 +633,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         return current ?? (await restoreLocal(logicalName, family));
       }
 
-      await dropVanished(logicalName, catalog);
+      await dropVanished(logicalName, catalog, survivor);
       const slots = await readSlots(logicalName);
 
       // Step 6: clean cached row, unchanged marker, no pending delta.
@@ -725,7 +807,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     family: MergeFamily,
     loaded: LoadedDoc
   ): Promise<{ text: string; meta: DriveFileMeta }> {
-    const catalog = await loadCatalog(logicalName);
+    const catalog = (await loadCatalog(logicalName)).catalog;
     const entry = catalogEntry(catalog, logicalName);
     const remote = entry === null ? null : await deps.drive.readFile(entry.id);
     const remoteText = remote === null ? null : remote.text;
@@ -770,7 +852,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     // attempt has not read the file it would now write to. A file that
     // appeared was never read, so writing to it would drop its content.
     // A file that vanished leaves no target. REQUIREMENTS 4.6, 4.8, 4.9.
-    const fresh = catalogEntry(await loadCatalog(logicalName), logicalName);
+    const fresh = catalogEntry((await loadCatalog(logicalName)).catalog, logicalName);
     const appeared = remoteMeta === null && fresh !== null;
     const vanished = remoteMeta !== null && fresh === null;
     const changedMarker =
