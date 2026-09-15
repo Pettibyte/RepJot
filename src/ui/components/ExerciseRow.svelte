@@ -1,0 +1,226 @@
+<!--
+  One exercise with its inputs.
+  Phase 17. REQUIREMENTS 11.1-11.8, 19.1-19.9.
+
+  The row is the unit of the Active Workout screen: the exercise name, the
+  prescription it sits under, the Last Time badge, one input per measurement
+  dimension, and the status control.
+
+  Three rules shape the row.
+
+  1. A row under a container that records with no child detail shows no
+     inputs. The container score is the record there, and an input beside it
+     would offer work the validator refuses. REQUIREMENTS 10.10, 10.13.
+  2. The status control only offers a reason code when the status is not
+     `completed`. A completed result must not carry one, and the validator
+     rejects the pair. REQUIREMENT 11.4.
+  3. An unresolved row keeps its name and its stored values visible and adds
+     the data-error card. One stale reference never drops the rest of the
+     workout. REQUIREMENTS 6.10, 15.6.
+-->
+<script lang="ts">
+  import DataError from './DataError.svelte';
+  import EffortControl from './EffortControl.svelte';
+  import LastTimeBadge from './LastTimeBadge.svelte';
+  import SideControl from './SideControl.svelte';
+  import ValueInput from './ValueInput.svelte';
+  import Button from './Button.svelte';
+  import type { ActiveExerciseRow } from '../viewmodels/activeWorkoutModel';
+  import { fieldDisplay } from '../viewmodels/activeWorkoutModel';
+  import { canAddAttempt, choiceForEffort } from '../screens/activeWorkoutActions';
+  import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
+  import { REASON_OPTIONS, STATUS_OPTIONS } from './exercise-row-options';
+
+  let {
+    row,
+    overrides = {},
+    disabled = false,
+    idPrefix = 'row',
+    side = undefined,
+    startingSide = 'left',
+    effortChoice = undefined,
+    busy = false,
+    onfieldchange = undefined,
+    onfieldblur = undefined,
+    onstatuschange = undefined,
+    onreasonchange = undefined,
+    onunitchange = undefined,
+    onsidechange = undefined,
+    onstartingchange = undefined,
+    oneffortchange = undefined,
+    onaddattempt = undefined
+  }: {
+    /** The row to draw. */
+    row: ActiveExerciseRow;
+    /** Draft text per dimension, overriding the model's display value. */
+    overrides?: Record<string, string>;
+    disabled?: boolean;
+    /** Prefix for element ids, so two trees on one page stay addressable. */
+    idPrefix?: string;
+    /** Draft side. Falls back to the side the row records. */
+    side?: Side;
+    /** Draft starting side for an alternating set. */
+    startingSide?: StartingSide;
+    /** Draft effort choice. Falls back to the effort already on the row. */
+    effortChoice?: string;
+    /** True while a row-level action is in flight, so a double tap cannot repeat. */
+    busy?: boolean;
+    /**
+     * Runs on every keystroke in a value field.
+     *
+     * This is the link that carries a typed value out of the row and into
+     * the screen's draft. Without it the text dies in the input and every
+     * edit is discarded. REQUIREMENT 11.1.
+     */
+    onfieldchange?: ((dimension: string, value: string) => void) | undefined;
+    onfieldblur?: ((dimension: string) => void) | undefined;
+    onstatuschange?: ((status: ResultStatus) => void) | undefined;
+    onreasonchange?: ((reason: ReasonCode) => void) | undefined;
+    onunitchange?: ((dimension: string) => void) | undefined;
+    onsidechange?: ((side: Side) => void) | undefined;
+    onstartingchange?: ((startingSide: StartingSide) => void) | undefined;
+    oneffortchange?: ((choice: string) => void) | undefined;
+    /**
+     * Opens one more attempt on this row.
+     *
+     * The service copies the identity of the attempt it follows and opens
+     * the new one with no values, so the row appears beside the first with
+     * empty fields. REQUIREMENT 19.9.
+     */
+    onaddattempt?: (() => void) | undefined;
+  } = $props();
+
+  const domId = (suffix: string): string => `${idPrefix}-${row.key}-${suffix}`;
+
+  /** A reason code is only meaningful on a result that is not completed. */
+  const showReason = $derived(row.status !== 'completed');
+
+  /** A row with no inputs still shows its name, so the tree stays readable. */
+  const showInputs = $derived(row.recordable && row.fields.length > 0 && !row.unresolved);
+
+  /** The side the row records now, draft first. */
+  const currentSide = $derived(side ?? row.side);
+
+  /** The effort the row shows now, draft first. */
+  const currentEffort = $derived(effortChoice ?? choiceForEffort(row.effort));
+
+  const errorProps = $derived({
+    title: `This exercise is not in the current build: ${row.exerciseId}`,
+    family: 'static-exercise',
+    detail: 'The row stays so the workout reads whole. Recorded values are kept.',
+    rawJson: JSON.stringify({ exerciseId: row.exerciseId, nodeKey: row.nodeKey }, null, 2)
+  });
+</script>
+
+<div class="exercise-row" class:exercise-row--unresolved={row.unresolved}>
+  {#if row.showCompactPath && row.compactPathLabel !== ''}
+    <p class="exercise-row__path">{row.compactPathLabel}</p>
+  {/if}
+
+  <div class="exercise-row__head">
+    <h4 class="exercise-row__name">{row.exerciseName}</h4>
+    <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
+  </div>
+
+  {#if row.prescriptionText !== ''}
+    <p class="exercise-row__prescription">{row.prescriptionText}</p>
+  {/if}
+
+  {#if row.unresolved}
+    <DataError props={errorProps} />
+  {:else if !row.recordable}
+    <p class="exercise-row__hint">
+      Recorded as part of the block score above.
+    </p>
+  {:else}
+    {#if showInputs}
+      <div class="exercise-row__fields">
+        {#each row.fields as field (field.dimension)}
+          {@const display = fieldDisplay(field, overrides)}
+          <ValueInput
+            field={{ ...field, value: display }}
+            id={domId(field.dimension)}
+            {disabled}
+            value={display}
+            oninput={(event: Event) => {
+              const target = event.target as HTMLInputElement;
+              onfieldchange?.(field.dimension, target.value);
+            }}
+            onblur={() => onfieldblur?.(field.dimension)}
+            onunit={() => onunitchange?.(field.dimension)}
+          />
+        {/each}
+      </div>
+
+      <SideControl
+        {row}
+        side={currentSide}
+        startingSide={startingSide}
+        {overrides}
+        {disabled}
+        {idPrefix}
+        onsidechange={(nextSide: Side) => onsidechange?.(nextSide)}
+        onstartingchange={(next: StartingSide) => onstartingchange?.(next)}
+      />
+
+      {#if row.effortTarget !== undefined}
+        <EffortControl
+          target={row.effortTarget}
+          value={currentEffort}
+          {disabled}
+          id={domId('effort')}
+          onchange={(event: Event) => {
+            const target = event.target as HTMLSelectElement;
+            oneffortchange?.(target.value);
+          }}
+        />
+      {/if}
+    {/if}
+
+    <div class="exercise-row__status">
+      <label class="exercise-row__label" for={domId('status')}>Status</label>
+      <select
+        class="exercise-row__select"
+        id={domId('status')}
+        {disabled}
+        value={row.status}
+        onchange={(event: Event) => {
+          const target = event.target as HTMLSelectElement;
+          onstatuschange?.(target.value as ResultStatus);
+        }}
+      >
+        {#each STATUS_OPTIONS as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
+    </div>
+
+    {#if showReason}
+      <div class="exercise-row__status">
+        <label class="exercise-row__label" for={domId('reason')}>Reason</label>
+        <select
+          class="exercise-row__select"
+          id={domId('reason')}
+          {disabled}
+          value={row.reasonCode ?? 'not_completed'}
+          onchange={(event: Event) => {
+            const target = event.target as HTMLSelectElement;
+            onreasonchange?.(target.value as ReasonCode);
+          }}
+        >
+          {#each REASON_OPTIONS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
+
+    {#if canAddAttempt(row)}
+      <div class="exercise-row__attempt">
+        <Button variant="secondary" disabled={disabled || busy} onclick={() => onaddattempt?.()}>
+          {busy ? 'Opening…' : 'Add another attempt'}
+        </Button>
+      </div>
+    {/if}
+  {/if}
+</div>

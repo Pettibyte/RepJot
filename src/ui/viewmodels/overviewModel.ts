@@ -60,7 +60,7 @@ export interface OverviewExerciseIndex {
 }
 
 /** Name for a container that carries none, keyed by strategy. */
-const CONTAINER_FALLBACK_NAMES: Record<string, string> = {
+export const CONTAINER_FALLBACK_NAMES: Record<string, string> = {
   sequence: 'Sequence',
   rounds: 'Rounds',
   amrap: 'AMRAP',
@@ -154,7 +154,7 @@ export function formatPrescription(prescription: Prescription): string {
 }
 
 /** The container's own summary, such as `4 rounds` or `AMRAP 20 min`. */
-function formatContainerSummary(container: ContainerNode): string {
+export function formatContainerSummary(container: ContainerNode): string {
   const config = container.strategyConfig as Record<string, unknown>;
 
   switch (container.strategy) {
@@ -190,14 +190,14 @@ function isDuration(value: unknown): value is DurationQuantity {
 }
 
 /** Join two text parts without leaving a leading or trailing space. */
-function joinText(left: string, right: string): string {
+export function joinText(left: string, right: string): string {
   if (left === '') return right;
   if (right === '') return left;
   return `${left} · ${right}`;
 }
 
 /** The stimulus word shown beside an exercise row, such as `Strength`. */
-function stimulusLabel(stimulus: Stimulus | undefined): string {
+export function stimulusLabel(stimulus: Stimulus | undefined): string {
   if (stimulus === undefined) return '';
   return STIMULUS_LABELS[stimulus] ?? stimulus;
 }

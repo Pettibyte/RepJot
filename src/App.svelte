@@ -18,10 +18,10 @@
   // blocker, so the raw route renders the viewer through the normal outlet.
   // REQUIREMENTS 6.9.
   //
-  // Route outlet. Phase 16 registers the landing page, the workout chooser, and
-  // the workout overview. The routes that later phases own resolve to the
-  // not-found screen until their component is registered here, so an unbuilt
-  // address never renders a blank page.
+  // Route outlet. Phase 17 registers the Active Workout screen, so a started
+  // session opens into the editor instead of the typed not-found state. The
+  // summary, history, and settings routes belong to Phases 18 and 19 and still
+  // resolve to the not-found screen until their components are registered here.
 
   import type { Readable } from 'svelte/store';
   import AppHeader from './ui/components/AppHeader.svelte';
@@ -32,6 +32,7 @@
   import LandingScreen from './ui/screens/LandingScreen.svelte';
   import NotFoundScreen from './ui/screens/NotFoundScreen.svelte';
   import RawJsonScreen from './ui/screens/RawJsonScreen.svelte';
+  import ActiveWorkoutScreen from './ui/screens/ActiveWorkoutScreen.svelte';
   import WorkoutChooserScreen from './ui/screens/WorkoutChooserScreen.svelte';
   import WorkoutOverviewScreen from './ui/screens/WorkoutOverviewScreen.svelte';
   import Tabs from './ui/components/Tabs.svelte';
@@ -207,6 +208,8 @@
         {/if}
       {:else if current.name === 'workout-overview'}
         <WorkoutOverviewScreen workoutId={current.workoutId} />
+      {:else if current.name === 'session-active'}
+        <ActiveWorkoutScreen sessionId={current.sessionId} />
       {:else if current.name === 'raw-json'}
         <RawJsonScreen source={current.source} />
       {:else}

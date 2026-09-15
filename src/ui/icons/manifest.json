@@ -61,6 +61,12 @@
       "sourceKey": "arrow-back",
       "viewBox": "0 0 24 24",
       "path": "m7.825 13l5.6 5.6L12 20l-8-8l8-8l1.425 1.4l-5.6 5.6H20v2z"
+    },
+    {
+      "name": "add",
+      "sourceKey": "add",
+      "viewBox": "0 0 24 24",
+      "path": "M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z"
     }
   ]
 }

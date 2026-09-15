@@ -57,6 +57,7 @@ export const REVIEWED_GLYPHS: string[] = [
   'timer', // rest timers and durations
   'weight', // load and reps metrics
   'arrow_back', // BackHeader back control
+  'add', // AMRAP quick round control
 ];
 
 const PACKAGE_NAME = '@iconify-json/material-symbols';
