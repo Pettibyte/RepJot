@@ -29,6 +29,8 @@
     children?: Snippet;
     class?: string;
     [key: `aria-${string}`]: unknown;
+    /** Click handler. The visible text still names the action. */
+    onclick?: ((event: MouseEvent) => void) | undefined;
   } = $props();
 
   const classes = $derived(

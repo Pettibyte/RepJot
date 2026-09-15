@@ -16,7 +16,14 @@ This plan does not restate them.
    Screens add no hex colors, no shadows, no gradients, and no page-specific CSS.
 5. UI code calls no `fetch` and no IndexedDB API. It calls services.
 6. Domain modules import no Svelte, DOM, OAuth, Drive, or IndexedDB.
-7. Final verification for every phase is the repo command set:
+7. Svelte components use Svelte 5 runes. Declare props with `$props()`, use
+   `$state()`, `$derived()`, and `$effect()`, and pass content with snippets.
+   Legacy syntax is out: no `export let`, no `<slot>`, and no `on:click`.
+   Svelte 5 rejects `export let` in a component that uses runes, so the two
+   styles cannot mix in one file. `src/App.svelte` and
+   `src/ui/components/DataError.svelte` are the reference files. Phases 16
+   through 19 carry the full rule under **Component syntax**.
+8. Final verification for every phase is the repo command set:
 
    ```sh
    bun ci

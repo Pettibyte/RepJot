@@ -127,52 +127,84 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void>;
 
 ### Implementation
 
-- [ ] Implement `parseHash` and `formatRoute` for every route, including the
+- [x] Implement `parseHash` and `formatRoute` for every route, including the
       not-found case.
-- [ ] Implement `createRouter` with a `hashchange` subscription and a readable store.
-- [ ] Implement `bootstrap` with the eight steps and typed failure handling.
-- [ ] Render a static-data failure blocker when `startupStatus` is `static_failed`.
-- [ ] Rewrite `src/App.svelte` as the shell: header variant, tab bar, route outlet,
+- [x] Implement `createRouter` with a `hashchange` subscription and a readable store.
+- [x] Implement `bootstrap` with the eight steps and typed failure handling.
+- [x] Render a static-data failure blocker when `startupStatus` is `static_failed`.
+- [x] Rewrite `src/App.svelte` as the shell: header variant, tab bar, route outlet,
       save-status indicator, and a dismissible error banner bound to `activeError`.
-- [ ] Implement `DataError.svelte` using Phase 01 primitives. Keep visible text on
+- [x] Implement `DataError.svelte` using Phase 01 primitives. Keep visible text on
       both actions.
-- [ ] Implement `RawJsonScreen.svelte` that renders the stored text inside a
+- [x] Implement `RawJsonScreen.svelte` that renders the stored text inside a
       `<pre>` through interpolation.
-- [ ] Add a `rawPayloadStore` in memory that holds the text a **View Raw JSON** action
+- [x] Add a `rawPayloadStore` in memory that holds the text a **View Raw JSON** action
       opens, keyed by a short id in the route.
-- [ ] Strip the OAuth fragment with `history.replaceState` before any private read.
-- [ ] Delete the prototype hello-world UI from `App.svelte`.
-- [ ] Keep `src/capabilities.html` and its page untouched.
+- [x] Strip the OAuth fragment with `history.replaceState` before any private read.
+- [x] Delete the prototype hello-world UI from `App.svelte`.
+- [x] Keep `src/capabilities.html` and its page untouched.
 
 ### Tests
 
-- [ ] `tests/hash-router.test.ts`: each route parses to the typed `Route` and formats
+- [x] `tests/hash-router.test.ts`: each route parses to the typed `Route` and formats
       back to the same hash.
-- [ ] `tests/hash-router.test.ts`: an unknown path parses to `not-found` with the
+- [x] `tests/hash-router.test.ts`: an unknown path parses to `not-found` with the
       attempted hash preserved.
-- [ ] `tests/hash-router.test.ts`: a malformed session id segment parses to
+- [x] `tests/hash-router.test.ts`: a malformed session id segment parses to
       `not-found` rather than throwing.
-- [ ] `tests/bootstrap.test.ts`: a static-data failure sets `static_failed` and never
+- [x] `tests/bootstrap.test.ts`: a static-data failure sets `static_failed` and never
       touches the account store.
-- [ ] `tests/bootstrap.test.ts`: no private cache read happens before `restoreAndBind`
+- [x] `tests/bootstrap.test.ts`: no private cache read happens before `restoreAndBind`
       resolves. Assert with call-order spies.
-- [ ] `tests/data-error.test.ts`: the component renders family, declared version, and
+- [x] `tests/data-error.test.ts`: the component renders family, declared version, and
       max supported version when present.
-- [ ] `tests/data-error.test.ts`: **View Raw JSON** navigates to the raw route with
+- [x] `tests/data-error.test.ts`: **View Raw JSON** navigates to the raw route with
       the payload key.
-- [ ] `tests/data-error.test.ts`: no code path sets `innerHTML`. Assert with a
+- [x] `tests/data-error.test.ts`: no code path sets `innerHTML`. Assert with a
       component render spy or a source grep test.
 
 ### Verification
 
-- [ ] `bun run check` passes.
-- [ ] `bun test` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run check:compat` passes.
+- [x] `bun run check` passes.
+- [x] `bun test` passes.
+- [x] `bun run build` passes.
+- [x] `bun run check:compat` passes.
 - [ ] Manual in `bun run dev`: reload on each route, bookmark one, and confirm it
       restores. Confirm an invalid hash shows not-found.
+      Not done. This build environment has no browser. `bun run dev` serves the
+      page and the app module, and `tests/shell.test.ts` plus
+      `tests/hash-router.test.ts` cover the route and header behavior by render.
+      Run the browser pass before release.
 
 ## Exit criteria
 
 The real shell runs. Every route reloads correctly, the startup gate holds, and one
 component reports every data problem.
+
+## Build decisions
+
+Four points in this plan needed a call before the code. The user chose each one.
+
+1. **Unbuilt routes show not-found.** The screens for routes other than `#/` and
+   `#/raw/:source` belong to Phases 16 through 19. Until a phase registers its
+   component in the `App.svelte` outlet, that route renders the not-found screen
+   with its own address. No placeholder component was built.
+2. **Sign-out moves to Phase 19.** The prototype `App.svelte` carried the
+   sign-out and retry-binding controls, so `tests/app-sign-out-availability.test.ts`
+   was deleted with that UI. Phase 19 restores the coverage with the Settings
+   screen. Until then this build has no sign-out control.
+3. **Warm cache is preferences only.** Step 6 loads `preferences.json` and stops.
+   Result shards load when a screen calls `coordinator.ensureLoaded`, so a cold
+   start costs one request instead of one per month of history.
+4. **Mount runs ahead of the warm.** The shell mounts once the static bundle and
+   the account binding resolve. The warm runs behind it. A warm is a Drive round
+   trip, and the Kindle pays for that on a slow link. A screen that needs data
+   first awaits the same load, so no screen reads a hole.
+
+Two smaller notes:
+
+- `DataError.svelte` uses Svelte 5 runes with the plan's `props` object shape:
+  `let { props }: { props: DataErrorProps } = $props()`. The type lives in
+  `src/ui/components/data-error-types.ts`.
+- The token-expiry timer that the prototype page owned now lives in `bootstrap`.
+  The shell carries no auth logic, and an expired token still stops being used.

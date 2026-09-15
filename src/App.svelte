@@ -1,255 +1,191 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  // The application shell.
+  // ARCHITECTURE section 9. REQUIREMENTS 4.3, 16.1, 16.2.
+  //
+  // The shell owns four things and nothing else: the header variant, the tab bar,
+  // the route outlet, and the error banner. Every screen is a child. The shell
+  // reads state; it never writes user data.
+  //
+  // Header variant. A tab root renders the REP JOT header with the Workout,
+  // History, and Settings tabs. Every other route renders the compact back
+  // header, which keeps the tab bar away from a screen the user is working in.
+  // REQUIREMENTS 16.1 and 16.2.
+  //
+  // Startup gate. The shell renders no screen until `startupStatus` says the
+  // static bundle is good. A static-data failure renders the blocker instead,
+  // because a half-loaded bundle cannot answer any question a screen asks. The
+  // raw viewer is the one exception: **View Raw JSON** must work from the
+  // blocker, so the raw route renders the viewer through the normal outlet.
+  // REQUIREMENTS 6.9.
+  //
+  // Route outlet. Phase 15 ships the home screen and the raw viewer. The routes
+  // that later phases own resolve to the not-found screen until their component
+  // is registered here, so an unbuilt address never renders a blank page.
+
+  import type { Readable } from 'svelte/store';
+  import AppHeader from './ui/components/AppHeader.svelte';
+  import BackHeader from './ui/components/BackHeader.svelte';
+  import Button from './ui/components/Button.svelte';
+  import DataError from './ui/components/DataError.svelte';
+  import type { DataErrorProps } from './ui/components/data-error-types';
+  import HomeScreen from './ui/screens/HomeScreen.svelte';
+  import NotFoundScreen from './ui/screens/NotFoundScreen.svelte';
+  import RawJsonScreen from './ui/screens/RawJsonScreen.svelte';
+  import Tabs from './ui/components/Tabs.svelte';
+  import { parentRoute, formatRoute, isTabRoot, type Route } from './routing/routes';
   import {
-    GOOGLE_ACCOUNT_CONNECTIONS_URL,
-    disconnect as disconnectAccount,
-    expireSession,
-    millisecondsUntilExpiry,
-    restoreAndBind,
-    getSession,
-    signOut as clearDeviceSession,
-    type AuthSession
-  } from './auth/auth-service';
-  import {
-    beginAuthorization,
-    hasStoredToken,
-    isTokenRemembered,
-    peekStoredToken,
-    type CallbackResult
-  } from './auth/oauth-redirect-adapter';
-  import { createDriveRestAdapter } from './drive/drive-rest-adapter';
-  import type { DriveAccountProfile } from './drive/drive-interface';
-  import { activeError, clearError } from './state/app-state';
+    activeError,
+    clearError,
+    saveStatus,
+    startupStatus,
+    type SaveStatus
+  } from './state/app-state';
+  import type { ShellAccount } from './app-types';
 
-  export let initialCallback: CallbackResult | null = null;
+  let {
+    route,
+    account = null,
+    clientId = '',
+    onSignIn = (): void => {}
+  }: {
+    /** The live route published by the router. */
+    route: Readable<Route>;
+    /** The bound account, or `null` while anonymous. */
+    account?: ShellAccount | null;
+    /** The OAuth client id. Empty means this build has none. */
+    clientId?: string;
+    /** Start the Google redirect. */
+    onSignIn?: ((options: { remember: boolean }) => void) | undefined;
+  } = $props();
 
-  const clientId: string = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
-  const configured: boolean = clientId.length > 0 && !clientId.startsWith('YOUR_CLIENT_ID');
+  /** Back-header titles. A tab root needs none because the wordmark names the app. */
+  const HEADER_TITLES: Record<string, string> = {
+    'workout-overview': 'Workout',
+    'session-active': 'Active Workout',
+    'session-summary': 'Workout Summary',
+    'exercise-history': 'Exercise History',
+    'raw-json': 'Raw JSON',
+    'not-found': 'Not found'
+  };
 
-  // One Drive adapter for the page. It reads the access token from the live
-  // session on every call, so a refreshed or cleared token takes effect at once
-  // and nothing here holds a copy. The fallback reader is pure: a per-call
-  // getter never writes to browser storage. ARCHITECTURE §14.
-  const drive = createDriveRestAdapter(
-    () => getSession()?.accessToken ?? peekStoredToken()?.accessToken ?? null
+  const current = $derived($route);
+  const tabRoot = $derived(isTabRoot(current));
+  const backHref = $derived(formatRoute(parentRoute(current)));
+  const headerTitle = $derived(HEADER_TITLES[current.name] ?? '');
+
+  /**
+   * The address to show on the not-found screen.
+   *
+   * A route the parser could not match carries the text the user typed. A route
+   * that parsed but has no component yet shows its own canonical hash, so the
+   * screen names the address the user asked for either way.
+   */
+  const attemptedAddress = $derived(
+    current.name === 'not-found' ? current.attempted : formatRoute(current)
   );
 
-  let session: AuthSession | null = null;
-  let account: DriveAccountProfile | null = null;
-  // True when a live token record sits in browser storage. The view keys off this,
-  // not off `session`, so a token that failed to bind still exposes a way to
-  // erase it. REQUIREMENTS 2.12.
-  let storedToken: boolean = hasStoredToken();
-  let remember = false;
-  let busy = false;
-  let showRevocationFallback = false;
-  let expiryTimer: number | null = null;
-  let status = configured
-    ? 'Authorize REP JOT to use its private Google Drive app data.'
-    : 'Set VITE_GOOGLE_CLIENT_ID in .env.local. Then restart the development server.';
-
-  function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+  /** The save badge text. `idle` shows nothing, so the header stays quiet. */
+  function saveStatusLabel(status: SaveStatus): string {
+    if (status === 'saving') return 'Saving…';
+    if (status === 'saved') return 'Saved';
+    if (status === 'sync_failed') return 'Sync failed';
+    return '';
   }
 
-  function clearExpiryTimer(): void {
-    if (expiryTimer !== null) {
-      window.clearTimeout(expiryTimer);
-      expiryTimer = null;
+  /** Read one numeric field out of an error's safe detail record. */
+  function numberField(detail: Record<string, string | number>, key: string): number | undefined {
+    const value = detail[key];
+    return typeof value === 'number' ? value : undefined;
+  }
+
+  /**
+   * The blocker card for a startup failure.
+   *
+   * The card reports the error family and message, and carries a serialized copy
+   * of the safe error fields as its raw text. The serialization holds only the
+   * typed kind, the safe detail record, and the message, so **View Raw JSON**
+   * shows what the app knew without inventing document bytes.
+   */
+  const blockerProps = $derived.by((): DataErrorProps => {
+    const error = $activeError;
+    if (error === null) {
+      return {
+        title: 'REP JOT could not load its bundled data.',
+        detail: 'Reload the page to try again.',
+        rawJson: ''
+      };
     }
-  }
-
-  function clearView(message: string): void {
-    clearExpiryTimer();
-    session = null;
-    account = null;
-    busy = false;
-    storedToken = hasStoredToken();
-    status = message;
-  }
-
-  function startExpiryTimer(): void {
-    clearExpiryTimer();
-    const delay = millisecondsUntilExpiry();
-    if (delay === 0) {
-      expireSession('expired');
-      clearView('Google access expired. Sign in to REP JOT again.');
-      return;
-    }
-    expiryTimer = window.setTimeout(() => {
-      expireSession('expired');
-      clearView('Google access expired. Sign in to REP JOT again.');
-    }, delay);
-  }
-
-  async function afterSignedIn(current: AuthSession): Promise<void> {
-    session = current;
-    account = {
-      accountKey: current.accountKey,
-      ...(current.displayName === undefined ? {} : { displayName: current.displayName })
+    return {
+      title: 'REP JOT could not load its bundled data.',
+      family: error.kind,
+      declaredVersion: numberField(error.detail, 'declaredVersion'),
+      maxSupportedVersion: numberField(error.detail, 'maxSupportedVersion'),
+      detail: `${error.message} Reload the page to try again.`,
+      rawJson: JSON.stringify(
+        { kind: error.kind, detail: error.detail, message: error.message },
+        null,
+        2
+      )
     };
-    storedToken = true;
-    remember = isTokenRemembered();
-    startExpiryTimer();
-    status = 'Authorized.';
-  }
-
-  async function restore(fallbackMessage: string = 'Sign in to REP JOT with Google.'): Promise<void> {
-    // A new sign-in attempt starts. Drop the error the previous attempt left on
-    // screen before this one reports its own result.
-    clearError();
-    busy = true;
-    status = 'Restoring your REP JOT session…';
-    try {
-      const restored = await restoreAndBind({ bind: () => drive.getAccountProfile() });
-      if (restored === null) {
-        clearView(fallbackMessage);
-        return;
-      }
-      await afterSignedIn(restored);
-    } catch (error: unknown) {
-      // Safety net only. `restoreAndBind` catches every throw, reports through
-      // the shared `activeError` store, and returns `null`, so this branch does
-      // not run in normal flow. It shows the message and keeps the stored
-      // token; it never wipes authorization state on its own.
-      clearView(`Error: ${errorMessage(error)}`);
-    }
-  }
-
-  function authorize(selectAccount = false): void {
-    if (!configured || busy) return;
-    clearError();
-    busy = true;
-    status = 'Redirecting to Google in this window…';
-    try {
-      beginAuthorization(clientId, {
-        remember,
-        returnRoute: window.location.hash,
-        selectAccount
-      });
-    } catch (error: unknown) {
-      status = `Error: ${errorMessage(error)}`;
-      busy = false;
-    }
-  }
-
-  function switchAccount(): void {
-    clearDeviceSession();
-    clearView('Switching Google account…');
-    authorize(true);
-  }
-
-  function signOut(): void {
-    clearDeviceSession();
-    clearView('Signed out from REP JOT. The Google grant remains active.');
-  }
-
-  function retryAccountBinding(): void {
-    void restore();
-  }
-
-  function callbackErrorText(result: CallbackResult): string {
-    if (result.error === 'access_denied') {
-      return 'Google authorization was denied. No access token was saved.';
-    }
-    if (result.kind === 'invalid_state') {
-      return 'Google returned an unexpected state. Sign in again.';
-    }
-    return `Google authorization did not complete (${result.error ?? 'unknown'}). Try again.`;
-  }
-
-  onMount(() => {
-    const callback = initialCallback;
-    if (callback !== null && callback.kind !== 'accepted' && callback.kind !== 'duplicate') {
-      // A rejected callback does not erase a stored token. Try the stored token
-      // first, and show the denial only when nothing restores. REQUIREMENTS 2.10.
-      void restore(callbackErrorText(callback));
-      return;
-    }
-    // An accepted or duplicate callback already stored its token. Bind it before
-    // any private data opens. REQUIREMENTS 2.11.
-    void restore();
   });
 
-  onDestroy(clearExpiryTimer);
-
-  async function disconnect(): Promise<void> {
-    if (session === null || account === null) return;
-    busy = true;
-    showRevocationFallback = false;
-    status = 'Asking Google to revoke REP JOT access…';
-    try {
-      const result = await disconnectAccount({
-        revoke: (token: string): Promise<void> => drive.revokeToken(token)
-      });
-      if (result.kind === 'revoked') {
-        clearView('Google confirmed the revocation. REP JOT is disconnected.');
-      } else {
-        showRevocationFallback = true;
-        status = 'Error: Google did not confirm the revocation. Use the Google Account connections page.';
-      }
-    } finally {
-      busy = false;
-    }
-  }
+  /** The tab items, with the current route marked. */
+  const tabItems = $derived([
+    { href: '#/', label: 'Workout', current: current.name === 'home' },
+    { href: '#/history', label: 'History', current: current.name === 'history' },
+    { href: '#/settings', label: 'Settings', current: current.name === 'settings' }
+  ]);
 </script>
 
-<main>
-  <h1>REP JOT authorization continuity proof</h1>
+{#snippet saveStatusBadge()}
+  <span class="save-status" role="status" aria-live="polite">
+    {saveStatusLabel($saveStatus)}
+  </span>
+{/snippet}
 
-  {#if account === null}
-    <p>
-      This prototype requests only private <code>drive.appdata</code> access. Google authorization replaces this page.
-    </p>
-    <label>
-      <input type="checkbox" bind:checked={remember} disabled={busy} />
-      Remember me on this device
-    </label>
-    <p>
-      If selected, the access token remains in local browser storage until its exact expiry time. Clear this option on a shared device.
-    </p>
-    <button type="button" onclick={() => authorize(false)} disabled={!configured || busy}>
-      Continue with Google
-    </button>
-    {#if session !== null || storedToken}
-      <button type="button" onclick={retryAccountBinding} disabled={busy}>
-        Retry account binding
-      </button>
-      <button type="button" onclick={signOut} disabled={busy}>Sign out from REP JOT</button>
+{#if $startupStatus === 'loading_static'}
+  <div class="screen">
+    <p class="shell__loading" role="status">Loading REP JOT…</p>
+  </div>
+{:else if ($startupStatus === 'static_failed' || $startupStatus === 'blocked') && current.name !== 'raw-json'}
+  <div class="screen screen--narrow">
+    <div class="blocker">
+      <h1 class="blocker__title">REP JOT cannot start</h1>
+      <p class="blocker__intro">
+        The bundled data did not load, so the app cannot show a workout. Nothing you recorded is lost.
+      </p>
+      <DataError props={blockerProps} />
+      <div class="blocker__actions">
+        <Button variant="primary" href="./">Reload the page</Button>
+      </div>
+    </div>
+  </div>
+{:else}
+  <div class="shell">
+    {#if tabRoot}
+      <AppHeader status={saveStatusBadge} />
+      <Tabs items={tabItems} label="Sections" />
+    {:else}
+      <BackHeader href={backHref} title={headerTitle} backLabel="Back" status={saveStatusBadge} />
     {/if}
-  {:else}
-    <section aria-labelledby="authorization-status">
-      <h2 id="authorization-status">Authorized account</h2>
-      <dl>
-        <dt>Google account</dt>
-        <dd>{account.displayName ?? 'Name not returned'}</dd>
-        <dt>Account binding</dt>
-        <dd>Bound to this access token</dd>
-        <dt>Token storage</dt>
-        <dd>{remember ? 'Remembered on this device' : 'This browser session only'}</dd>
-        <dt>Expires at UTC</dt>
-        <dd>{session?.expiresAtUtc}</dd>
-      </dl>
-    </section>
 
-    <h2>Authorization actions</h2>
-    <button type="button" onclick={switchAccount} disabled={busy}>Switch Google account</button>
-    <button type="button" onclick={signOut} disabled={busy}>Sign out from REP JOT</button>
-    <button type="button" onclick={disconnect} disabled={busy}>Disconnect Google Account</button>
-  {/if}
+    {#if $activeError !== null}
+      <div class="shell__banner" role="alert">
+        <p class="shell__banner-text">{$activeError.message}</p>
+        <div class="shell__banner-actions">
+          <Button variant="secondary" onclick={clearError}>Dismiss</Button>
+        </div>
+      </div>
+    {/if}
 
-  <p role="status" aria-live="polite">{status}</p>
-
-  {#if $activeError !== null}
-    <p role="alert">{$activeError.message}</p>
-  {/if}
-
-  {#if showRevocationFallback}
-    <p>
-      REP JOT kept the local authorization state because Google did not confirm revocation.
-      <a href={GOOGLE_ACCOUNT_CONNECTIONS_URL}>Open Google Account connections</a>.
-    </p>
-  {/if}
-
-  <p><a href="./capabilities.html">Run browser capability report</a></p>
-</main>
+    <main class="shell__outlet">
+      {#if current.name === 'home'}
+        <HomeScreen {account} {clientId} {onSignIn} />
+      {:else if current.name === 'raw-json'}
+        <RawJsonScreen source={current.source} />
+      {:else}
+        <NotFoundScreen attempted={attemptedAddress} />
+      {/if}
+    </main>
+  </div>
+{/if}

@@ -81,6 +81,29 @@ export function buildExerciseHistoryModel(
 
 - Current year omits the year. Any other year includes it.
 
+### Component syntax
+
+Every `.svelte` file in this phase uses Svelte 5 runes. Phase 15 set the pattern
+in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
+`src/ui/screens/`. Follow it for the summary and history screens.
+
+1. Declare props with `$props()`. Never use `export let`. Svelte 5 rejects
+   `export let` in a component that uses runes, so one file cannot mix the two
+   styles.
+2. Type the props on the `$props()` call, and give every optional prop a default.
+3. Share a props type across modules through a plain `.ts` file, not through the
+   component. `src/ui/components/data-error-types.ts` is the model.
+4. Use `$state()` for local state, `$derived()` for a computed value, and
+   `$effect()` for a side effect. A paged list keeps its loaded rows in
+   `$state` and derives the visible slice.
+5. Pass content with a snippet: `{#snippet name()}` at the call site and
+   `{@render name()}` inside the component. Never use `<slot>`.
+6. Read an app store with the `$store` prefix. Store interop works in runes mode.
+   `App.svelte` reads `startupStatus`, `saveStatus`, and `activeError` that way.
+7. Handle an event with the `onclick={handler}` attribute. Never use the legacy
+   `on:click` directive. The shared `Button` component takes a typed `onclick`
+   prop and spreads it to the element.
+
 ## Requirements traceability
 
 | Source | How this phase satisfies it |
@@ -113,6 +136,8 @@ export function buildExerciseHistoryModel(
       `getExerciseHistory`.
 - [ ] Confirm no screen computes a volume total.
 - [ ] Render `DataError` per unresolved result without dropping the list.
+- [ ] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
+      `export let`, no `<slot>`, and no `on:click`.
 
 ### Tests
 

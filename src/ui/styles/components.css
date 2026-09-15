@@ -264,6 +264,21 @@
   padding: var(--space-2) var(--space-gutter);
 }
 
+/* Back control on the left, save status on the right. No `gap`: the targeted
+   Kindle browser has no flexbox gap. Margins carry the spacing. */
+.back-header__row {
+  align-items: center;
+  display: flex;
+}
+
+.back-header__status {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  margin-left: auto;
+  text-align: right;
+}
+
 .back-header__back {
   align-items: center;
   display: inline-flex;
@@ -289,4 +304,176 @@
   font-weight: var(--weight-extra-bold);
   letter-spacing: var(--tracking-tight);
   text-transform: uppercase;
+}
+
+/* Shell ---------------------------------------------------------------- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.shell__loading {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+}
+
+.shell__outlet {
+  flex: 1 1 auto;
+  padding: var(--space-3) var(--space-gutter);
+}
+
+/* Dismissible banner. Sits under the header and above the screen. */
+
+.shell__banner {
+  background-color: var(--color-error-container);
+  border-bottom: var(--border-weight) solid var(--color-primary);
+  color: var(--color-on-error-container);
+  padding: var(--space-2) var(--space-gutter);
+}
+
+.shell__banner-text {
+  margin-bottom: var(--space-2);
+}
+
+.shell__banner-actions {
+  text-align: right;
+}
+
+.save-status {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+}
+
+/* Startup blocker ------------------------------------------------------- */
+
+.blocker__title {
+  font-size: var(--text-headline-md);
+  line-height: var(--lh-headline);
+}
+
+.blocker__intro {
+  margin-top: var(--space-2);
+}
+
+.blocker__actions {
+  margin-top: var(--space-3);
+}
+
+/* Data error card ------------------------------------------------------- */
+
+.data-error {
+  background-color: var(--color-surface-sunken);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.data-error__title {
+  font-size: var(--text-body-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-body);
+}
+
+.data-error__facts {
+  margin-top: var(--space-2);
+}
+
+.data-error__fact dt {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+}
+
+.data-error__fact dd {
+  font-family: var(--font-data);
+  margin-left: 0;
+  margin-top: var(--space-1);
+}
+
+.data-error__fact + .data-error__fact {
+  margin-top: var(--space-2);
+}
+
+.data-error__detail {
+  margin-top: var(--space-2);
+}
+
+.data-error__actions {
+  margin-top: var(--space-3);
+}
+
+.data-error__actions .btn + .btn {
+  margin-left: var(--space-2);
+}
+
+/* Raw JSON viewer ------------------------------------------------------- */
+
+.raw-json {
+  background-color: var(--color-surface-sunken);
+  border: var(--border-weight) solid var(--color-outline-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  line-height: var(--lh-body);
+  overflow-x: auto;
+  padding: var(--space-3);
+  white-space: pre;
+}
+
+.raw-json__missing {
+  color: var(--color-on-surface-variant);
+}
+
+/* Not found ------------------------------------------------------------- */
+
+.not-found__title {
+  font-size: var(--text-headline-md);
+  line-height: var(--lh-headline);
+}
+
+.not-found__detail {
+  margin-top: var(--space-2);
+}
+
+.not-found__address {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+}
+
+.not-found__hint {
+  color: var(--color-on-surface-variant);
+  margin-top: var(--space-1);
+}
+
+.not-found__actions {
+  margin-top: var(--space-3);
+}
+
+/* Home ------------------------------------------------------------------ */
+
+.home__title {
+  font-size: var(--text-headline-lg);
+  font-weight: var(--weight-extra-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+}
+
+.home__intro,
+.home__signed-in,
+.home__pending,
+.home__unconfigured {
+  margin-top: var(--space-2);
+}
+
+.home__remember {
+  margin-top: var(--space-3);
+}
+
+.home__actions {
+  margin-top: var(--space-3);
 }

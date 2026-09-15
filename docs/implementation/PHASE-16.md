@@ -85,6 +85,28 @@ export function buildOverviewModel(workout: Workout, staticData: LoadedStaticDat
 - `Start Workout` calls `sessionService.start(workoutId)` then navigates.
 - An unknown `workoutId` renders the not-found state.
 
+### Component syntax
+
+Every `.svelte` file in this phase uses Svelte 5 runes. Phase 15 set the pattern
+in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
+`src/ui/screens/`. Follow it for the landing, chooser, and overview components.
+
+1. Declare props with `$props()`. Never use `export let`. Svelte 5 rejects
+   `export let` in a component that uses runes, so one file cannot mix the two
+   styles.
+2. Type the props on the `$props()` call, and give every optional prop a default.
+3. Share a props type across modules through a plain `.ts` file, not through the
+   component. `src/ui/components/data-error-types.ts` is the model.
+4. Use `$state()` for local state, `$derived()` for a computed value, and
+   `$effect()` for a side effect.
+5. Pass content with a snippet: `{#snippet name()}` at the call site and
+   `{@render name()}` inside the component. Never use `<slot>`.
+6. Read an app store with the `$store` prefix. Store interop works in runes mode.
+   `App.svelte` reads `startupStatus`, `saveStatus`, and `activeError` that way.
+7. Handle an event with the `onclick={handler}` attribute. Never use the legacy
+   `on:click` directive. The shared `Button` component takes a typed `onclick`
+   prop and spreads it to the element.
+
 ## Requirements traceability
 
 | Source | How this phase satisfies it |
@@ -116,6 +138,8 @@ export function buildOverviewModel(workout: Workout, staticData: LoadedStaticDat
 - [ ] Wire all three into the Phase 15 route outlet.
 - [ ] Show `DataError` for an unresolved workout reference inside the chooser list
       without dropping the other rows.
+- [ ] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
+      `export let`, no `<slot>`, and no `on:click`.
 
 ### Tests
 

@@ -115,6 +115,10 @@ It then prints the gate table from `docs/RELEASE.md` for manual sign-off.
       from a clean checkout.
 - [ ] Confirm no client secret appears in source, `.env.example`, or `dist/`.
 - [ ] Confirm `src/public/CNAME` contains `repjot.com`.
+- [ ] Confirm no `.svelte` file in the tree uses legacy syntax: no `export let`,
+      no `<slot>`, and no `on:click`. Every component uses Svelte 5 runes. See
+      the runes rule in `docs/implementation/README.md` and the **Component
+      syntax** section in Phases 16 through 19.
 
 ### Kindle smoke checklist
 

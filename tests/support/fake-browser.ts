@@ -62,6 +62,8 @@ export interface FakeBrowser {
   localStorage: MemoryStorage;
   submittedForm: FakeElement | null;
   removedElementCount: number;
+  /** Event listeners the fake window holds, by type. */
+  eventListeners: Record<string, Array<() => void>>;
 }
 
 export function installFakeBrowser(route = '#/settings'): FakeBrowser {
@@ -82,7 +84,8 @@ export function installFakeBrowser(route = '#/settings'): FakeBrowser {
     sessionStorage,
     localStorage,
     submittedForm: null,
-    removedElementCount: 0
+    removedElementCount: 0,
+    eventListeners: {}
   };
 
   Object.defineProperty(globalThis, 'window', {
@@ -99,7 +102,21 @@ export function installFakeBrowser(route = '#/settings'): FakeBrowser {
         }
       },
       setTimeout: globalThis.setTimeout,
-      clearTimeout: globalThis.clearTimeout
+      clearTimeout: globalThis.clearTimeout,
+      // Event listener registry. The hash router subscribes here, and a test
+      // can fire a type by walking `eventListeners`.
+      eventListeners: browser.eventListeners,
+      addEventListener: (type: string, listener: () => void): void => {
+        const list = browser.eventListeners[type] ?? [];
+        list.push(listener);
+        browser.eventListeners[type] = list;
+      },
+      removeEventListener: (type: string, listener: () => void): void => {
+        const list = browser.eventListeners[type] ?? [];
+        browser.eventListeners[type] = list.filter(
+          (item: () => void): boolean => item !== listener
+        );
+      }
     }
   });
   Object.defineProperty(globalThis, 'document', {
