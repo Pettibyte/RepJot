@@ -30,7 +30,7 @@ import type {
 } from '../domain/types';
 import type { ResultStatus } from '../domain/enums';
 import type { PathSegment } from '../domain/execution-path';
-import { containerResultKey, encodePath, exerciseResultKey } from '../domain/execution-path';
+import { containerResultKey, encodePath, exerciseResultKey, sameSegment } from '../domain/execution-path';
 import { isIntegerLikeKey } from '../domain/ids';
 import { parseUtc, yearMonthUtc } from '../domain/time';
 import {
@@ -809,13 +809,12 @@ interface ChildEntry {
   result: ExerciseResult;
 }
 
-/** True when two segments name one node in one iteration. */
-function sameSegment(one: PathSegment | undefined, other: PathSegment): boolean {
-  return one !== undefined && one.nodeId === other.nodeId && one.iteration === other.iteration;
-}
-
 /**
  * Collect the exercise results stored beneath `containerPath`.
+ *
+ * The segment match is the shared `sameSegment` helper from the execution-path
+ * module, so this selection rule and the session service's `childrenBelow` rule
+ * cannot drift apart. See that helper for the iteration normalization rule.
  *
  * A child path repeats the container segment with its own `iteration`, so the
  * container's iteration sits at `containerPath.length - 1` on the child path, and

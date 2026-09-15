@@ -107,6 +107,24 @@ export function decodePath(encoded: string): PathSegment[] {
 }
 
 /**
+ * True when two path segments name one node in one iteration.
+ *
+ * A segment with no `iteration` reads as iteration 1, because a step that does
+ * not repeat still sits in the first pass of its container. The session service
+ * and the semantic validator select the children under one container occurrence
+ * with this one rule, so the two cannot drift apart. A match on node ID alone
+ * pulls a child of another outer round into this container's derivation.
+ * REQUIREMENTS 10.8, 10.12, 10.13.
+ */
+export function sameSegment(
+  one: PathSegment | undefined,
+  other: PathSegment | undefined
+): boolean {
+  if (one === undefined || other === undefined) return false;
+  return one.nodeId === other.nodeId && (one.iteration ?? 1) === (other.iteration ?? 1);
+}
+
+/**
  * Build the `exerciseResults` map key: `<path>|<side>|<attempt>`.
  *
  * Always writes both `side` and `attempt`, even at their defaults, so a key never
