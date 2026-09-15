@@ -285,6 +285,57 @@ describe('lookupService: session lists', () => {
     expect(lookup.listRecentSessions(1).map((s) => s.id)).toEqual(['session-a1']);
     expect(lookup.listRecentSessions(0)).toEqual([]);
   });
+
+  test('listAllSessions returns every status, startedAtUtc newest first', () => {
+    // Phase 18. The History tab has no workout id, so it needs all statuses
+    // across every workout. REQUIREMENTS 20.1.
+    const lookup = createLookupService({ staticData: loadedStaticData(), shards });
+    const all = lookup.listAllSessions({ offset: 0, limit: 20 });
+    expect(all.items.map((s) => s.id)).toEqual([
+      'session-i2',
+      'session-i1',
+      'session-a1',
+      'session-c1'
+    ]);
+    expect(all.total).toBe(4);
+  });
+
+  test('listAllSessions pages without dropping or repeating a row', () => {
+    const lookup = createLookupService({ staticData: loadedStaticData(), shards });
+    const first = lookup.listAllSessions({ offset: 0, limit: 2 });
+    const second = lookup.listAllSessions({ offset: 2, limit: 2 });
+
+    expect(first.items.map((s) => s.id)).toEqual(['session-i2', 'session-i1']);
+    expect(first.hasMore).toBe(true);
+    expect(second.items.map((s) => s.id)).toEqual(['session-a1', 'session-c1']);
+    expect(second.hasMore).toBe(false);
+
+    const joined = [...first.items, ...second.items].map((s) => s.id);
+    expect(new Set(joined).size).toBe(4);
+  });
+
+  test('listAllSessions on an empty account returns an empty page', () => {
+    const lookup = createLookupService({ staticData: loadedStaticData(), shards: [] });
+    const page = lookup.listAllSessions({ offset: 0, limit: 20 });
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(0);
+    expect(page.hasMore).toBe(false);
+  });
+
+  test('listAllSessions keeps its order after extendHistory adds an older shard', () => {
+    const lookup = createLookupService({
+      staticData: loadedStaticData(),
+      shards: [shard('2026-09', [session('session-new', 'completed', '2026-09-05T08:00:00Z', '2026-09-05T09:00:00Z')])]
+    });
+    lookup.extendHistory([
+      shard('2026-07', [session('session-old', 'completed', '2026-07-01T08:00:00Z', '2026-07-01T09:00:00Z')])
+    ]);
+    // The older session lands at the end, not the front. REQUIREMENTS 3.20.
+    expect(lookup.listAllSessions({ offset: 0, limit: 20 }).items.map((s) => s.id)).toEqual([
+      'session-new',
+      'session-old'
+    ]);
+  });
 });
 
 describe('lookupService: static lookups and unresolved', () => {

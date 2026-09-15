@@ -265,6 +265,9 @@ function toOccurrence(session: Session, key: string, result: ExerciseResult): Ex
     completedAtUtc: completedAt(result.endedAtUtc, session)
   };
   if (result.side !== undefined) occurrence.side = result.side;
+  // The alternating split cannot be rebuilt from the total, so the starting
+  // side travels with the row. REQUIREMENTS 11.7.
+  if (result.startingSide !== undefined) occurrence.startingSide = result.startingSide;
   if (result.values !== undefined) occurrence.values = result.values;
   return occurrence;
 }
@@ -344,6 +347,9 @@ function mergeSession(
     summary,
     newestSessionFirst
   );
+  // Every status lands here. The Workout History tab pages this list, so an
+  // in-progress session must sit beside a completed one. REQUIREMENTS 20.1.
+  insertSorted(index.allSessionsByStartedAtUtc, summary, newestSessionFirst);
   if (summary.status === 'in_progress') {
     insertSorted(index.activeSessionsByUpdatedAtUtc, summary, newestUpdatedFirst);
   } else {
@@ -432,6 +438,9 @@ function dropSessionFrom(index: MutableIndex, sessionId: string): void {
   }
 
   index.terminalSessions = index.terminalSessions.filter((s) => s.id !== sessionId);
+  index.allSessionsByStartedAtUtc = index.allSessionsByStartedAtUtc.filter(
+    (s) => s.id !== sessionId
+  );
   index.activeSessionsByUpdatedAtUtc = index.activeSessionsByUpdatedAtUtc.filter(
     (s) => s.id !== sessionId
   );
@@ -516,6 +525,7 @@ function createStaticIndex(staticData: LoadedStaticData, recentLimit: number): M
     unresolvedResults: [],
     sessionsById: new Map(),
     terminalSessions: [],
+    allSessionsByStartedAtUtc: [],
     sessionsByWorkoutId: new Map(),
     occurrencesByExerciseId: new Map(),
     containerOccurrencesBySessionId: new Map(),

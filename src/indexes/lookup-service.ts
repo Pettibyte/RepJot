@@ -69,6 +69,14 @@ export interface LookupService {
   listRecentSessions(limit?: number): SessionSummary[];
   /** All statuses for one workout, `startedAtUtc` newest first. REQUIREMENTS 20.1. */
   getWorkoutHistory(workoutId: string, page: Page): PageResult<SessionSummary>;
+  /**
+   * Every session across every workout, `startedAtUtc` newest first.
+   *
+   * The Workout History tab has no workout id, so it cannot use
+   * `getWorkoutHistory`. This answers the same paging contract over the
+   * whole session set. REQUIREMENTS 20.1. Phase 18.
+   */
+  listAllSessions(page: Page): PageResult<SessionSummary>;
   /** One exercise's results, newest first. REQUIREMENTS 20.4. */
   getExerciseHistory(exerciseId: string, page: Page): PageResult<ExerciseOccurrence>;
   /** Latest completed occurrence, or `null` when the exercise has none. */
@@ -148,6 +156,8 @@ export function createLookupService(input: {
 
     getWorkoutHistory: (workoutId: string, page: Page) =>
       pageOf(index.sessionsByWorkoutId.get(workoutId) ?? [], page),
+
+    listAllSessions: (page: Page) => pageOf(index.allSessionsByStartedAtUtc, page),
 
     getExerciseHistory: (exerciseId: string, page: Page) =>
       pageOf(index.occurrencesByExerciseId.get(exerciseId) ?? [], page),

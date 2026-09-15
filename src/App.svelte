@@ -19,9 +19,10 @@
   // REQUIREMENTS 6.9.
   //
   // Route outlet. Phase 17 registers the Active Workout screen, so a started
-  // session opens into the editor instead of the typed not-found state. The
-  // summary, history, and settings routes belong to Phases 18 and 19 and still
-  // resolve to the not-found screen until their components are registered here.
+  // session opens into the editor instead of the typed not-found state. Phase
+  // 18 registers the summary, history, and exercise-history screens. The
+  // settings route belongs to Phase 19 and still resolves to the not-found
+  // screen until its component is registered here.
 
   import type { Readable } from 'svelte/store';
   import AppHeader from './ui/components/AppHeader.svelte';
@@ -33,6 +34,9 @@
   import NotFoundScreen from './ui/screens/NotFoundScreen.svelte';
   import RawJsonScreen from './ui/screens/RawJsonScreen.svelte';
   import ActiveWorkoutScreen from './ui/screens/ActiveWorkoutScreen.svelte';
+  import ExerciseHistoryScreen from './ui/screens/ExerciseHistoryScreen.svelte';
+  import WorkoutHistoryScreen from './ui/screens/WorkoutHistoryScreen.svelte';
+  import WorkoutSummaryScreen from './ui/screens/WorkoutSummaryScreen.svelte';
   import WorkoutChooserScreen from './ui/screens/WorkoutChooserScreen.svelte';
   import WorkoutOverviewScreen from './ui/screens/WorkoutOverviewScreen.svelte';
   import Tabs from './ui/components/Tabs.svelte';
@@ -210,6 +214,12 @@
         <WorkoutOverviewScreen workoutId={current.workoutId} />
       {:else if current.name === 'session-active'}
         <ActiveWorkoutScreen sessionId={current.sessionId} />
+      {:else if current.name === 'session-summary'}
+        <WorkoutSummaryScreen sessionId={current.sessionId} />
+      {:else if current.name === 'history'}
+        <WorkoutHistoryScreen />
+      {:else if current.name === 'exercise-history'}
+        <ExerciseHistoryScreen exerciseId={current.exerciseId} />
       {:else if current.name === 'raw-json'}
         <RawJsonScreen source={current.source} />
       {:else}

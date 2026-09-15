@@ -1172,3 +1172,244 @@
 .finish-bar__actions .btn + .btn {
   margin-left: var(--space-2);
 }
+
+/* Load older --------------------------------------------------------- */
+/* Phase 18. The control that asks a history list for its next page. */
+
+.load-older {
+  margin-top: var(--space-4);
+}
+
+.load-older__count {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  margin-top: var(--space-2);
+  text-align: center;
+}
+
+.load-older__end {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  margin-top: var(--space-4);
+  text-align: center;
+}
+
+/* Summary tree ------------------------------------------------------- */
+/* Phase 18. Recorded work, read-only. One section per container. */
+
+.summary-tree {
+  margin-top: var(--space-3);
+}
+
+.summary-group + .summary-group {
+  border-top: var(--border-weight) solid var(--color-outline-variant);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+}
+
+.summary-group__title {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  margin-bottom: var(--space-2);
+}
+
+.summary-row {
+  padding: var(--space-2) 0;
+}
+
+.summary-row + .summary-row {
+  border-top: var(--border-weight) solid var(--color-outline-variant);
+}
+
+/* Six capped indents. A depth past six reuses the last class. */
+.summary-row--d1 { margin-left: 0; }
+.summary-row--d2 { margin-left: var(--space-3); }
+.summary-row--d3 { margin-left: var(--space-4); }
+.summary-row--d4 { margin-left: var(--space-5); }
+.summary-row--d5 { margin-left: var(--space-5); }
+.summary-row--d6 { margin-left: var(--space-5); }
+
+.summary-row--score {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.summary-row--score .summary-row__label {
+  margin-right: var(--space-2);
+}
+
+/* An unresolved row carries the error card **and** the values the session
+   stored. The card decorates the row; it does not replace it. REQUIREMENTS
+   6.8, 6.23. */
+.summary-row--unresolved > .data-error {
+  margin-bottom: var(--space-2);
+}
+
+/* The score row is a flex line, so the card takes the full width first and
+   the score reads on the line below it. */
+.summary-row--score > .data-error {
+  flex-basis: 100%;
+}
+
+.summary-row__score {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+.summary-row__score-value {
+  color: var(--color-on-surface);
+  font-family: var(--font-data);
+  font-size: var(--text-data-lg);
+  margin-left: var(--space-2);
+}
+
+.summary-row__note {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  margin-left: var(--space-2);
+}
+
+.summary-row__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.summary-row__name {
+  color: var(--color-primary);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+
+.summary-row__attempt,
+.summary-row__status {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  margin-left: var(--space-2);
+}
+
+.summary-row__values {
+  color: var(--color-on-surface);
+  font-family: var(--font-data);
+  margin-top: var(--space-1);
+}
+
+.summary-row__reason {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  margin-top: var(--space-1);
+}
+
+/* Workout Summary screen --------------------------------------------- */
+/* Phase 18. One session, read back. */
+
+.summary-screen__loading,
+.summary-screen__empty {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-body);
+}
+
+.summary-screen__missing-title,
+.history-screen__missing-title {
+  font-size: var(--text-headline-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-headline);
+}
+
+.summary-screen__missing-detail,
+.history-screen__missing-detail {
+  color: var(--color-on-surface-variant);
+  margin-top: var(--space-2);
+}
+
+.summary-screen__title,
+.history-screen__title {
+  font-size: var(--text-headline-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-headline);
+}
+
+.summary-screen__meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+.summary-screen__date {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  margin-left: var(--space-2);
+}
+
+.summary-screen__banner {
+  background-color: var(--color-surface-sunken);
+  border: var(--border-weight) solid var(--color-outline-variant);
+  border-radius: var(--radius);
+  color: var(--color-on-surface-variant);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+}
+
+.summary-screen__notes {
+  margin-top: var(--space-4);
+}
+
+.summary-screen__notes-title {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+}
+
+.summary-screen__notes-body {
+  margin-top: var(--space-1);
+  white-space: pre-wrap;
+}
+
+.summary-screen__unresolved {
+  margin-top: var(--space-4);
+}
+
+.summary-screen__actions,
+.history-screen__actions {
+  margin-top: var(--space-4);
+}
+
+.summary-screen__actions .btn + .btn,
+.history-screen__actions .btn + .btn {
+  margin-left: var(--space-2);
+}
+
+/* History screens ---------------------------------------------------- */
+/* Phase 18. Workout History and Exercise History. */
+
+.history-screen__head {
+  margin-bottom: var(--space-3);
+}
+
+.history-screen__subtitle {
+  color: var(--color-on-surface-variant);
+  margin-top: var(--space-1);
+}
+
+.history-screen__error {
+  color: var(--color-error);
+  margin-top: var(--space-2);
+}
+
+.history-screen__empty {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-body);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

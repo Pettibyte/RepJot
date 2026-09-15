@@ -1,9 +1,15 @@
-// Execution path encoding and the composite result keys.
+// Execution path encoding, the composite result keys, and path resolution.
 // Requirement 22.4.6 (encoding), Requirement 22.4.7 (always write the defaults),
 // Requirement 22.4.9 (one key builder per result kind).
+//
+// `resolvePath` lives here too, not only in the semantic validator. The
+// Workout Summary must answer the same question the validator answers — does
+// this recorded path walk the current tree — and a second resolver would let
+// the two layers disagree. One resolver, one answer. REQUIREMENTS 6.8, 6.23.
 
 import { AppError } from './errors';
 import { assertIdSafe } from './ids';
+import type { ContainerNode, Workout, WorkoutNode } from './types';
 import type { Side } from './enums';
 
 /** One step of an execution path: a node ID and, for a repeated container, its iteration. */
@@ -165,4 +171,96 @@ export function nodeKey(workoutId: string, nodeId: string): string {
   assertIdSafe(nodeId, 'node ID');
 
   return [workoutId, nodeId].join(FIELD_SEPARATOR);
+}
+
+/**
+ * A path resolved against one workout tree.
+ *
+ * `depth` is the index of the segment that failed to resolve, so a caller can
+ * report where the break sits.
+ */
+export type ResolvedPath =
+  | { ok: true; node: WorkoutNode }
+  | { ok: false; reason: 'broken_path'; depth: number };
+
+/** Strategies that repeat their children. A sequence runs once. */
+export function isRepeatedContainer(node: WorkoutNode): node is ContainerNode {
+  return node.type === 'container' && node.strategy !== 'sequence';
+}
+
+/** How many times a repeated container runs. An AMRAP has no fixed ceiling. */
+export function iterationCount(container: ContainerNode): number {
+  switch (container.strategy) {
+    case 'rounds':
+      return container.strategyConfig.rounds;
+    case 'emom':
+    case 'complex':
+      return container.strategyConfig.cycles;
+    case 'amrap':
+      return Infinity;
+    default:
+      return 1;
+  }
+}
+
+/**
+ * Walk one execution path from the workout root.
+ *
+ * A segment may carry an `iteration` only on a repeated container: `rounds`,
+ * `amrap`, `emom`, or `complex`. A `sequence` runs once, so an iteration on it
+ * does not resolve.
+ *
+ * Every repeated container segment below the last one must carry an `iteration`.
+ * The value is one-based and cannot exceed the container's configured count, so a
+ * round 999 of a three-round container does not resolve. An AMRAP has no ceiling.
+ * The last segment is exempt: a container result addresses the whole container,
+ * not one of its iterations. Spec items 12, 13. REQUIREMENTS 10.8.
+ *
+ * The whole chain is walked. A resolver that only looked for the leaf node would
+ * call a result fine when the leaf still existed somewhere else in the tree and an
+ * ancestor was gone, which hides a broken path behind a value that reads as
+ * resolved. REQUIREMENTS 6.8 third bullet, 6.10.
+ */
+export function resolvePath(
+  workout: Workout,
+  segments: PathSegment[] | undefined
+): ResolvedPath {
+  if (!Array.isArray(segments) || segments.length === 0) {
+    return { ok: false, reason: 'broken_path', depth: 0 };
+  }
+  if (segments[0].nodeId !== workout.root.id) {
+    return { ok: false, reason: 'broken_path', depth: 0 };
+  }
+
+  let current: WorkoutNode = workout.root;
+  for (let depth = 1; depth < segments.length; depth += 1) {
+    const segment = segments[depth];
+    if (current.type !== 'container') {
+      return { ok: false, reason: 'broken_path', depth };
+    }
+    const next: WorkoutNode | undefined = current.children.find(
+      (child) => child.id === segment.nodeId
+    );
+    if (next === undefined) {
+      return { ok: false, reason: 'broken_path', depth };
+    }
+    if (segment.iteration !== undefined && !isRepeatedContainer(next)) {
+      return { ok: false, reason: 'broken_path', depth };
+    }
+    if (depth < segments.length - 1 && isRepeatedContainer(next)) {
+      const max = iterationCount(next);
+      const iteration = segment.iteration;
+      if (
+        iteration === undefined ||
+        !Number.isInteger(iteration) ||
+        iteration < 1 ||
+        iteration > max
+      ) {
+        return { ok: false, reason: 'broken_path', depth };
+      }
+    }
+    current = next;
+  }
+
+  return { ok: true, node: current };
 }

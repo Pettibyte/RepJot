@@ -11,7 +11,7 @@
 // `Object.keys`, `Map` insertion order, or a `Record` iteration. REQUIREMENTS
 // 3.17 and 3.19.
 
-import type { Muscle, ResultStatus, SessionStatus, Side } from '../domain/enums';
+import type { Muscle, ResultStatus, SessionStatus, Side, StartingSide } from '../domain/enums';
 import type { PathSegment } from '../domain/execution-path';
 import type {
   Exercise,
@@ -46,8 +46,8 @@ export interface SessionSummary {
  * One exercise result, flattened out of its session.
  *
  * The occurrence keeps the result's own `exerciseId`, `encodedPath`, `side`,
- * `attempt`, and `values`. A recorded row therefore renders without the workout
- * tree. REQUIREMENTS 6.23.
+ * `startingSide`, `attempt`, and `values`. A recorded row therefore renders
+ * without the workout tree. REQUIREMENTS 6.23.
  */
 export interface ExerciseOccurrence {
   sessionId: string;
@@ -58,6 +58,17 @@ export interface ExerciseOccurrence {
   /** The `executionPath` encoded as it appears inside `resultKey`. */
   encodedPath: string;
   side?: Side;
+  /**
+   * The side an alternating set started on.
+   *
+   * Copied straight off the result. The per-side split of an alternating set
+   * cannot be derived from the total alone: `9 total / 5 left / 4 right` and
+   * `9 total / 5 right / 4 left` are different records that flatten to the
+   * same `9`. Without this field the flattened row throws the split away and
+   * an alternating set reads as a `both` set of the same size.
+   * REQUIREMENTS 11.7, 20.4.
+   */
+  startingSide?: StartingSide;
   attempt: number;
   status: ResultStatus;
   values?: ResultValues;
@@ -161,8 +172,24 @@ export interface DataIndex {
 
   /** Every indexed session by `id`. */
   sessionsById: Map<string, SessionSummary>;
-  /** All statuses, newest first by `startedAtUtc`. */
+  /**
+   * Completed and abandoned sessions only, newest first by `startedAtUtc`.
+   *
+   * An `in_progress` session goes to `activeSessionsByUpdatedAtUtc` instead,
+   * so this list never holds one. A screen that wants every status in one
+   * paged list pages `allSessionsByStartedAtUtc`, not this list.
+   */
   terminalSessions: SessionSummary[];
+  /**
+   * Every session, all three statuses, newest first by `startedAtUtc`.
+   *
+   * The Workout History tab shows in-progress, completed, and abandoned
+   * sessions on one paged list. REQUIREMENTS 20.1. Neither `terminalSessions`
+   * nor `activeSessionsByUpdatedAtUtc` answers that on its own: the first
+   * drops in-progress sessions, and the second orders by a different field.
+   * Phase 18.
+   */
+  allSessionsByStartedAtUtc: SessionSummary[];
   /** All statuses for one workout, newest first by `startedAtUtc`. */
   sessionsByWorkoutId: Map<string, SessionSummary[]>;
   /** Full history for one exercise, newest first. */

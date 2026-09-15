@@ -30,7 +30,16 @@ import type {
 } from '../domain/types';
 import type { ResultStatus } from '../domain/enums';
 import type { PathSegment } from '../domain/execution-path';
-import { containerResultKey, encodePath, exerciseResultKey, sameSegment } from '../domain/execution-path';
+import {
+  containerResultKey,
+  encodePath,
+  exerciseResultKey,
+  isRepeatedContainer,
+  iterationCount,
+  resolvePath,
+  sameSegment,
+  type ResolvedPath
+} from '../domain/execution-path';
 import { isIntegerLikeKey } from '../domain/ids';
 import { parseUtc, yearMonthUtc } from '../domain/time';
 import {
@@ -263,84 +272,10 @@ function safeEncodedPath(segments: PathSegment[] | undefined): string {
 // ---------------------------------------------------------------------------
 // Workout tree index and path resolution
 // ---------------------------------------------------------------------------
-
-/** A path resolved against one workout tree. */
-type ResolvedPath =
-  | { ok: true; node: WorkoutNode }
-  | { ok: false; reason: 'broken_path'; depth: number };
-
-function isRepeatedContainer(node: WorkoutNode): node is ContainerNode {
-  return node.type === 'container' && node.strategy !== 'sequence';
-}
-
-/**
- * Walk one execution path from the workout root.
- *
- * A segment may carry an `iteration` only on a repeated container: `rounds`,
- * `amrap`, `emom`, or `complex`. A `sequence` runs once, so an iteration on it
- * does not resolve.
- *
- * Every repeated container segment below the last one must carry an `iteration`.
- * The value is one-based and cannot exceed the container's configured count, so a
- * round 999 of a three-round container does not resolve. An AMRAP has no ceiling.
- * The last segment is exempt: a container result addresses the whole container,
- * not one of its iterations. Spec items 12, 13. REQUIREMENTS 10.8.
- */
-function resolvePath(workout: Workout, segments: PathSegment[] | undefined): ResolvedPath {
-  if (!Array.isArray(segments) || segments.length === 0) {
-    return { ok: false, reason: 'broken_path', depth: 0 };
-  }
-  if (segments[0].nodeId !== workout.root.id) {
-    return { ok: false, reason: 'broken_path', depth: 0 };
-  }
-
-  let current: WorkoutNode = workout.root;
-  for (let depth = 1; depth < segments.length; depth += 1) {
-    const segment = segments[depth];
-    if (current.type !== 'container') {
-      return { ok: false, reason: 'broken_path', depth };
-    }
-    const next: WorkoutNode | undefined = current.children.find(
-      (child) => child.id === segment.nodeId
-    );
-    if (next === undefined) {
-      return { ok: false, reason: 'broken_path', depth };
-    }
-    if (segment.iteration !== undefined && !isRepeatedContainer(next)) {
-      return { ok: false, reason: 'broken_path', depth };
-    }
-    if (depth < segments.length - 1 && isRepeatedContainer(next)) {
-      const max = iterationCount(next);
-      const iteration = segment.iteration;
-      if (
-        iteration === undefined ||
-        !Number.isInteger(iteration) ||
-        iteration < 1 ||
-        iteration > max
-      ) {
-        return { ok: false, reason: 'broken_path', depth };
-      }
-    }
-    current = next;
-  }
-
-  return { ok: true, node: current };
-}
-
-/** How many times a repeated container runs. An AMRAP has no fixed ceiling. */
-function iterationCount(container: ContainerNode): number {
-  switch (container.strategy) {
-    case 'rounds':
-      return container.strategyConfig.rounds;
-    case 'emom':
-    case 'complex':
-      return container.strategyConfig.cycles;
-    case 'amrap':
-      return Infinity;
-    default:
-      return 1;
-  }
-}
+//
+// `resolvePath`, `isRepeatedContainer`, `iterationCount`, and `ResolvedPath`
+// live in `src/domain/execution-path.ts`, because the Workout Summary resolves
+// the same paths and the two layers must not own separate answers.
 
 /** Every exercise node reachable at or below `node`, in tree order. */
 function exerciseLeaves(node: WorkoutNode): ExerciseNodeLike[] {
