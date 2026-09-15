@@ -170,3 +170,42 @@ in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
 
 A user can sign in, see their in-progress work, read a programmed workout, and start
 a session.
+
+## Build decisions
+
+Four points in this plan needed a call before the code. The user chose each one.
+
+1. **Screens read services from a registry.** `src/services/registry.ts` holds a
+   Svelte store with `lookup`, `sessionService`, `preferences`, `coordinator`,
+   and `staticData`. Bootstrap publishes them; screens read `$services`. This
+   mirrors `src/routing/router-registry.ts` and adds a store because the warm
+   fills the index after the first paint, so a screen must re-render when a
+   service grows. `publishServices()` re-publishes after each shard lands.
+2. **Bootstrap warms the result shards.** Step 6 now loads preferences and then
+   every result shard the Drive catalog lists, current month first, one at a
+   time. The catalog carries no session status, so the only way to find an
+   in-progress session is to read the shards that could hold one. Each shard
+   reaches the index as it arrives, so the chooser fills progressively. See
+   `src/sync/warm-result-shards.ts`.
+3. **The chooser lists every workout in the bundle.** The plan's `ChooserModel`
+   had `active`, `recent`, and `hasMore` only. A signed-in user with no history
+   would then have had no path to the overview. The model gained `workouts` and
+   `workoutsHasMore`, paginated at ten, with a **Show more workouts** control.
+   Each workout row carries a `Last: YYYY-MM-DD` label when a loaded session
+   covers it.
+4. **The privacy link points at `./privacy.html`.** Phase 20 owns that file. The
+   link 404s until Phase 20 ships it.
+
+Three smaller notes:
+
+- `timeLabel` uses `Today HH:MM` for the current local day and `YYYY-MM-DD` for
+  any earlier day, which matches the plan's `'Today 06:30' or '2026-08-31'`
+  contract. A prior year carries the year inside the date.
+- The overview renders a repeated container once per iteration. The first row
+  carries the container's own name and its round count; a later row reads
+  `Round N` with no count, so the rows differ at a glance and each shows the
+  prescription that applies to it.
+- `HomeScreen.svelte` is deleted. `LandingScreen.svelte` replaces the anonymous
+  half and `WorkoutChooserScreen.svelte` replaces the signed-in half. The
+  `.home__*` styles were replaced by `.landing__*`, `.chooser__*`,
+  `.session-row`, `.workout-row`, `.overview__*`, and `.tree-row` rules.

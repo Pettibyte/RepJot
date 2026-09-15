@@ -12,11 +12,15 @@ import type { LoadedStaticData } from '../src/documents/static-loader';
 import { AppError } from '../src/domain/errors';
 import { openRawJson } from '../src/routing/open-raw-json';
 import { getRouter, setRouter } from '../src/routing/router-registry';
+import { clearServices, getServices } from '../src/services/registry';
 import { clearRawPayloads, getRawPayload } from '../src/state/raw-payload-store';
 import { activeError, clearError, setStartupStatus, startupStatus } from '../src/state/app-state';
 import type { LocalStore, LocalStoreEntry } from '../src/storage/local-store';
 import type { Coordinator } from '../src/sync/sync-coordinator';
+import WorkoutOverviewScreen from '../src/ui/screens/WorkoutOverviewScreen.svelte';
+import { workout } from './fixtures/semantic';
 import { installFakeBrowser, uninstallFakeBrowser } from './support/fake-browser';
+import { html } from './support/render';
 
 const HOUR_MS = 3_600_000;
 
@@ -129,6 +133,7 @@ afterEach(() => {
   clearAllAuthState();
   signOut();
   clearError();
+  clearServices();
   setStartupStatus('loading_static');
   setRouter(null);
   clearRawPayloads();
@@ -226,6 +231,91 @@ describe('bootstrap startup gate', () => {
     expect(result.coordinator).toBeNull();
     // The lookup service still answers static questions for the chooser.
     expect(result.lookup).not.toBeNull();
+  });
+});
+
+describe('bootstrap degraded start publishes the bundle', () => {
+  // REQUIREMENTS 18.1. A signed-in start that cannot open the account store
+  // still holds the static bundle, so the registry must publish the static
+  // half. Otherwise the overview denies a workout the app is holding.
+  function bundleWithWorkout(): LoadedStaticData {
+    const w = workout();
+    return {
+      exercises: [],
+      workouts: [w],
+      exerciseById: new Map(),
+      workoutById: new Map([[w.id, w]])
+    };
+  }
+
+  /** Ports for a signed-in start whose later step throws. */
+  function signedInThrowingPorts(throwAt: 'local_store' | 'coordinator'): BootstrapPorts {
+    const boom = new Error('this step fails');
+    return {
+      async loadStaticData(): Promise<LoadedStaticData> {
+        return bundleWithWorkout();
+      },
+      async restoreAndBind(): Promise<null> {
+        return {
+          accountKey: 'acct-1',
+          accessToken: 'a-token',
+          expiresAtUtc: new Date(Date.now() + HOUR_MS).toISOString()
+        } as never;
+      },
+      async createLocalStore(): Promise<LocalStore> {
+        if (throwAt === 'local_store') throw boom;
+        return fakeStore([]);
+      },
+      createCoordinator(): Coordinator {
+        throw boom;
+      },
+      mountApp(): unknown {
+        return {};
+      }
+    };
+  }
+
+  function assertStaticHalfPublished(result: Awaited<ReturnType<typeof bootstrap>>): void {
+    const services = getServices();
+    expect(services.staticData).not.toBeNull();
+    expect(services.lookup).not.toBeNull();
+    // Every write path reads as unavailable, which is the truth.
+    expect(services.sessionService).toBeNull();
+    expect(services.coordinator).toBeNull();
+    expect(result.mounted).toBe(true);
+
+    // The overview renders the programmed tree, not the not-found state.
+    const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
+    expect(out).not.toContain('No workout with that id');
+    expect(out).toContain('Demo Workout');
+    // Starting stays blocked until a session service exists.
+    expect(out).toContain('not connected to your Drive folder');
+  }
+
+  test('a local-store failure still publishes the static bundle and lookup', async () => {
+    clearServices();
+    installFakeBrowser();
+
+    const result = await bootstrap({
+      clientId: 'client-id',
+      ports: signedInThrowingPorts('local_store'),
+      target: fakeTarget()
+    });
+
+    assertStaticHalfPublished(result);
+  });
+
+  test('a coordinator failure still publishes the static bundle and lookup', async () => {
+    clearServices();
+    installFakeBrowser();
+
+    const result = await bootstrap({
+      clientId: 'client-id',
+      ports: signedInThrowingPorts('coordinator'),
+      target: fakeTarget()
+    });
+
+    assertStaticHalfPublished(result);
   });
 });
 

@@ -18,9 +18,10 @@
   // blocker, so the raw route renders the viewer through the normal outlet.
   // REQUIREMENTS 6.9.
   //
-  // Route outlet. Phase 15 ships the home screen and the raw viewer. The routes
-  // that later phases own resolve to the not-found screen until their component
-  // is registered here, so an unbuilt address never renders a blank page.
+  // Route outlet. Phase 16 registers the landing page, the workout chooser, and
+  // the workout overview. The routes that later phases own resolve to the
+  // not-found screen until their component is registered here, so an unbuilt
+  // address never renders a blank page.
 
   import type { Readable } from 'svelte/store';
   import AppHeader from './ui/components/AppHeader.svelte';
@@ -28,9 +29,11 @@
   import Button from './ui/components/Button.svelte';
   import DataError from './ui/components/DataError.svelte';
   import type { DataErrorProps } from './ui/components/data-error-types';
-  import HomeScreen from './ui/screens/HomeScreen.svelte';
+  import LandingScreen from './ui/screens/LandingScreen.svelte';
   import NotFoundScreen from './ui/screens/NotFoundScreen.svelte';
   import RawJsonScreen from './ui/screens/RawJsonScreen.svelte';
+  import WorkoutChooserScreen from './ui/screens/WorkoutChooserScreen.svelte';
+  import WorkoutOverviewScreen from './ui/screens/WorkoutOverviewScreen.svelte';
   import Tabs from './ui/components/Tabs.svelte';
   import { parentRoute, formatRoute, isTabRoot, type Route } from './routing/routes';
   import {
@@ -135,6 +138,23 @@
     { href: '#/history', label: 'History', current: current.name === 'history' },
     { href: '#/settings', label: 'Settings', current: current.name === 'settings' }
   ]);
+
+  /**
+   * True when a sign-in failure belongs on the landing page, not the banner.
+   *
+   * A denied consent comes back as an `authentication` error while the user is
+   * still anonymous on `#/`. Showing it inside the landing page puts the reason
+   * beside the control that failed, so **Continue with Google** is right there.
+   * Everywhere else the banner carries it. REQUIREMENTS 2.10, 2.12.
+   */
+  const signInFailureInline = $derived(
+    current.name === 'home' && account === null && $activeError?.kind === 'authentication'
+  );
+
+  const signInNotice = $derived(signInFailureInline ? ($activeError?.message ?? '') : '');
+
+  /** The banner error, with the sign-in failure pulled out to the landing page. */
+  const bannerError = $derived(signInFailureInline ? null : $activeError);
 </script>
 
 {#snippet saveStatusBadge()}
@@ -169,9 +189,9 @@
       <BackHeader href={backHref} title={headerTitle} backLabel="Back" status={saveStatusBadge} />
     {/if}
 
-    {#if $activeError !== null}
+    {#if bannerError !== null}
       <div class="shell__banner" role="alert">
-        <p class="shell__banner-text">{$activeError.message}</p>
+        <p class="shell__banner-text">{bannerError.message}</p>
         <div class="shell__banner-actions">
           <Button variant="secondary" onclick={clearError}>Dismiss</Button>
         </div>
@@ -180,7 +200,13 @@
 
     <main class="shell__outlet">
       {#if current.name === 'home'}
-        <HomeScreen {account} {clientId} {onSignIn} />
+        {#if account === null}
+          <LandingScreen {clientId} signInNotice={signInNotice} {onSignIn} />
+        {:else}
+          <WorkoutChooserScreen />
+        {/if}
+      {:else if current.name === 'workout-overview'}
+        <WorkoutOverviewScreen workoutId={current.workoutId} />
       {:else if current.name === 'raw-json'}
         <RawJsonScreen source={current.source} />
       {:else}

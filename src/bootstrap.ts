@@ -53,6 +53,9 @@ import { createLookupService, type LookupService } from './indexes/lookup-servic
 import { createPreferenceService, type PreferenceService } from './preferences/preference-service';
 import { createRouter, type Router } from './routing/hash-router';
 import { setRouter } from './routing/router-registry';
+import { setServices, publishServices } from './services/registry';
+import { createSessionService, type SessionService } from './sessions/session-service';
+import { warmResultShards } from './sync/warm-result-shards';
 import { reportError, setStartupStatus } from './state/app-state';
 import { createLocalStore as createLocalStoreDefault } from './storage/create-local-store';
 import type { LocalStore } from './storage/local-store';
@@ -114,6 +117,8 @@ export interface BootstrapResult {
   coordinator: Coordinator | null;
   preferences: PreferenceService | null;
   lookup: LookupService | null;
+  /** Null for an anonymous visitor, who has no Drive folder to write to. */
+  sessionService: SessionService | null;
   router: Router | null;
   /** True when the shell reached a mount target. */
   mounted: boolean;
@@ -190,6 +195,7 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
     coordinator: null,
     preferences: null,
     lookup: null,
+    sessionService: null,
     router: null,
     mounted: false
   };
@@ -268,6 +274,10 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
     // Anonymous. The lookup service still answers static questions, so the
     // shell renders the chooser with no history.
     result.lookup = createLookupService({ staticData });
+    // Publish what an anonymous visitor can reach: the bundle and the static
+    // lookups. No session service and no coordinator, so every write path reads
+    // as unavailable instead of failing later. REQUIREMENTS 2.11.
+    setServices({ lookup: result.lookup, staticData });
     finishMount(ports, result, target, deps.clientId);
     return result;
   }
@@ -282,6 +292,13 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
     store = await ports.createLocalStore(session.accountKey);
   } catch (error: unknown) {
     reportError(toAppError(error, 'local_store'));
+    // The bundle loaded, so the static half of the registry can serve reads.
+    // Publishing it keeps the overview on the programmed tree instead of
+    // denying a workout the app is holding. No session service and no
+    // coordinator means every write path reads as unavailable, which is the
+    // truth. REQUIREMENTS 18.1.
+    result.lookup = createLookupService({ staticData });
+    setServices({ lookup: result.lookup, staticData });
     finishMount(ports, result, target, deps.clientId);
     return result;
   }
@@ -297,6 +314,11 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
     });
   } catch (error: unknown) {
     reportError(toAppError(error, 'coordinator'));
+    // Same rule as the local-store failure above: the bundle is good, so the
+    // static half of the registry publishes and the screens keep their
+    // programmed tree. REQUIREMENTS 18.1.
+    result.lookup = createLookupService({ staticData });
+    setServices({ lookup: result.lookup, staticData });
     finishMount(ports, result, target, deps.clientId);
     return result;
   }
@@ -305,15 +327,48 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
   result.preferences = createPreferenceService({ coordinator, staticData });
   result.lookup = createLookupService({ staticData });
 
+  result.sessionService = createSessionService({
+    coordinator,
+    staticData,
+    preferences: result.preferences,
+    lookup: result.lookup
+  });
+
+  // Publish the signed-in services before the mount, so the chooser draws from
+  // the real registry on its first render rather than waiting one tick.
+  setServices({
+    lookup: result.lookup,
+    sessionService: result.sessionService,
+    preferences: result.preferences,
+    coordinator,
+    staticData
+  });
+
   finishMount(ports, result, target, deps.clientId, coordinator);
 
-  // Step 6. Warm the cache behind the mounted shell. Preferences first, because
-  // every unit pill reads them. Result shards stay lazy: a screen calls
-  // `ensureLoaded` for the shard it needs, so a cold start costs one request
-  // rather than one per month of history.
+  // Step 6. Warm the cache behind the mounted shell. Preferences go first,
+  // because every unit pill reads them and the chooser needs nothing else to
+  // draw its workout list.
   void result.preferences.ensureDoc().catch((): void => {
     // The coordinator already reported the failure through `activeError`. The
     // catch exists so a rejected warm never becomes an unhandled rejection.
+  });
+
+  // Result shards follow. The Drive catalog carries no session status, so the
+  // only way to find an in-progress session is to read the shards that could
+  // hold one. Each shard reaches the index as it lands, and the registry
+  // republishes so the chooser fills progressively instead of waiting for the
+  // last month. specs/storage-and-lookup.md "Loading policy".
+  void warmResultShards({
+    drive,
+    coordinator,
+    lookup: result.lookup,
+    onShardLoaded: (): void => {
+      publishServices();
+    }
+  }).catch((): void => {
+    // A catalog that will not list leaves the chooser showing workouts with no
+    // history. The startup error banner already carries the report.
   });
 
   return result;
