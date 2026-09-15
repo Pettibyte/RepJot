@@ -15,7 +15,8 @@ Kindle smoke, and the GitHub Pages publish.
 2. Extend the compatibility gate with the bundle budget and the secret scan.
 3. Publish the privacy policy and link it from the landing page.
 4. Run the full release gate list.
-5. Publish `dist/` to GitHub Pages at `https://repjot.com`.
+5. Build to `dist/`, deploy to `../RepJot-pages`
+6. Push `../RepJot-pages` to GitHub Pages at `https://repjot.com`.
 
 ## Interfaces
 
@@ -142,7 +143,7 @@ Run each item on the physical device and record the result in `docs/RELEASE.md`.
 - [ ] `bun run check:compat` reports the bundle size and file count inside budget.
 - [ ] `grep -rn "client_secret\|BEGIN PRIVATE KEY" dist/` returns nothing.
 - [ ] `dist/CNAME` equals `repjot.com`.
-- [ ] Publish `dist/` to the `gh-pages` branch using the README procedure.
+- [ ] Publish `dist/` to the `gh-pages` branch using `../RepJot-pages`.
 - [ ] `https://repjot.com` loads, signs in, records a workout, and syncs.
 - [ ] Tag the release and record the tag with the Kindle smoke results in
       `docs/RELEASE.md`.
