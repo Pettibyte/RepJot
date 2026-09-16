@@ -24,7 +24,8 @@ Kindle smoke, and the GitHub Pages publish.
 
 | Path | Purpose |
 | --- | --- |
-| `src/index.html` | Adds the CSP meta tag and the final page title. |
+| `src/index.html` | Adds the final page title. The CSP meta tag reaches the built page from `vite.config.ts`, not from this file. |
+| `vite.config.ts` | Injects the CSP meta tag into the built `index.html` in the `kindle-classic-entry` plugin. |
 | `scripts/check-browser-compat.ts` | Adds the budget and secret checks to the existing ES2019 gate. |
 | `scripts/release-check.ts` | Runs the full gate list as `bun run release:check`. |
 | `src/public/privacy.html` | Privacy policy page. |
@@ -33,17 +34,31 @@ Kindle smoke, and the GitHub Pages publish.
 
 ### CSP policy
 
-The meta policy permits:
+The shipped meta policy permits:
 
 - `default-src 'self'`
-- `script-src 'self' 'unsafe-inline'` for the existing bootstrap loader
+- `script-src 'self' 'unsafe-inline' 'unsafe-eval'` for the existing bootstrap
+  loader and for the Ajv schema compiler
 - `style-src 'self' 'unsafe-inline'`
 - `font-src 'self'`, `img-src 'self' data:`
 - `connect-src https://www.googleapis.com https://oauth2.googleapis.com`
 - `form-action https://oauth2.googleapis.com`
 - `frame-src https://accounts.google.com` for the revocation flow
-- No GIS script origin, no telemetry origin, no remote UI origin, no `base-uri`
-  outside `'self'`, no `object-src`.
+- `base-uri 'self'`
+- `object-src 'none'`
+- No GIS script origin, no telemetry origin, no remote UI origin.
+
+`'unsafe-eval'` is required. `src/validation/schema-validator.ts` compiles the
+four document schemas in the browser at module load. Ajv generates validator
+source and builds it with the `Function` constructor, which a policy without
+`'unsafe-eval'` blocks. The follow-up that removes the need for it, a build-time
+Ajv standalone compile, is section 6 of `docs/RELEASE.md`.
+
+The build injects the tag through the `kindle-classic-entry` plugin in
+`vite.config.ts`, which runs only for the production build. The tag is absent
+from `src/index.html` because the policy blocks the `ws://` socket that Vite hot
+reload opens. Check 10 in `scripts/check-browser-compat.ts` enforces the policy
+above against the built page.
 
 ### New compatibility checks
 
@@ -62,6 +77,9 @@ Extend `scripts/check-browser-compat.ts` with:
 8. `dist/CNAME` equals `repjot.com`.
 9. `dist/index.html` contains no `type="module"` script and loads the classic
    loader after its function and DOM target. Existing check.
+10. The CSP meta policy in `dist/index.html` matches the reviewed policy above
+    and names no origin outside the allowlist.
+11. `dist/app.js` carries the required Drive app-data scope.
 
 ### Release gate
 
@@ -101,8 +119,9 @@ It then prints the gate table from `docs/RELEASE.md` for manual sign-off.
 
 ### Implementation
 
-- [ ] Add the CSP meta tag to `src/index.html` and confirm the app still runs in
-      development and in the built bundle.
+- [ ] Add the CSP meta policy to the production build through the
+      `kindle-classic-entry` plugin in `vite.config.ts`, and confirm the app
+      still runs in development with hot reload and in the built bundle.
 - [ ] Set the final page title and the `lang` attribute.
 - [ ] Extend `scripts/check-browser-compat.ts` with checks 4 through 8.
 - [ ] Create `scripts/release-check.ts` and register `bun run release:check`.

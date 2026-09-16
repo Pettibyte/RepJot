@@ -4,7 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>REP JOT Google Drive prototype</title>
+  <!--
+    The Content-Security-Policy meta tag is absent here on purpose. The build
+    injects it through the kindle-classic-entry plugin in vite.config.ts, which
+    runs only for the production build. The policy blocks the ws:// socket that
+    Vite hot reload opens, so a copy in this file would break development.
+    check-browser-compat.ts check 10 enforces the shipped policy.
+  -->
+  <title>REP JOT</title>
 </head>
 
 <body>

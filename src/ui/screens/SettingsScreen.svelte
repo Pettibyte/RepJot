@@ -297,6 +297,10 @@
     <p class="settings-license__text">
       For non-commercial use only. For commercial licensing, Contact Pettibyte LLC.
     </p>
+    <p class="settings-license__text">
+      <a href="./privacy.html">Privacy policy</a>. It explains how REP JOT
+      accesses, stores, uses, exports, and deletes your data.
+    </p>
   </div>
 
   {#if signedIn || deleteOpen}

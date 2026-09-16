@@ -21,7 +21,8 @@
     "seed": "bun scripts/seed-exercises.ts",
     "seed:check": "bun scripts/seed-exercises.ts check",
     "seed:bump": "bun scripts/seed-exercises.ts bump",
-    "deploy": "bun run build && rsync -a --delete --exclude='.git' dist/ ../RepJot-pages/"
+    "deploy": "bun scripts/check-deploy-target.ts && bun run build && rsync -a --delete --exclude='.git' dist/ ../RepJot-pages/",
+    "release:check": "bun scripts/release-check.ts"
   },
   "devDependencies": {
     "@iconify-json/material-symbols": "1.2.92",
