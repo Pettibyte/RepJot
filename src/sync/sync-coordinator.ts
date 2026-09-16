@@ -65,6 +65,7 @@ import {
   debouncedEdit,
   flushOnPagehide,
   pageTarget,
+  wallClock,
   type EditQueue,
   type EventTargetLike,
   type TimerSet
@@ -72,6 +73,9 @@ import {
 
 /** Upload attempts before the coordinator gives up and reports `sync_failed`. */
 export const MAX_UPLOAD_ATTEMPTS = 3;
+
+/** Production quiet period before one logical file synchronizes to Drive. */
+export const DEFAULT_SYNC_DEBOUNCE_MS = 5_000;
 
 /** The preferences logical file name. */
 export const PREFERENCES_NAME = PREFERENCES_FILE_NAME;
@@ -106,6 +110,19 @@ export interface SyncDeps {
   consolidate?: ConsolidateHook;
   /** Quiet period for `queueEdit`. */
   debounceMs?: number;
+  /** Maximum time that continuous input can delay a local write. */
+  debounceMaxMs?: number;
+  /**
+   * Quiet period before a durable local edit synchronizes to Drive.
+   *
+   * The coordinator default is zero for API compatibility. Production passes
+   * `DEFAULT_SYNC_DEBOUNCE_MS` from bootstrap.
+   */
+  syncDebounceMs?: number;
+  /** Maximum time that durable edits can delay Drive synchronization. */
+  syncDebounceMaxMs?: number;
+  /** Base delay between upload retries. Zero keeps tests immediate. */
+  retryBaseDelayMs?: number;
   /** Timer pair. Injectable so tests need no wall clock. */
   timers?: TimerSet;
   /** `pagehide` target. Defaults to `window` when the host has one. */
@@ -145,7 +162,9 @@ export interface Coordinator {
    * confirmed on Drive. REQUIREMENTS 4.4, 4.20.
    */
   pendingEdits(): Promise<string[]>;
-  /** Flush pending local edits. Called on pagehide. */
+  /** Flush pending edits to local storage without waiting for Drive. */
+  flushLocal(): Promise<void>;
+  /** Flush local edits and wait for scheduled Drive synchronization. */
   flush(): Promise<void>;
   /**
    * Forget in-memory state for this account. The local rows stay.
@@ -370,7 +389,10 @@ function classifyAttempt(error: unknown): { kind: AppErrorKind; retryable: boole
       error.kind === 'semantic_reference' ||
       error.kind === 'migration' ||
       error.kind === 'storage' ||
-      error.kind === 'duplicate_drive_file'
+      error.kind === 'duplicate_drive_file' ||
+      error.kind === 'authentication' ||
+      error.kind === 'authorization' ||
+      error.kind === 'drive_quota'
     ) {
       return { kind: error.kind, retryable: false };
     }
@@ -391,6 +413,16 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     deps.consolidate ?? createConsolidateHook({ drive: deps.drive, staticData: deps.staticData });
   const semantic = (logicalName: string): SemanticStage =>
     semanticStageFor(logicalName, deps.staticData);
+  const retryBaseDelayMs = deps.retryBaseDelayMs ?? 0;
+
+  async function waitBeforeRetry(attempt: number): Promise<void> {
+    if (retryBaseDelayMs <= 0) return;
+    const exponential = retryBaseDelayMs * Math.pow(2, Math.max(0, attempt - 1));
+    const jittered = Math.round(exponential * (0.75 + Math.random() * 0.5));
+    await new Promise<void>((resolve): void => {
+      wallClock.setTimeout(resolve, jittered);
+    });
+  }
 
   /** In-memory working documents by logical name. */
   const docs = new Map<string, LoadedDoc>();
@@ -519,20 +551,146 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   /** Detach for the `pagehide` listener registered at the bottom. */
   let detachPagehide: () => void = () => undefined;
 
+  /** One promise waiting for a specified local generation to reach Drive. */
+  interface SyncWaiter {
+    generation: number;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  }
+
+  /** Drive debounce state, keyed by logical file. */
+  const syncDelayMs = deps.syncDebounceMs ?? 0;
+  const syncMaxDelayMs = deps.syncDebounceMaxMs;
+  const syncTimers = deps.timers ?? wallClock;
+  const syncGeneration = new Map<string, number>();
+  const syncHandles = new Map<string, unknown>();
+  const syncMaxHandles = new Map<string, unknown>();
+  const syncRunning = new Map<string, Promise<void>>();
+  const syncWaiters = new Map<string, SyncWaiter[]>();
+
+  function cancelSyncTimer(logicalName: string): void {
+    const handle = syncHandles.get(logicalName);
+    if (handle !== undefined) {
+      syncTimers.clearTimeout(handle);
+      syncHandles.delete(logicalName);
+    }
+    const maxHandle = syncMaxHandles.get(logicalName);
+    if (maxHandle !== undefined) {
+      syncTimers.clearTimeout(maxHandle);
+      syncMaxHandles.delete(logicalName);
+    }
+  }
+
+  function settleSyncWaiters(logicalName: string, generation: number, error?: unknown): void {
+    const waiting = syncWaiters.get(logicalName) ?? [];
+    const later: SyncWaiter[] = [];
+    for (const waiter of waiting) {
+      if (waiter.generation > generation) {
+        later.push(waiter);
+      } else if (error === undefined) {
+        waiter.resolve();
+      } else {
+        waiter.reject(error);
+      }
+    }
+    if (later.length === 0) syncWaiters.delete(logicalName);
+    else syncWaiters.set(logicalName, later);
+  }
+
+  function armSync(logicalName: string): void {
+    if (syncRunning.has(logicalName)) return;
+    const quietHandle = syncHandles.get(logicalName);
+    if (quietHandle !== undefined) syncTimers.clearTimeout(quietHandle);
+    syncHandles.delete(logicalName);
+    if (syncDelayMs <= 0) {
+      void startScheduledSync(logicalName).catch((): void => undefined);
+      return;
+    }
+    syncHandles.set(
+      logicalName,
+      syncTimers.setTimeout((): void => {
+        syncHandles.delete(logicalName);
+        void startScheduledSync(logicalName).catch((): void => undefined);
+      }, syncDelayMs)
+    );
+  }
+
+  /** Start one reconciliation for all edits known at this instant. */
+  function startScheduledSync(logicalName: string): Promise<void> {
+    const active = syncRunning.get(logicalName);
+    if (active !== undefined) return active;
+
+    cancelSyncTimer(logicalName);
+    const generation = syncGeneration.get(logicalName) ?? 0;
+    const task = withSync(logicalName, async (): Promise<void> => {
+      await reconcileOne(logicalName);
+    });
+    syncRunning.set(logicalName, task);
+
+    void task.then(
+      (): void => settleSyncWaiters(logicalName, generation),
+      (error: unknown): void => settleSyncWaiters(logicalName, generation, error)
+    ).finally((): void => {
+      if (syncRunning.get(logicalName) === task) syncRunning.delete(logicalName);
+      if ((syncGeneration.get(logicalName) ?? 0) > generation) armSync(logicalName);
+    });
+    return task;
+  }
+
+  /** Schedule one Drive synchronization and return its generation promise. */
+  function scheduleSync(logicalName: string): Promise<void> {
+    const generation = (syncGeneration.get(logicalName) ?? 0) + 1;
+    syncGeneration.set(logicalName, generation);
+    const synced = new Promise<void>((resolve, reject): void => {
+      const waiting = syncWaiters.get(logicalName) ?? [];
+      waiting.push({ generation, resolve, reject });
+      syncWaiters.set(logicalName, waiting);
+    });
+    if (syncMaxDelayMs !== undefined && !syncMaxHandles.has(logicalName)) {
+      syncMaxHandles.set(
+        logicalName,
+        syncTimers.setTimeout((): void => {
+          const quiet = syncHandles.get(logicalName);
+          if (quiet !== undefined) syncTimers.clearTimeout(quiet);
+          syncHandles.delete(logicalName);
+          syncMaxHandles.delete(logicalName);
+          void startScheduledSync(logicalName).catch((): void => undefined);
+        }, syncMaxDelayMs)
+      );
+    }
+    // Keep fire-and-forget save callers from creating an unhandled rejection.
+    // The original promise still rejects for callers that await `synced`.
+    void synced.catch((): void => undefined);
+    armSync(logicalName);
+    return synced;
+  }
+
+  /** Force all scheduled generations for one file through the sync lock. */
+  async function flushScheduledSync(logicalName: string): Promise<void> {
+    cancelSyncTimer(logicalName);
+    for (;;) {
+      const active = syncRunning.get(logicalName);
+      if (active !== undefined) {
+        await active.catch((): void => undefined);
+        continue;
+      }
+      if ((syncWaiters.get(logicalName)?.length ?? 0) === 0) return;
+      await startScheduledSync(logicalName).catch((): void => undefined);
+    }
+  }
+
   /**
    * Debounced edit queue. Normal typing lands here.
    *
-   * The runner stops at local durability. It never waits for the network,
-   * because a stalled upload must not hold the next queued input: on
-   * `pagehide` the whole queue has milliseconds to reach storage. The
-   * reconciliation each edit started is tracked by the sync lock and
-   * awaited once, at the end of the flush. REQUIREMENTS 4.1, 4.2, 4.4.
+   * One drained batch becomes one local transaction. The local edit schedules
+   * Drive separately, so a slow upload cannot delay local durability.
    */
   const queue: EditQueue = debouncedEdit(
     async (logicalName: string, mutate: (doc: unknown) => unknown): Promise<void> => {
-      await edit(logicalName, mutate);
+      const handle = await edit(logicalName, mutate);
+      void handle.synced.catch((): void => undefined);
     },
-    { delayMs: deps.debounceMs, timers: deps.timers }
+    { delayMs: deps.debounceMs, maxDelayMs: deps.debounceMaxMs, timers: deps.timers }
   );
 
   /** Read the three local slots for one logical file. */
@@ -1194,6 +1352,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         await withLocal(logicalName, async (): Promise<void> => {
           docs.delete(logicalName);
         });
+        if (attempt < MAX_UPLOAD_ATTEMPTS) await waitBeforeRetry(attempt);
       }
     }
 
@@ -1318,9 +1477,10 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     // not hide another file's unresolved failure. REQUIREMENTS 4.3, 4.20.
     setSaveStatus(settledStatus());
 
-    const synced = withSync(logicalName, async (): Promise<void> => {
-      await reconcileOne(logicalName);
-    });
+    // Drive synchronization has its own per-file quiet period. All edits in
+    // that period share one reconciliation generation instead of adding one
+    // complete preflight/upload/read-back cycle per field.
+    const synced = scheduleSync(logicalName);
 
     return { localDurable: true, synced };
   }
@@ -1369,13 +1529,23 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    * the others; the status reports the failure at the end. REQUIREMENTS 4.15.
    */
   async function syncAll(): Promise<void> {
+    await flushLocal();
     const names = await listKnownNames();
     let failed = false;
     for (const name of names) {
       try {
-        await withSync(name, async (): Promise<void> => {
-          await reconcileOne(name);
-        });
+        if (
+          syncHandles.has(name) ||
+          syncMaxHandles.has(name) ||
+          syncRunning.has(name) ||
+          syncWaiters.has(name)
+        ) {
+          await flushScheduledSync(name);
+        } else {
+          await withSync(name, async (): Promise<void> => {
+            await reconcileOne(name);
+          });
+        }
       } catch {
         failed = true;
       }
@@ -1408,15 +1578,25 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     }
   }
 
-  /**
-   * Flush queued edits and wait for the reconciliations already started.
-   *
-   * Called on `pagehide`. The local writes land inside `edit`; a network
-   * failure is reported through `saveStatus` and swallowed here, because a
-   * hidden page has no caller to report it to.
-   */
-  async function flush(): Promise<void> {
+  /** Flush queued edits through IndexedDB only. */
+  async function flushLocal(): Promise<void> {
     await queue.flush();
+  }
+
+  /** Flush local edits, start delayed synchronizations, and drain the network. */
+  async function flush(): Promise<void> {
+    await flushLocal();
+    const names = new Set<string>([
+      ...Array.from(syncHandles.keys()),
+      ...Array.from(syncMaxHandles.keys()),
+      ...Array.from(syncRunning.keys()),
+      ...Array.from(syncWaiters.keys())
+    ]);
+    await Promise.all(
+      Array.from(names).map(
+        (logicalName: string): Promise<void> => flushScheduledSync(logicalName)
+      )
+    );
     await drainInFlight();
   }
 
@@ -1432,13 +1612,21 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    * flushes. REQUIREMENTS 4.2, 4.4, 4.5.
    */
   async function reset(): Promise<void> {
-    await queue.flush();
-    await drainInFlight();
+    await flush();
+    const timerNames = new Set<string>([
+      ...Array.from(syncHandles.keys()),
+      ...Array.from(syncMaxHandles.keys())
+    ]);
+    for (const logicalName of timerNames) cancelSyncTimer(logicalName);
     docs.clear();
     localLock.clear();
     syncLock.clear();
     failedFiles.clear();
     inFlight.clear();
+    syncGeneration.clear();
+    syncMaxHandles.clear();
+    syncRunning.clear();
+    syncWaiters.clear();
     detachPagehide();
     registerPagehide();
   }
@@ -1447,7 +1635,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
   function registerPagehide(): void {
     detachPagehide = flushOnPagehide(
       deps.pagehideTarget === undefined ? pageTarget() : deps.pagehideTarget,
-      flush
+      flushLocal
     );
   }
 
@@ -1463,6 +1651,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       (await withSync(logicalName, async (): Promise<LoadedDoc> => await loadDoc(logicalName))).doc,
     edit,
     queueEdit: (logicalName: string, mutate: (doc: unknown) => unknown): void => {
+      setSaveStatus('saving');
       queue.schedule(logicalName, mutate);
     },
     syncAll,
@@ -1479,6 +1668,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       }
       return names.sort();
     },
+    flushLocal,
     flush,
     reset,
     peek: (logicalName: string): unknown => {

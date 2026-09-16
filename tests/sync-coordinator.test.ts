@@ -29,6 +29,11 @@ import { clone, preferencesDoc, resultsShard } from './fixtures/merge';
 import { SHARD_MONTH, SESSION_KEY, validSession, validShard } from './fixtures/semantic';
 import type { Session } from '../src/domain/types';
 
+/** Let coordinator promise chains advance without using a wall-clock delay. */
+async function tick(times = 12): Promise<void> {
+  for (let index = 0; index < times; index += 1) await Promise.resolve();
+}
+
 /** A valid session ID for slot `n`. The schema requires a UUID v4 shape. */
 function sid(n: number): string {
   const tail = String(n).padStart(12, '0');
@@ -458,6 +463,62 @@ describe('flush and reset', () => {
 
     await coordinator.flush();
     expect(drive.textOf(SHARD_NAME)).toContain(sid(11));
+  });
+
+  test('flushLocal does not await a stalled Drive upload', async () => {
+    const { store, drive, coordinator } = makeSetup({ name: SHARD_NAME, text: shardText() });
+    await coordinator.ensureLoaded(SHARD_NAME);
+
+    const gate = drive.blockUpload();
+    coordinator.queueEdit(SHARD_NAME, (doc: unknown) => withSession(doc, 12, 10));
+
+    let localDone = false;
+    const localFlush = coordinator.flushLocal().then((): void => {
+      localDone = true;
+    });
+
+    // Give both the local write and the reconciliation enough turns to reach
+    // the blocked upload. Local durability must already have resolved.
+    for (let turns = 0; turns < 100; turns += 1) {
+      if (drive.calls.some((call: string): boolean => call.startsWith('updateFile'))) break;
+      await tick(1);
+    }
+
+    try {
+      expect(drive.calls.some((call: string): boolean => call.startsWith('updateFile'))).toBe(true);
+      expect(localDone).toBe(true);
+      const cached = (await raw(store, cacheKey(SHARD_NAME))) as { contentText: string };
+      expect(cached.contentText).toContain(sid(12));
+    } finally {
+      gate.release();
+    }
+
+    await localFlush;
+    await coordinator.flush();
+    expect(drive.textOf(SHARD_NAME)).toContain(sid(12));
+  });
+
+  test('rapid queued edits cause at most one reconciliation', async () => {
+    const { drive, coordinator } = makeSetup({ name: SHARD_NAME, text: shardText() });
+    await coordinator.ensureLoaded(SHARD_NAME);
+    drive.calls.length = 0;
+
+    coordinator.queueEdit(SHARD_NAME, (doc: unknown) => withSession(doc, 13, 10));
+    coordinator.queueEdit(SHARD_NAME, (doc: unknown) => withSession(doc, 14, 11));
+    coordinator.queueEdit(SHARD_NAME, (doc: unknown) => withSession(doc, 15, 12));
+
+    await coordinator.flushLocal();
+    await coordinator.flush();
+
+    const uploads = drive.calls.filter((call: string): boolean => call.startsWith('updateFile'));
+    const catalogs = drive.calls.filter((call: string): boolean => call.startsWith('listCatalog'));
+    expect(uploads).toHaveLength(1);
+    // One normal reconciliation lists during load, preflight, and final check.
+    expect(catalogs.length).toBeLessThanOrEqual(3);
+    const remote = drive.textOf(SHARD_NAME) ?? '';
+    expect(remote).toContain(sid(13));
+    expect(remote).toContain(sid(14));
+    expect(remote).toContain(sid(15));
   });
 
   test('reset forgets in-memory state but keeps the local rows', async () => {

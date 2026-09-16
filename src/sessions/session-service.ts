@@ -92,6 +92,14 @@ export interface SessionService {
   saveExerciseResult(sessionId: string, draft: ExerciseResultDraft): Promise<void>;
   /** Drop one exercise result by its composite key. */
   clearExerciseResult(sessionId: string, key: string): Promise<void>;
+  /** Move one result key and replace its value in one shard transaction. */
+  moveExerciseResult(
+    sessionId: string,
+    previousKey: string,
+    draft: ExerciseResultDraft
+  ): Promise<void>;
+  /** Save a group of exercise results in one shard transaction. */
+  saveExerciseResults(sessionId: string, drafts: ExerciseResultDraft[]): Promise<void>;
   /** Open one more attempt on the exercise `fromKey` names. Returns the new key. */
   addAttempt(sessionId: string, fromKey: string): Promise<string>;
   /** Append one completed cycle under an AMRAP container and rescore it. */
@@ -110,9 +118,13 @@ export interface SessionService {
   reportMissingWork(sessionId: string): Promise<MissingWorkReport>;
   /** Debounced `saveExerciseResult`. */
   queueSaveExerciseResult(sessionId: string, draft: ExerciseResultDraft): void;
+  /** Debounced removal of one exercise result. */
+  queueClearExerciseResult(sessionId: string, key: string): void;
   /** Debounced `setContainerScore`. */
   queueSetContainerScore(sessionId: string, draft: ContainerResultDraft): void;
-  /** Run every queued edit now. Wire this to blur and to a route change. */
+  /** Debounced removal of one container result. */
+  queueClearContainerResult(sessionId: string, key: string): void;
+  /** Make every queued edit durable locally without waiting for Drive. */
   queueFlush(): Promise<void>;
 }
 
@@ -272,6 +284,8 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
   /** Sessions this service knows the shard for, including ones it just created. */
   const shardBySession = new Map<string, string>();
+  /** Shards whose queued edits still need a lookup refresh after local flush. */
+  const queuedShards = new Set<string>();
 
   /**
    * The monthly shard that holds one session.
@@ -295,6 +309,18 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
     shardBySession.set(sessionId, summary.shardName);
     return summary.shardName;
+  }
+
+  /**
+   * Refresh the read model from a shard after a local write becomes durable.
+   *
+   * The coordinator and lookup service hold separate in-memory views. Without
+   * this refresh, a session can be saved successfully while History continues
+   * to read the shard snapshot that was loaded at startup.
+   */
+  function refreshLookup(shard: string): void {
+    const current = coordinator.peek(shard);
+    if (current !== undefined) lookup.extendHistory([current as ResultsShard]);
   }
 
   /** Validate one candidate session before it reaches storage. */
@@ -366,8 +392,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
    * delete that should remove one removes nothing.
    */
   async function editShard(shard: string, mutate: ShardMutator): Promise<EditHandle> {
-    await coordinator.ensureLoaded(shard);
+    if (coordinator.peek(shard) === undefined) await coordinator.ensureLoaded(shard);
     const handle = await coordinator.edit(shard, mutate);
+    refreshLookup(shard);
     void handle.synced.catch(() => undefined);
     return handle;
   }
@@ -390,6 +417,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   ): void {
     const shard = shardFor(sessionId);
     coordinator.queueEdit(shard, buildMutator(sessionId, shard, apply, allowTerminal));
+    queuedShards.add(shard);
   }
 
   /** The workout a session belongs to, from the current bundle. */
@@ -544,6 +572,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       shardDoc.sessions[session.id] = session;
       return shardDoc;
     });
+    refreshLookup(shard);
     void handle.synced.catch(() => undefined);
     shardBySession.set(session.id, shard);
 
@@ -558,7 +587,11 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
   async function load(sessionId: string): Promise<Session> {
     const shard = shardFor(sessionId);
-    const shardDoc = (await coordinator.ensureLoaded(shard)) as ResultsShard;
+    // The active screen already loaded this shard. Read that working document
+    // directly, because `ensureLoaded` can perform a Drive preflight when a
+    // local delta is pending. A screen refresh must never create network work.
+    const warm = coordinator.peek(shard);
+    const shardDoc = (warm ?? (await coordinator.ensureLoaded(shard))) as ResultsShard;
     const session = shardDoc.sessions?.[sessionId];
     if (session === undefined) {
       throw new AppError(
@@ -599,6 +632,58 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     await editNow(sessionId, (next: Session): void => {
       delete next.exerciseResults[key];
       rescoreAncestors(next, workout, childPath);
+    });
+  }
+
+  async function moveExerciseResult(
+    sessionId: string,
+    previousKey: string,
+    draft: ExerciseResultDraft
+  ): Promise<void> {
+    if (isBlankExerciseDraft(draft)) return;
+    const session = await load(sessionId);
+    const workout = workoutFor(session);
+    const result = toExerciseResult(draft);
+    const nextKey = exerciseResultKey(
+      result.executionPath,
+      result.side ?? 'both',
+      result.attempt ?? 1
+    );
+
+    await editNow(sessionId, (next: Session): void => {
+      delete next.exerciseResults[previousKey];
+      next.exerciseResults[nextKey] = clone(result);
+      rescoreAncestors(next, workout, result.executionPath);
+    });
+  }
+
+  async function saveExerciseResults(
+    sessionId: string,
+    drafts: ExerciseResultDraft[]
+  ): Promise<void> {
+    const results = drafts
+      .filter((draft: ExerciseResultDraft): boolean => !isBlankExerciseDraft(draft))
+      .map((draft: ExerciseResultDraft): ExerciseResult => toExerciseResult(draft));
+    if (results.length === 0) return;
+    const session = await load(sessionId);
+    const workout = workoutFor(session);
+
+    await editNow(sessionId, (next: Session): void => {
+      for (const result of results) {
+        const key = exerciseResultKey(
+          result.executionPath,
+          result.side ?? 'both',
+          result.attempt ?? 1
+        );
+        next.exerciseResults[key] = clone(result);
+      }
+      const paths = new Set<string>();
+      for (const result of results) {
+        const encoded = encodePath(result.executionPath);
+        if (paths.has(encoded)) continue;
+        paths.add(encoded);
+        rescoreAncestors(next, workout, result.executionPath);
+      }
     });
   }
 
@@ -958,6 +1043,17 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     });
   }
 
+  function queueClearExerciseResult(sessionId: string, key: string): void {
+    const session = peekSession(sessionId);
+    const existing = session?.exerciseResults[key];
+    if (session === null || existing === undefined) return;
+    const workout = workoutFor(session);
+    queueEdit(sessionId, (next: Session): void => {
+      delete next.exerciseResults[key];
+      rescoreAncestors(next, workout, existing.executionPath);
+    });
+  }
+
   function queueSetContainerScore(sessionId: string, draft: ContainerResultDraft): void {
     if (isBlankContainerDraft(draft)) return;
     const session = peekSession(sessionId);
@@ -981,6 +1077,14 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     });
   }
 
+  function queueClearContainerResult(sessionId: string, key: string): void {
+    const session = peekSession(sessionId);
+    if (session?.containerResults[key] === undefined) return;
+    queueEdit(sessionId, (next: Session): void => {
+      delete next.containerResults[key];
+    });
+  }
+
   /**
    * The session from the coordinator's in-memory document, with no load.
    *
@@ -998,7 +1102,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   }
 
   async function queueFlush(): Promise<void> {
-    await coordinator.flush();
+    await coordinator.flushLocal();
+    for (const shard of queuedShards) refreshLookup(shard);
+    queuedShards.clear();
   }
 
   return {
@@ -1006,6 +1112,8 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     load,
     saveExerciseResult,
     clearExerciseResult,
+    moveExerciseResult,
+    saveExerciseResults,
     addAttempt,
     addAmrapRound,
     setContainerScore,
@@ -1015,7 +1123,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     remove,
     reportMissingWork,
     queueSaveExerciseResult,
+    queueClearExerciseResult,
     queueSetContainerScore,
+    queueClearContainerResult,
     queueFlush
   };
 }

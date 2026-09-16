@@ -715,9 +715,9 @@ describe('C1: a rebase keeps a conflicted session whole', () => {
 });
 
 describe('C2: a failed batch keeps its place ahead of a newer batch', () => {
-  test('a later flush replays in input order, not newest first', async () => {
+  test('a later flush replays one composed batch in input order', async () => {
     const clock = frozenTimers();
-    const order: string[] = [];
+    const results: string[] = [];
     let release: () => void = () => undefined;
     const paused = new Promise<void>((resolve: () => void): void => {
       release = resolve;
@@ -730,12 +730,12 @@ describe('C2: a failed batch keeps its place ahead of a newer batch', () => {
           await paused;
           throw new Error('local write failed');
         }
-        order.push(String(mutate('')));
+        results.push(String(mutate('')));
       },
       { timers: clock.timers }
     );
 
-    queue.schedule('a.json', (): string => 'first');
+    queue.schedule('a.json', (doc: unknown): string => `${String(doc)}first`);
     const flushing = queue.flush().then(
       (): string => 'resolved',
       (): string => 'rejected'
@@ -743,7 +743,7 @@ describe('C2: a failed batch keeps its place ahead of a newer batch', () => {
     await tick(4);
 
     // A newer input arrives while the first batch is still running.
-    queue.schedule('a.json', (): string => 'later');
+    queue.schedule('a.json', (doc: unknown): string => `${String(doc)}-later`);
     const flushingAgain = queue.flush().then(
       (): string => 'resolved',
       (): string => 'rejected'
@@ -752,11 +752,11 @@ describe('C2: a failed batch keeps its place ahead of a newer batch', () => {
     release();
     expect(await flushing).toBe('rejected');
     expect(await flushingAgain).toBe('rejected');
-    expect(order).toEqual([]);
+    expect(results).toEqual([]);
 
-    // The replay keeps the original order, so the newer input lands last.
+    // The replay is one runner call, with the newer input composed last.
     await queue.flush();
-    expect(order).toEqual(['first', 'later']);
+    expect(results).toEqual(['first-later']);
   });
 });
 

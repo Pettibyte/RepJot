@@ -19,7 +19,7 @@
 /** A pure document edit. Same shape the coordinator takes. */
 export type Mutator = (doc: unknown) => unknown;
 
-/** Runs one queued edit. Returns a promise the flush awaits. */
+/** Runs one queued batch. Returns a promise the flush awaits. */
 export type EditRunner = (logicalName: string, mutate: Mutator) => Promise<void>;
 
 /** The timer pair this module needs. Injectable so tests need no wall clock. */
@@ -49,10 +49,9 @@ export interface EditQueue {
   /**
    * Queue one edit. Restarts the quiet timer for that logical file.
    *
-   * The timer coalesces. The mutators never do. Three quick edits become one
-   * timer that applies all three mutators in order, so no keystroke is lost.
-   * Dropping a queued mutator would discard a user edit, which
-   * REQUIREMENTS 4.4 forbids.
+   * The timer and local write coalesce. Three quick edits become one timer
+   * and one composed mutator. The composed mutator applies all three edits in
+   * order, so no user edit is lost. REQUIREMENTS 4.4.
    */
   schedule(logicalName: string, mutate: Mutator): void;
   /**
@@ -78,14 +77,17 @@ export interface EditQueue {
  */
 export function debouncedEdit(
   run: EditRunner,
-  opts: { delayMs?: number; timers?: TimerSet } = {}
+  opts: { delayMs?: number; maxDelayMs?: number; timers?: TimerSet } = {}
 ): EditQueue {
   const delayMs = opts.delayMs === undefined ? DEFAULT_DEBOUNCE_MS : opts.delayMs;
+  const maxDelayMs = opts.maxDelayMs;
   const timers = opts.timers === undefined ? wallClock : opts.timers;
   /** Queued mutators per logical file, oldest first. */
   const queues = new Map<string, Mutator[]>();
-  /** One timer per logical file. */
+  /** One quiet timer per logical file. */
   const handles = new Map<string, unknown>();
+  /** Optional maximum-wait timer per logical file. */
+  const maxHandles = new Map<string, unknown>();
   /**
    * The batch running for one logical file, if any.
    *
@@ -96,22 +98,24 @@ export function debouncedEdit(
   const drainers = new Map<string, Promise<void>>();
 
   /**
-   * Apply one batch of mutators in order.
+   * Apply one batch through one local document write.
    *
-   * When one run fails, that mutator and every mutator behind it go back
-   * into the queue ahead of anything scheduled later. A dropped mutator is
-   * a dropped user edit, which REQUIREMENTS 4.4 forbids.
+   * The composed mutator preserves input order. If the write fails, the full
+   * batch returns ahead of edits scheduled later. This is necessary because
+   * the store transaction either accepted all mutations or accepted none.
    */
   const runBatch = async (logicalName: string, batch: Mutator[]): Promise<void> => {
-    for (let index = 0; index < batch.length; index += 1) {
-      try {
-        await run(logicalName, batch[index]);
-      } catch (error: unknown) {
-        const leftover = batch.slice(index);
-        const later = queues.get(logicalName) ?? [];
-        queues.set(logicalName, leftover.concat(later));
-        throw error;
-      }
+    const composed = (doc: unknown): unknown => {
+      let next = doc;
+      for (const mutate of batch) next = mutate(next);
+      return next;
+    };
+    try {
+      await run(logicalName, composed);
+    } catch (error: unknown) {
+      const later = queues.get(logicalName) ?? [];
+      queues.set(logicalName, batch.concat(later));
+      throw error;
     }
   };
 
@@ -126,6 +130,11 @@ export function debouncedEdit(
     if (armed !== undefined) {
       timers.clearTimeout(armed);
       handles.delete(logicalName);
+    }
+    const maxArmed = maxHandles.get(logicalName);
+    if (maxArmed !== undefined) {
+      timers.clearTimeout(maxArmed);
+      maxHandles.delete(logicalName);
     }
 
     const batch = queues.get(logicalName) ?? [];
@@ -163,6 +172,15 @@ export function debouncedEdit(
         void drainAtDeadline(logicalName).catch((): void => undefined);
       }, delayMs)
     );
+    if (maxDelayMs !== undefined && !maxHandles.has(logicalName)) {
+      maxHandles.set(
+        logicalName,
+        timers.setTimeout((): void => {
+          maxHandles.delete(logicalName);
+          void drainAtDeadline(logicalName).catch((): void => undefined);
+        }, maxDelayMs)
+      );
+    }
   };
 
   /** Names with mutators still waiting, whether or not a timer is armed. */
@@ -175,7 +193,11 @@ export function debouncedEdit(
     // the failed input at the queue head for a later retry.
     for (;;) {
       const names = new Set<string>(
-        Array.from(handles.keys()).concat(queuedNames(), Array.from(drainers.keys()))
+        Array.from(handles.keys()).concat(
+          Array.from(maxHandles.keys()),
+          queuedNames(),
+          Array.from(drainers.keys())
+        )
       );
       if (names.size === 0) return;
       await Promise.all(Array.from(names).map((name: string): Promise<void> => drainOne(name)));
@@ -184,13 +206,15 @@ export function debouncedEdit(
 
   const cancel = (): void => {
     for (const handle of handles.values()) timers.clearTimeout(handle);
+    for (const handle of maxHandles.values()) timers.clearTimeout(handle);
     handles.clear();
+    maxHandles.clear();
     queues.clear();
     drainers.clear();
   };
 
   const pending = (): string[] => {
-    const names = new Set<string>(Array.from(handles.keys()));
+    const names = new Set<string>(Array.from(handles.keys()).concat(Array.from(maxHandles.keys())));
     for (const name of queuedNames()) names.add(name);
     return Array.from(names);
   };
@@ -217,7 +241,7 @@ export type Detach = () => void;
 export function flushOnBlur(target: EventTargetLike | null | undefined, flush: () => Promise<void>): Detach {
   if (target === null || target === undefined) return () => undefined;
   const listener = (): void => {
-    void flush();
+    void flush().catch((): void => undefined);
   };
   target.addEventListener('blur', listener);
   return () => target.removeEventListener('blur', listener);
@@ -238,7 +262,7 @@ export function flushOnPagehide(
 ): Detach {
   if (target === null || target === undefined) return () => undefined;
   const listener = (): void => {
-    void flush();
+    void flush().catch((): void => undefined);
   };
   target.addEventListener('pagehide', listener);
   return () => target.removeEventListener('pagehide', listener);

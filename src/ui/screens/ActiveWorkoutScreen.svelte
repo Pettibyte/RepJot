@@ -13,9 +13,9 @@
   at render time means a save can rebuild the model from storage without
   wiping the field the user is still typing in.
 
-  Saving. A field blur queues the edit and then flushes it. The queue is the
-  debounced one from `src/sync/debounce.ts` behind the coordinator, so a run
-  of fast blurs coalesces into one local write instead of one per field.
+  Saving. Input events queue the current row while the field stays focused.
+  A field blur flushes those edits to local storage. Drive uses a separate
+  quiet period, so field changes do not start one reconciliation each.
   `flushOnBlur` from that module is not used here because DOM `blur` does not
   bubble, so a listener on the screen root would never fire for a child
   input. The row's own blur handler is the trigger.
@@ -176,42 +176,26 @@
   }
 
   /**
-   * Persist one row now.
-   *
-   * A draft that carries nothing clears the stored result rather than saving
-   * nothing, because the user blanked a field that had a value. Leaving the
-   * old value in place would ignore what they typed.
-   */
-  async function saveRow(row: ActiveExerciseRow): Promise<void> {
-    const service = sessionService;
-    if (service === null || session === null || row.resultKey === null) return;
-
-    const draft = draftForRow(row);
-    try {
-      if (isBlankExerciseDraft(draft)) {
-        if (row.hasSavedResult) await service.clearExerciseResult(session.id, row.resultKey);
-        return;
-      }
-      await service.saveExerciseResult(session.id, draft);
-      session = await service.load(session.id);
-    } catch (error: unknown) {
-      errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-    }
-  }
-
-  /**
    * Queue one row's save and flush it.
    *
-   * The queue coalesces a run of blurs; the flush makes the value durable
-   * before the user can leave the screen. Both go through the coordinator,
-   * so the save-status badge in the back header reflects the write.
+   * The flush makes the value durable before the user can leave the screen.
+   * Drive synchronization keeps its separate quiet period, so blur never
+   * waits for or directly starts a network cycle.
    */
   function queueAndFlush(row: ActiveExerciseRow): void {
     const service = sessionService;
     if (service === null || session === null || row.resultKey === null) return;
     const draft = draftForRow(row);
     if (isBlankExerciseDraft(draft)) {
-      void saveRow(row);
+      if (row.hasSavedResult) {
+        service.queueClearExerciseResult(session.id, row.resultKey);
+        const targetId = session.id;
+        void service.queueFlush().then(async () => {
+          session = await service.load(targetId);
+        }).catch((error: unknown) => {
+          errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
+        });
+      }
       return;
     }
     service.queueSaveExerciseResult(session.id, draft);
@@ -230,6 +214,21 @@
     const forRow = overrides[rowKey] ?? {};
     forRow[dimension] = value;
     overrides[rowKey] = forRow;
+
+    // Queue the complete row while the field is still focused. The quiet
+    // timer keeps normal typing cheap, and pagehide can now flush a value
+    // even when Silk does not dispatch blur first.
+    const service = sessionService;
+    const row = rowsByKey.get(rowKey);
+    if (service === null || session === null || row === undefined) return;
+    const draft = draftForRow(row);
+    if (isBlankExerciseDraft(draft)) {
+      if (row.hasSavedResult && row.resultKey !== null) {
+        service.queueClearExerciseResult(session.id, row.resultKey);
+      }
+      return;
+    }
+    service.queueSaveExerciseResult(session.id, draft);
   }
 
   function onFieldBlur(rowKey: string): void {
@@ -272,14 +271,16 @@
 
     const draft = draftForRow(row);
     try {
-      if (row.hasSavedResult && previousSide !== nextSide) {
-        await service.clearExerciseResult(session.id, previousKey);
-      }
+      await service.queueFlush();
       if (isBlankExerciseDraft(draft)) {
         session = await service.load(session.id);
         return;
       }
-      await service.saveExerciseResult(session.id, draft);
+      if (row.hasSavedResult && previousSide !== nextSide) {
+        await service.moveExerciseResult(session.id, previousKey, draft);
+      } else {
+        await service.saveExerciseResult(session.id, draft);
+      }
       session = await service.load(session.id);
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
@@ -317,6 +318,7 @@
     if (row === undefined || row.resultKey === null) return;
     busy = true;
     try {
+      await service.queueFlush();
       await service.addAttempt(session.id, row.resultKey);
       session = await service.load(session.id);
     } catch (error: unknown) {
@@ -372,6 +374,7 @@
     if (service === null || session === null || busy) return;
     busy = true;
     try {
+      await service.queueFlush();
       await service.addAmrapRound(session.id, group.storedPath);
       session = await service.load(session.id);
     } catch (error: unknown) {
@@ -409,9 +412,11 @@
     if (service === null || session === null || busy) return;
     busy = true;
     try {
-      for (const entry of drafts) {
-        await service.saveExerciseResult(session.id, entry.draft);
-      }
+      await service.queueFlush();
+      await service.saveExerciseResults(
+        session.id,
+        drafts.map((entry: DraftChild): ExerciseResultDraft => entry.draft)
+      );
       delete inferredDrafts[group.key];
       delete expandedGroups[group.key];
       session = await service.load(session.id);
@@ -422,51 +427,66 @@
     }
   }
 
-  /** Save a typed container score. */
-  async function saveContainerScore(group: GroupModel, text: string): Promise<void> {
+  /** Queue a typed container score while its field is focused. */
+  function queueContainerScore(group: GroupModel, text: string): void {
     const service = sessionService;
     if (service === null || session === null || group.scoreType === undefined) return;
     const trimmed = text.trim();
-    if (trimmed === '') return;
+    if (trimmed === '') {
+      service.queueClearContainerResult(session.id, containerKeyFor(group));
+      return;
+    }
     const parsed = Number(trimmed);
     if (!Number.isFinite(parsed) || parsed < 0) return;
     const score = scoreFromText(group.scoreType, parsed, group.totalIntervals);
     if (score === null) return;
+    service.queueSetContainerScore(session.id, {
+      workoutId: session.workoutId,
+      executionPath: group.storedPath,
+      status: 'completed',
+      score
+    });
+  }
+
+  /** Save a typed container score. */
+  async function saveContainerScore(group: GroupModel, text: string): Promise<void> {
+    const service = sessionService;
+    if (service === null || session === null || group.scoreType === undefined) return;
+    queueContainerScore(group, text);
     try {
-      await service.setContainerScore(session.id, {
-        workoutId: session.workoutId,
-        executionPath: group.storedPath,
-        status: 'completed',
-        score
-      });
+      await service.queueFlush();
       session = await service.load(session.id);
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not save that score.';
     }
   }
 
-  /**
-   * Save the AMRAP extra-reps field.
-   *
-   * The extra reps ride on the container's rounds-and-reps score. The round
-   * count comes from the score already on file, so typing extra reps never
-   * resets completed rounds.
-   */
-  async function saveAmrapPartial(group: GroupModel, text: string): Promise<void> {
+  /** Queue AMRAP extra reps while the field is focused. */
+  function queueAmrapPartial(group: GroupModel, text: string): void {
     const service = sessionService;
     if (service === null || session === null || group.scoreType !== 'rounds_and_reps') return;
     const trimmed = text.trim();
-    if (trimmed === '') return;
+    if (trimmed === '') {
+      service.queueClearContainerResult(session.id, containerKeyFor(group));
+      return;
+    }
     const parsed = Number(trimmed);
     if (!Number.isFinite(parsed) || parsed < 0) return;
-    const existing = group.score;
+    service.queueSetContainerScore(session.id, {
+      workoutId: session.workoutId,
+      executionPath: group.storedPath,
+      status: 'completed',
+      score: amrapPartialScore(group.score, parsed)
+    });
+  }
+
+  /** Save the AMRAP extra-reps field. */
+  async function saveAmrapPartial(group: GroupModel, text: string): Promise<void> {
+    const service = sessionService;
+    if (service === null || session === null || group.scoreType !== 'rounds_and_reps') return;
+    queueAmrapPartial(group, text);
     try {
-      await service.setContainerScore(session.id, {
-        workoutId: session.workoutId,
-        executionPath: group.storedPath,
-        status: 'completed',
-        score: amrapPartialScore(existing, parsed)
-      });
+      await service.queueFlush();
       session = await service.load(session.id);
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not save that score.';
@@ -485,6 +505,7 @@
     if (service === null || session === null || busy) return;
     busy = true;
     try {
+      await service.queueFlush();
       const report = await service.reportMissingWork(session.id);
       if (report.hasMissingWork) {
         missingItems = report.items;
@@ -507,6 +528,7 @@
     busy = true;
     promptOpen = false;
     try {
+      await service.queueFlush();
       await service.complete(session.id);
       getRouter()?.navigate({ name: 'session-summary', sessionId: session.id });
     } catch (error: unknown) {
@@ -522,6 +544,7 @@
     if (service === null || session === null || busy) return;
     busy = true;
     try {
+      await service.queueFlush();
       await service.abandon(session.id, 'user_skipped');
       getRouter()?.navigate({ name: 'home' });
     } catch (error: unknown) {
@@ -602,6 +625,7 @@
               onpartialchange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
                 amrapPartialDrafts[group.key] = target.value;
+                queueAmrapPartial(group, target.value);
               }}
               onpartialblur={() => void saveAmrapPartial(group, amrapPartialDrafts[group.key] ?? '')}
             />
@@ -616,6 +640,7 @@
               onchange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
                 emomDrafts[group.key] = target.value;
+                queueContainerScore(group, target.value);
               }}
               onblur={() => void saveContainerScore(group, emomDrafts[group.key] ?? '')}
             />
@@ -630,6 +655,7 @@
               onscorechange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
                 containerDrafts[group.key] = target.value;
+                queueContainerScore(group, target.value);
               }}
               onscoreblur={() => void saveContainerScore(group, containerDrafts[group.key] ?? '')}
             />

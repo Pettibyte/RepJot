@@ -365,10 +365,12 @@ Use styled native HTML controls. Application actions use Material Symbols. Fitne
 3. Save the new session to its UTC shard locally before navigating to Active Workout.
 4. Resolve the session against the current workout tree on each load.
 5. Debounce ordinary edits. Save on blur and before a route change.
-6. Start a local flush on `pagehide`. Do not claim that a network save completed.
-7. Complete or abandon a session by setting its terminal status and timestamps.
-8. Delete a session by removing its key from the shard `sessions` map.
-9. Edit terminal sessions against the current tree. Preserve terminal status, `startedAtUtc`, and `completedAtUtc`.
+6. Debounce Drive synchronization separately for each logical file.
+7. Start a local flush on `pagehide`. Do not claim that a network save completed.
+8. Do not make route publication wait for Drive.
+9. Complete or abandon a session by setting its terminal status and timestamps.
+10. Delete a session by removing its key from the shard `sessions` map.
+11. Edit terminal sessions against the current tree. Preserve terminal status, `startedAtUtc`, and `completedAtUtc`.
 
 A stale device can restore a deleted session because release one stores no tombstone. The user can delete the restored session again.
 

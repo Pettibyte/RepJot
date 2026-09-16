@@ -95,6 +95,10 @@ function fakeCoordinator(events: string[]): Coordinator {
     },
     queueEdit(): void {},
     async syncAll(): Promise<void> {},
+    async pendingEdits(): Promise<string[]> {
+      return [];
+    },
+    async flushLocal(): Promise<void> {},
     async flush(): Promise<void> {},
     async reset(): Promise<void> {},
     peek(): unknown {

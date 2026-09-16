@@ -94,7 +94,7 @@ a {
 }
 
 a:visited {
-  color: var(--color-on-bg);
+  /* color: var(--color-on-bg); */
 }
 
 /* Focus. A 4px outline with a 4px offset reads on any surface. */

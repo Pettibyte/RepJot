@@ -164,6 +164,17 @@ function shardOnDrive(drive: FakeDrive, name: string): ResultsShard | undefined 
   return JSON.parse(text) as ResultsShard;
 }
 
+/** Count calls through the coordinator's local edit boundary. */
+function countLocalEdits(coordinator: Coordinator): () => number {
+  const original = coordinator.edit.bind(coordinator);
+  let count = 0;
+  coordinator.edit = async (...args: Parameters<Coordinator['edit']>) => {
+    count += 1;
+    return original(...args);
+  };
+  return (): number => count;
+}
+
 /** True when some scored container above `path` forbids child detail. */
 function underNoChildDetail(w: Workout, path: { nodeId: string; iteration?: number }[]): boolean {
   for (let depth = 1; depth < path.length; depth += 1) {
@@ -295,6 +306,87 @@ describe('saveExerciseResult', () => {
 
     expect(kind).toBe('semantic_reference');
     expect(JSON.stringify(workingShard(coordinator))).toBe(before);
+  });
+});
+
+describe('moveExerciseResult and saveExerciseResults', () => {
+  test('moveExerciseResult removes the previous key and saves the replacement once', async () => {
+    const { service, coordinator, drive } = await makeEmptySetup();
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'cindy', iteration: 1 },
+      { nodeId: 'pushups' }
+    ];
+    const previousKey = exerciseResultKey(path, 'both', 1);
+    const nextKey = exerciseResultKey(path, 'both', 2);
+
+    await service.saveExerciseResult(SESSION_KEY, {
+      workoutId: WORKOUT_ID,
+      exerciseId: 'push-up',
+      executionPath: path,
+      status: 'completed',
+      values: { reps: { value: 5, unit: 'reps' } }
+    });
+    await coordinator.flush();
+
+    drive.calls.length = 0;
+    const editCount = countLocalEdits(coordinator);
+    await service.moveExerciseResult(SESSION_KEY, previousKey, {
+      workoutId: WORKOUT_ID,
+      exerciseId: 'push-up',
+      executionPath: path,
+      attempt: 2,
+      status: 'completed',
+      values: { reps: { value: 8, unit: 'reps' } }
+    });
+    await coordinator.flush();
+
+    const results = workingSession(coordinator).exerciseResults;
+    expect(results[previousKey]).toBeUndefined();
+    expect(results[nextKey]?.attempt).toBe(2);
+    expect(results[nextKey]?.values?.reps?.value).toBe(8);
+    expect(editCount()).toBe(1);
+    expect(drive.calls.filter((call: string): boolean => call.startsWith('updateFile'))).toHaveLength(1);
+  });
+
+  test('saveExerciseResults stores all drafts in one local edit and upload', async () => {
+    const { service, coordinator, drive } = await makeEmptySetup();
+    const pushPath = [
+      { nodeId: 'root' },
+      { nodeId: 'cindy', iteration: 1 },
+      { nodeId: 'pushups' }
+    ];
+    const sitPath = [
+      { nodeId: 'root' },
+      { nodeId: 'cindy', iteration: 1 },
+      { nodeId: 'situps' }
+    ];
+    drive.calls.length = 0;
+    const editCount = countLocalEdits(coordinator);
+
+    await service.saveExerciseResults(SESSION_KEY, [
+      {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'push-up',
+        executionPath: pushPath,
+        status: 'completed',
+        values: { reps: { value: 10, unit: 'reps' } }
+      },
+      {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'sit-up',
+        executionPath: sitPath,
+        status: 'completed',
+        values: { reps: { value: 15, unit: 'reps' } }
+      }
+    ]);
+    await coordinator.flush();
+
+    const results = workingSession(coordinator).exerciseResults;
+    expect(results[exerciseResultKey(pushPath, 'both', 1)]?.values?.reps?.value).toBe(10);
+    expect(results[exerciseResultKey(sitPath, 'both', 1)]?.values?.reps?.value).toBe(15);
+    expect(editCount()).toBe(1);
+    expect(drive.calls.filter((call: string): boolean => call.startsWith('updateFile'))).toHaveLength(1);
   });
 });
 
@@ -649,6 +741,24 @@ describe('complete and abandon', () => {
     const session = workingSession(coordinator);
     expect(session.status).toBe('abandoned');
     expect(typeof session.completedAtUtc).toBe('string');
+  });
+
+  test('a newly saved workout is immediately available to History', async () => {
+    const { service, lookup } = await makeSetup([]);
+    const session = await service.start(WORKOUT_ID);
+
+    expect(lookup.listAllSessions({ offset: 0, limit: 10 }).items.map((item) => item.id)).toEqual([
+      session.id
+    ]);
+    expect(lookup.listActiveSessions().map((item) => item.id)).toEqual([session.id]);
+
+    await service.complete(session.id);
+
+    const history = lookup.listAllSessions({ offset: 0, limit: 10 });
+    expect(history.items.map((item) => item.id)).toEqual([session.id]);
+    expect(history.items[0]?.status).toBe('completed');
+    expect(lookup.listActiveSessions()).toEqual([]);
+    expect(lookup.listRecentSessions().map((item) => item.id)).toEqual([session.id]);
   });
 });
 

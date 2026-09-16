@@ -62,6 +62,7 @@ import { createLocalStore as createLocalStoreDefault } from './storage/create-lo
 import type { LocalStore } from './storage/local-store';
 import {
   createCoordinator as createCoordinatorDefault,
+  DEFAULT_SYNC_DEBOUNCE_MS,
   type Coordinator,
   type SyncDeps
 } from './sync/sync-coordinator';
@@ -312,7 +313,11 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
       store,
       drive,
       staticData,
-      accountKey: session.accountKey
+      accountKey: session.accountKey,
+      debounceMaxMs: 2_000,
+      syncDebounceMs: DEFAULT_SYNC_DEBOUNCE_MS,
+      syncDebounceMaxMs: 30_000,
+      retryBaseDelayMs: 250
     });
   } catch (error: unknown) {
     reportError(toAppError(error, 'coordinator'));
@@ -376,10 +381,16 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
     onShardLoaded: (): void => {
       publishServices();
     }
-  }).catch((): void => {
-    // A catalog that will not list leaves the chooser showing workouts with no
-    // history. The startup error banner already carries the report.
-  });
+  })
+    .then(async (): Promise<void> => {
+      // A prior page can leave a durable delta after a network error. Retry it
+      // after the warm-up, even when the user makes no new edit this time.
+      await coordinator.syncAll();
+    })
+    .catch((): void => {
+      // A catalog that will not list leaves the chooser showing workouts with no
+      // history. The startup error banner already carries the report.
+    });
 
   return result;
 }
@@ -387,10 +398,9 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
 /**
  * Start the router and mount the shell.
  *
- * The router carries the coordinator flush ahead of each route change, so a
- * back navigation from an active workout cannot leave an edit unpersisted.
- * REQUIREMENTS 11.11. The wait covers the local flush; an upload already in
- * flight settles before the new route publishes.
+ * The router carries the local coordinator flush ahead of each route change.
+ * Back navigation cannot leave an edit only in memory. Drive synchronization
+ * continues in the background and never delays route publication.
  */
 function finishMount(
   ports: BootstrapPorts,
@@ -401,8 +411,11 @@ function finishMount(
 ): void {
   const router = createRouter({
     beforeRouteChange: async (): Promise<void> => {
-      if (coordinator === null) return;
-      await coordinator.flush();
+      if (result.sessionService !== null) {
+        await result.sessionService.queueFlush();
+        return;
+      }
+      if (coordinator !== null) await coordinator.flushLocal();
     }
   });
   result.router = router;

@@ -410,6 +410,14 @@ Save each edit to local storage before Drive synchronization. Debounce normal ed
 save on blur, and flush pending local edits on `pagehide`. The UI shows `Saving` while
 a local save runs. It shows `Saved` after the local save succeeds.
 
+The local queue has a 400 ms quiet period and a 2 second maximum delay. One drain
+applies all queued mutators for a logical file in one local transaction. Blur and route
+flushes wait for local storage only. `pagehide` starts the same local flush.
+
+Drive synchronization has a separate timer for each logical file. The timer has a 5
+second quiet period and a 30 second maximum delay. A new local write restarts the quiet
+period. If a write occurs during synchronization, one later synchronization handles it.
+
 One transactional `setMany` call writes the working document, its base copy, and its
 pending delta. A Drive error does not remove these local records.
 
@@ -430,8 +438,9 @@ Instead:
 2. Read the file back and confirm that the content matches what the client wrote.
 3. On a mismatch or an upload error, re-read the remote file, re-run the merge from a
    fresh base, and re-upload.
-4. Retry at most three times.
-5. After three failed attempts, show `Sync failed` and keep every pending local edit.
+4. Retry at most three times. Use exponential delay with jitter between attempts.
+5. Do not retry authentication, authorization, or storage-quota errors immediately.
+6. After three failed attempts, show `Sync failed` and keep every pending local edit.
    Discard nothing.
 
 REP JOT accepts the residual race between the final read-back and a simultaneous
