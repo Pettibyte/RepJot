@@ -34,8 +34,11 @@
   let {
     row,
     overrides = {},
+    fieldErrors = {},
+    missing = false,
     disabled = false,
     idPrefix = 'row',
+    status = undefined,
     side = undefined,
     startingSide = 'left',
     effortChoice = undefined,
@@ -54,9 +57,15 @@
     row: ActiveExerciseRow;
     /** Draft text per dimension, overriding the model's display value. */
     overrides?: Record<string, string>;
+    /** Inline validation messages keyed by dimension. */
+    fieldErrors?: Record<string, string>;
+    /** True when Finish found no completed result for this row. */
+    missing?: boolean;
     disabled?: boolean;
     /** Prefix for element ids, so two trees on one page stay addressable. */
     idPrefix?: string;
+    /** Draft status. Falls back to the stored row status. */
+    status?: ResultStatus;
     /** Draft side. Falls back to the side the row records. */
     side?: Side;
     /** Draft starting side for an alternating set. */
@@ -92,8 +101,11 @@
 
   const domId = (suffix: string): string => `${idPrefix}-${row.key}-${suffix}`;
 
+  /** The status the row shows now, draft first. */
+  const currentStatus = $derived(status ?? row.status);
+
   /** A reason code is only meaningful on a result that is not completed. */
-  const showReason = $derived(row.status !== 'completed');
+  const showReason = $derived(currentStatus !== 'completed');
 
   /** A row with no inputs still shows its name, so the tree stays readable. */
   const showInputs = $derived(row.recordable && row.fields.length > 0 && !row.unresolved);
@@ -112,13 +124,21 @@
   });
 </script>
 
-<div class="exercise-row" class:exercise-row--unresolved={row.unresolved}>
+<div
+  class="exercise-row"
+  class:exercise-row--unresolved={row.unresolved}
+  class:exercise-row--missing={missing}
+  id={domId('row')}
+  role="group"
+  aria-label={row.exerciseName}
+>
   {#if row.showCompactPath && row.compactPathLabel !== ''}
     <p class="exercise-row__path">{row.compactPathLabel}</p>
   {/if}
 
   <div class="exercise-row__head">
     <h4 class="exercise-row__name">{row.exerciseName}</h4>
+    {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
     <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
   </div>
 
@@ -142,6 +162,7 @@
             id={domId(field.dimension)}
             {disabled}
             value={display}
+            error={fieldErrors[field.dimension]}
             oninput={(event: Event) => {
               const target = event.target as HTMLInputElement;
               onfieldchange?.(field.dimension, target.value);
@@ -183,7 +204,7 @@
         class="exercise-row__select"
         id={domId('status')}
         {disabled}
-        value={row.status}
+        value={currentStatus}
         onchange={(event: Event) => {
           const target = event.target as HTMLSelectElement;
           onstatuschange?.(target.value as ResultStatus);

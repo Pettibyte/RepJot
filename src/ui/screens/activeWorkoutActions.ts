@@ -72,7 +72,7 @@ export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
     side: input.side ?? input.row.side,
     attempt: input.row.attempt,
     status,
-    values: draftRowValues(input.row.fields, input.overrides)
+    values: status === 'skipped' ? {} : draftRowValues(input.row.fields, input.overrides)
   };
   // A starting side belongs to an alternating set only. The validator
   // rejects the pair on any other side, so the guard drops the field rather
@@ -90,6 +90,17 @@ export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
   }
   if (status !== 'completed') draft.reasonCode = input.reasonCode ?? 'not_completed';
   return draft;
+}
+
+/** Validate an optional count field used by scored containers. */
+export function wholeCountError(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+    return 'Enter a whole number of 0 or more.';
+  }
+  return undefined;
 }
 
 /**

@@ -787,6 +787,20 @@
   border-left-width: calc(var(--border-weight) * 2);
 }
 
+.exercise-row--missing {
+  border-left-color: var(--color-primary);
+  border-left-width: calc(var(--border-weight) * 2);
+}
+
+.exercise-row__missing-label {
+  border: var(--border-weight) solid var(--color-primary);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  margin-right: var(--space-2);
+  padding: var(--space-1);
+}
+
 .exercise-row__path {
   color: var(--color-on-surface-variant);
   font-family: var(--font-data);
@@ -942,6 +956,25 @@
 
 .value-input__unit-hint {
   margin-left: var(--space-2);
+}
+
+.value-input__control[aria-invalid="true"],
+.container-score__field[aria-invalid="true"],
+.amrap-controls__field[aria-invalid="true"],
+.emom-controls__field[aria-invalid="true"] {
+  border-color: var(--color-error);
+  border-width: calc(var(--border-weight) * 2);
+}
+
+.value-input__error,
+.container-score__error,
+.amrap-controls__error,
+.emom-controls__error {
+  color: var(--color-error);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  margin-top: var(--space-1);
 }
 
 /* Unit pill ----------------------------------------------------------- */

@@ -68,8 +68,12 @@ import { resolveTree, isUnderNoChildDetail, type ResolvedNode } from './tree-res
 
 /** One item of prescribed work a session has not recorded as completed. */
 export interface MissingWorkItem {
-  /** `<workoutId>|<nodeId>` for the occurrence with the gap. */
+  /** `<workoutId>|<nodeId>` for the workout node with the gap. */
   nodeKey: string;
+  /** The matching Active Workout row key. */
+  rowKey: string;
+  /** Exercise name shown beside the missing-work reason. */
+  exerciseName: string;
   /** The path a person reads, for example `Strength / Complex / Round 2`. */
   compactPathLabel: string;
   /** Why the item counts as missing. */
@@ -118,8 +122,8 @@ export interface SessionService {
   reportMissingWork(sessionId: string): Promise<MissingWorkReport>;
   /** Debounced `saveExerciseResult`. */
   queueSaveExerciseResult(sessionId: string, draft: ExerciseResultDraft): void;
-  /** Debounced removal of one exercise result. */
-  queueClearExerciseResult(sessionId: string, key: string): void;
+  /** Debounced removal of one exercise result. `path` also cancels an earlier queued new result. */
+  queueClearExerciseResult(sessionId: string, key: string, path?: PathSegment[]): void;
   /** Debounced `setContainerScore`. */
   queueSetContainerScore(sessionId: string, draft: ContainerResultDraft): void;
   /** Debounced removal of one container result. */
@@ -1012,14 +1016,24 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       const nodeKey = `${workout.id}|${node.node.id}`;
       const bucket = recorded.get(encodePath(node.path));
 
+      const exerciseName =
+        staticData.exerciseById.get(node.node.exerciseId)?.name ?? node.node.exerciseId;
       if (bucket === undefined || bucket.length === 0) {
-        items.push({ nodeKey, compactPathLabel: node.compactPathLabel, reason: 'no_result' });
+        items.push({
+          nodeKey,
+          rowKey: `${workout.id}|${encodePath(node.path)}|both|1`,
+          exerciseName,
+          compactPathLabel: node.compactPathLabel,
+          reason: 'no_result'
+        });
         continue;
       }
       for (const result of bucket) {
         if (result.status === 'completed') continue;
         items.push({
           nodeKey,
+          rowKey: `${workout.id}|${encodePath(node.path)}|${result.side ?? 'both'}|${result.attempt ?? 1}`,
+          exerciseName,
           compactPathLabel: node.compactPathLabel,
           reason: result.status === 'skipped' ? 'skipped' : 'incomplete'
         });
@@ -1043,14 +1057,20 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     });
   }
 
-  function queueClearExerciseResult(sessionId: string, key: string): void {
+  function queueClearExerciseResult(
+    sessionId: string,
+    key: string,
+    path?: PathSegment[]
+  ): void {
     const session = peekSession(sessionId);
-    const existing = session?.exerciseResults[key];
-    if (session === null || existing === undefined) return;
+    if (session === null) return;
+    const existing = session.exerciseResults[key];
+    const affectedPath = existing?.executionPath ?? path;
+    if (existing === undefined && affectedPath === undefined) return;
     const workout = workoutFor(session);
     queueEdit(sessionId, (next: Session): void => {
       delete next.exerciseResults[key];
-      rescoreAncestors(next, workout, existing.executionPath);
+      if (affectedPath !== undefined) rescoreAncestors(next, workout, affectedPath);
     });
   }
 
@@ -1078,8 +1098,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   }
 
   function queueClearContainerResult(sessionId: string, key: string): void {
-    const session = peekSession(sessionId);
-    if (session?.containerResults[key] === undefined) return;
+    if (peekSession(sessionId) === null) return;
+    // Always queue the delete. It can cancel a valid value queued by an earlier
+    // keystroke even when that value is not durable yet.
     queueEdit(sessionId, (next: Session): void => {
       delete next.containerResults[key];
     });

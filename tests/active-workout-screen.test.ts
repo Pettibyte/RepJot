@@ -253,7 +253,13 @@ describe('amrapPartialScore', () => {
 
 describe('finishPlan', () => {
   const gaps: MissingWorkItem[] = [
-    { nodeKey: 'w|a', compactPathLabel: 'Round 2', reason: 'no_result' }
+    {
+      nodeKey: 'w|a',
+      rowKey: 'w|root/a:2|both|1',
+      exerciseName: 'Back Squat',
+      compactPathLabel: 'Round 2',
+      reason: 'no_result'
+    }
   ];
 
   test('no gaps means the plain Finish button is live', () => {

@@ -24,6 +24,9 @@
     disabled = false,
     busy = false,
     rowOverrides = {},
+    rowFieldErrors = {},
+    missingRowKeys = [],
+    statusDrafts = {},
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
@@ -45,6 +48,12 @@
     busy?: boolean;
     /** Draft field text, keyed by row key then by dimension. */
     rowOverrides?: Record<string, Record<string, string>>;
+    /** Validation messages, keyed by row key then by dimension. */
+    rowFieldErrors?: Record<string, Record<string, string>>;
+    /** Rows that the last Finish check found not recorded. */
+    missingRowKeys?: string[];
+    /** Draft status, keyed by row key. */
+    statusDrafts?: Record<string, ResultStatus>;
     /** Draft side, keyed by row key. */
     sideDrafts?: Record<string, Side>;
     /** Draft starting side, keyed by row key. */
@@ -93,6 +102,9 @@
         <ExerciseRow
           row={block.row}
           overrides={overridesFor(block.row.key)}
+          fieldErrors={rowFieldErrors[block.row.key] ?? {}}
+          missing={missingRowKeys.includes(block.row.key)}
+          status={statusDrafts[block.row.key]}
           side={sideDrafts[block.row.key]}
           startingSide={startingSideDrafts[block.row.key] ?? 'left'}
           effortChoice={effortDrafts[block.row.key]}

@@ -9,7 +9,13 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import ExerciseUnitsSection from '../../src/ui/components/ExerciseUnitsSection.svelte';
+import ActiveWorkoutScreen from '../../src/ui/screens/ActiveWorkoutScreen.svelte';
 import type { Exercise } from '../../src/domain/types';
+import { createLookupService } from '../../src/indexes/lookup-service';
+import { createSessionService } from '../../src/sessions/session-service';
+import { setServices } from '../../src/services/registry';
+import { SESSION_KEY, validShard } from '../fixtures/semantic';
+import { SHARD_NAME } from '../fixtures/sync';
 import {
   drainTimers,
   mountTo,
@@ -109,6 +115,45 @@ describe('the unit pill updates on tap', () => {
       expect(firstPill(target).textContent?.trim()).toBe(expected);
       expect(harness.preferences.getUnit('back-squat', 'weight')).toBe(expected);
     }
+  });
+});
+
+describe('the Active Workout unit pill', () => {
+  test('changes the pill and number together on every tap', async () => {
+    const shard = validShard();
+    harness = await signIn([
+      { name: 'preferences.json', text: prefsDoc() },
+      { name: SHARD_NAME, text: JSON.stringify(shard) }
+    ]);
+    await harness.coordinator.ensureLoaded(SHARD_NAME);
+
+    const lookup = createLookupService({ staticData: harness.staticData, shards: [shard] });
+    const sessionService = createSessionService({
+      coordinator: harness.coordinator,
+      staticData: harness.staticData,
+      preferences: harness.preferences,
+      lookup
+    });
+    setServices({ lookup, sessionService });
+
+    const { target } = mountTo(ActiveWorkoutScreen, { sessionId: SESSION_KEY });
+    await settle(12);
+
+    const pill = firstPill(target);
+    const input = pill.closest('.value-input')?.querySelector('input') as HTMLInputElement | null;
+    expect(pill.textContent?.trim()).toBe('lb');
+    expect(input).not.toBeNull();
+    const pounds = input?.value ?? '';
+
+    tap(pill);
+    await settle(12);
+    expect(firstPill(target).textContent?.trim()).toBe('kg');
+    expect(input?.value).not.toBe(pounds);
+
+    tap(firstPill(target));
+    await settle(12);
+    expect(firstPill(target).textContent?.trim()).toBe('lb');
+    expect(input?.value).toBe(pounds);
   });
 });
 

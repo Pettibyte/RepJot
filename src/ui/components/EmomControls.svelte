@@ -22,6 +22,7 @@
     group,
     completed = '',
     disabled = false,
+    error = undefined,
     onchange = undefined,
     onblur = undefined
   }: {
@@ -30,6 +31,7 @@
     /** Completed interval count, as typed text. */
     completed?: string;
     disabled?: boolean;
+    error?: string;
     onchange?: ((event: Event) => void) | undefined;
     onblur?: ((event: FocusEvent) => void) | undefined;
   } = $props();
@@ -53,7 +55,12 @@
     value={completed}
     oninput={onchange}
     onblur={onblur}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={error ? `${group.key}-intervals-error` : undefined}
   />
+  {#if error}
+    <p class="emom-controls__error" id={`${group.key}-intervals-error`} aria-live="polite">{error}</p>
+  {/if}
   {#if readOnly}
     <p class="emom-controls__note">Set by the recorded detail below.</p>
   {/if}

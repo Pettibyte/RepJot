@@ -435,29 +435,23 @@ describe('V-3 round trip: Last Time skips the session under edit', () => {
   });
 });
 
-describe('V-4 round trip: the reps field shows the prescribed target', () => {
-  test('all three RepsPrescription shapes fill the reps field', async () => {
-    const cases: Array<{ name: string; reps: import('../src/domain/types').RepsPrescription; want: string }> = [
-      { name: 'plain number', reps: 8, want: '8' },
-      { name: 'approximate target', reps: { target: 12, qualifier: 'approximate' }, want: '12' },
-      { name: 'range', reps: { min: 6, max: 10 }, want: '6' }
+describe('V-4 round trip: prescriptions stay out of actual-work fields', () => {
+  test('all three RepsPrescription shapes leave an unsaved reps field blank', async () => {
+    const cases: import('../src/domain/types').RepsPrescription[] = [
+      8,
+      { target: 12, qualifier: 'approximate' },
+      { min: 6, max: 10 }
     ];
 
-    for (const entry of cases) {
-      const workoutTree = singleExerciseWorkout('push-up', 'set', { reps: entry.reps });
+    for (const repsPrescription of cases) {
+      const workoutTree = singleExerciseWorkout('push-up', 'set', { reps: repsPrescription });
       const screen = await makeScreen({ workout: workoutTree, session: openSession() });
-      const reps = screen.rowByNode('set').fields.find((field) => field.dimension === 'reps');
-      // The field is not blank, so the user sees the target above the keys.
-      expect(reps?.value).toBe(entry.want);
+      const row = screen.rowByNode('set');
+      const reps = row.fields.find((field) => field.dimension === 'reps');
+      expect(reps?.value).toBe('');
       expect(reps?.stored).toBe(false);
+      expect(row.prescriptionText).toContain('reps');
     }
-  });
-
-  test('a reps range reads its low end, the same rule scoring uses', async () => {
-    const workoutTree = singleExerciseWorkout('push-up', 'set', { reps: { min: 5, max: 9 } });
-    const screen = await makeScreen({ workout: workoutTree, session: openSession() });
-    const reps = screen.rowByNode('set').fields.find((field) => field.dimension === 'reps');
-    expect(reps?.value).toBe('5');
   });
 });
 

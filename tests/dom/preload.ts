@@ -38,9 +38,9 @@ const g: any = globalThis;
 // than silently reading a Node global.
 const DOM_GLOBALS: string[] = [
   'window', 'document', 'navigator', 'Node', 'Element', 'Text', 'Comment',
-  'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'DocumentFragment',
+  'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'MutationObserver', 'DocumentFragment',
   'SVGElement', 'HTMLElement', 'HTMLAnchorElement', 'HTMLButtonElement',
-  'HTMLInputElement', 'HTMLSelectElement', 'HTMLTextAreaElement',
+  'HTMLInputElement', 'HTMLMediaElement', 'HTMLSelectElement', 'HTMLTextAreaElement',
   'HTMLFormElement', 'HTMLTemplateElement', 'requestAnimationFrame',
   'cancelAnimationFrame', 'getComputedStyle', 'DOMParser', 'XMLSerializer'
 ];

@@ -12,6 +12,7 @@ import {
   convertFieldDisplay,
   draftRowValues,
   fieldDisplay,
+  fieldInputError,
   parseFieldValue,
   tapUnitPill
 } from '../src/ui/viewmodels/activeWorkoutModel';
@@ -135,7 +136,7 @@ describe('buildActiveWorkoutModel fields', () => {
     expect(row.fields.map((field) => field.dimension)).toEqual(['reps', 'weight']);
   });
 
-  test('the field shows the preferred unit and the prescription default', () => {
+  test('an unsaved field is blank while keeping the preferred unit', () => {
     const h = harness();
     const model = buildActiveWorkoutModel({
       workout: h.workout,
@@ -149,9 +150,8 @@ describe('buildActiveWorkoutModel fields', () => {
       (field) => field.dimension === 'weight'
     );
     expect(weight?.unit).toBe('lb');
-    // The prescription is 60 lb and nothing is recorded, so the shown text is
-    // the default, not a saved value.
-    expect(weight?.value).toBe('60');
+    // The prescription remains guidance above the controls. It is not actual work.
+    expect(weight?.value).toBe('');
     expect(weight?.stored).toBe(false);
   });
 
@@ -540,9 +540,13 @@ describe('field parsing', () => {
     expect(parseFieldValue(field, '0')).toEqual({ value: 0, unit: 'lb' });
   });
 
-  test('a reps field rounds to a whole number', () => {
+  test('invalid and fractional values are rejected with field-specific messages', () => {
     const reps = { ...field, dimension: 'reps' as const, unit: 'reps', step: 1 };
-    expect(parseFieldValue(reps, '8.6')).toEqual({ value: 9, unit: 'reps' });
+    expect(parseFieldValue(reps, '8.6')).toBeNull();
+    expect(fieldInputError(reps, '8.6')).toContain('whole number');
+    expect(fieldInputError(field, '-1')).toContain('0 or more');
+    expect(fieldInputError(field, 'not-a-number')).toContain('0 or more');
+    expect(fieldInputError(field, '')).toBeUndefined();
   });
 
   test('draftRowValues skips blanks and keeps the field unit', () => {

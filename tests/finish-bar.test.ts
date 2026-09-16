@@ -11,11 +11,15 @@ function missing(): MissingWorkItem[] {
   return [
     {
       nodeKey: 'w|back-squat-set',
+      rowKey: 'w|root/sets:2/back-squat-set|both|1',
+      exerciseName: 'Back Squat',
       compactPathLabel: 'Strength / Sets / Round 2',
       reason: 'no_result'
     },
     {
       nodeKey: 'w|bench-set',
+      rowKey: 'w|root/bench:1/bench-set|both|1',
+      exerciseName: 'Bench Press',
       compactPathLabel: 'Strength / Bench / Round 1',
       reason: 'incomplete'
     }
@@ -45,7 +49,7 @@ describe('FinishWorkoutBar', () => {
 
     expect(html).toContain('Strength / Sets / Round 2');
     expect(html).toContain('Strength / Bench / Round 1');
-    expect(html).toContain('2 items are not recorded');
+    expect(html).toContain('2 items need attention');
   });
 
   test('one missing item reads as singular', () => {
@@ -53,7 +57,7 @@ describe('FinishWorkoutBar', () => {
       missing: [missing()[0]],
       promptOpen: true
     });
-    expect(html).toContain('1 item is not recorded');
+    expect(html).toContain('1 item needs attention');
   });
 
   test('the prompt warns that gaps are kept', () => {
@@ -75,19 +79,25 @@ describe('FinishWorkoutBar', () => {
     }
   });
 
-  test('an empty path label still reads as the workout', () => {
+  test('an empty path label still names the exercise', () => {
     const html = renderHtml(FinishWorkoutBar, {
-      missing: [{ nodeKey: 'w|root', compactPathLabel: '', reason: 'no_result' }],
+      missing: [{
+        nodeKey: 'w|root',
+        rowKey: 'w|root|both|1',
+        exerciseName: 'Back Squat',
+        compactPathLabel: '',
+        reason: 'no_result'
+      }],
       promptOpen: true
     });
-    expect(html).toContain('Workout');
+    expect(html).toContain('Back Squat');
   });
 
   test('a closed bar with missing work shows no prompt', () => {
     // The prompt only appears after the user presses Finish. A bar that
     // warned on every render would nag.
     const html = renderHtml(FinishWorkoutBar, { missing: missing(), promptOpen: false });
-    expect(html).not.toContain('not recorded');
+    expect(html).not.toContain('need attention');
     expect(html).toContain('Finish Workout');
   });
 });

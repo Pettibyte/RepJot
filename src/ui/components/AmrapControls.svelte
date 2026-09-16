@@ -27,6 +27,7 @@
     additionalReps = '',
     disabled = false,
     busy = false,
+    error = undefined,
     onaddround = undefined,
     onpartialchange = undefined,
     onpartialblur = undefined
@@ -38,6 +39,7 @@
     disabled?: boolean;
     /** True while an add is in flight, so a double tap cannot add two rounds. */
     busy?: boolean;
+    error?: string;
     onaddround?: (() => void) | undefined;
     onpartialchange?: ((event: Event) => void) | undefined;
     onpartialblur?: ((event: FocusEvent) => void) | undefined;
@@ -88,7 +90,12 @@
         value={additionalReps}
         oninput={onpartialchange}
         onblur={onpartialblur}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={error ? `${group.key}-partial-error` : undefined}
       />
+      {#if error}
+        <p class="amrap-controls__error" id={`${group.key}-partial-error`} aria-live="polite">{error}</p>
+      {/if}
     </div>
   {/if}
 </div>

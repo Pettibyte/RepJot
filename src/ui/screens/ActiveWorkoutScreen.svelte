@@ -32,6 +32,7 @@
   finish bar, because a terminal status cannot be written twice.
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '../components/Button.svelte';
   import WorkoutTreeEditable from '../components/WorkoutTreeEditable.svelte';
   import AmrapControls from '../components/AmrapControls.svelte';
@@ -39,12 +40,12 @@
   import ContainerScoreEditor from '../components/ContainerScoreEditor.svelte';
   import AggregateExpander from '../components/AggregateExpander.svelte';
   import FinishWorkoutBar from '../components/FinishWorkoutBar.svelte';
-  import { services } from '../../services/registry';
+  import { publishServices, services } from '../../services/registry';
   import { getRouter } from '../../routing/router-registry';
   import {
     buildActiveWorkoutModel,
-    draftRowValues,
     fieldDisplay,
+    fieldInputError,
     tapUnitPill,
     type ActiveExerciseRow,
     type ActiveWorkoutModel,
@@ -60,7 +61,8 @@
     effortFromChoice,
     finishPlan,
     scoreFromText,
-    terminalActionsAllowed
+    terminalActionsAllowed,
+    wholeCountError
   } from './activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
   import { containerResultKey, type PathSegment } from '../../domain/execution-path';
@@ -76,6 +78,10 @@
 
   /** Draft field text, keyed by row key then by dimension. */
   let overrides = $state<Record<string, Record<string, string>>>({});
+  /** Inline field errors, keyed by row key then by dimension. */
+  let fieldErrors = $state<Record<string, Record<string, string>>>({});
+  /** Inline scored-container errors, keyed by group key. */
+  let containerErrors = $state<Record<string, string>>({});
   /** Draft status keyed by row key. Absent means the model's status. */
   let statusDrafts = $state<Record<string, ResultStatus>>({});
   /** Draft reason code keyed by row key. */
@@ -125,16 +131,13 @@
 
   /** What the finish bar shows right now. */
   const finish = $derived(finishPlan(missingItems, promptOpen));
+  const missingRowKeys = $derived(missingItems.map((item) => item.rowKey));
 
   const sessionService = $derived($services.sessionService);
 
   /** Draft text for one row, keyed by dimension. */
   function overridesFor(row: ActiveExerciseRow): Record<string, string> {
     return overrides[row.key] ?? {};
-  }
-
-  function statusFor(row: ActiveExerciseRow): ResultStatus {
-    return statusDrafts[row.key] ?? row.status;
   }
 
   function reasonFor(row: ActiveExerciseRow): ReasonCode | undefined {
@@ -187,15 +190,13 @@
     if (service === null || session === null || row.resultKey === null) return;
     const draft = draftForRow(row);
     if (isBlankExerciseDraft(draft)) {
-      if (row.hasSavedResult) {
-        service.queueClearExerciseResult(session.id, row.resultKey);
-        const targetId = session.id;
-        void service.queueFlush().then(async () => {
-          session = await service.load(targetId);
-        }).catch((error: unknown) => {
-          errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-        });
-      }
+      service.queueClearExerciseResult(session.id, row.resultKey, row.path);
+      const targetId = session.id;
+      void service.queueFlush().then(async () => {
+        session = await service.load(targetId);
+      }).catch((error: unknown) => {
+        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
+      });
       return;
     }
     service.queueSaveExerciseResult(session.id, draft);
@@ -210,21 +211,48 @@
       });
   }
 
+  function validateRow(row: ActiveExerciseRow): boolean {
+    const next: Record<string, string> = {};
+    const rowOverrides = overridesFor(row);
+    for (const field of row.fields) {
+      if (!Object.prototype.hasOwnProperty.call(rowOverrides, field.dimension)) continue;
+      const message = fieldInputError(field, rowOverrides[field.dimension] ?? '');
+      if (message !== undefined) next[field.dimension] = message;
+    }
+    if (Object.keys(next).length === 0) delete fieldErrors[row.key];
+    else fieldErrors[row.key] = next;
+    return Object.keys(next).length === 0;
+  }
+
+  function restoreRowAfterInvalid(row: ActiveExerciseRow): void {
+    const service = sessionService;
+    if (service === null || session === null || row.resultKey === null) return;
+    if (row.hasSavedResult) {
+      service.queueSaveExerciseResult(
+        session.id,
+        buildRowDraft({ workoutId: session.workoutId, row, overrides: {} })
+      );
+    } else {
+      service.queueClearExerciseResult(session.id, row.resultKey, row.path);
+    }
+  }
+
   function onFieldChange(rowKey: string, dimension: string, value: string): void {
     const forRow = overrides[rowKey] ?? {};
     forRow[dimension] = value;
     overrides[rowKey] = forRow;
 
-    // Queue the complete row while the field is still focused. The quiet
-    // timer keeps normal typing cheap, and pagehide can now flush a value
-    // even when Silk does not dispatch blur first.
     const service = sessionService;
     const row = rowsByKey.get(rowKey);
     if (service === null || session === null || row === undefined) return;
+    if (!validateRow(row)) {
+      restoreRowAfterInvalid(row);
+      return;
+    }
     const draft = draftForRow(row);
     if (isBlankExerciseDraft(draft)) {
-      if (row.hasSavedResult && row.resultKey !== null) {
-        service.queueClearExerciseResult(session.id, row.resultKey);
+      if (row.resultKey !== null) {
+        service.queueClearExerciseResult(session.id, row.resultKey, row.path);
       }
       return;
     }
@@ -233,7 +261,7 @@
 
   function onFieldBlur(rowKey: string): void {
     const row = rowsByKey.get(rowKey);
-    if (row === undefined) return;
+    if (row === undefined || !validateRow(row)) return;
     queueAndFlush(row);
   }
 
@@ -350,6 +378,12 @@
 
     const exercise = $services.staticData?.exerciseById.get(row.exerciseId);
     const display = fieldDisplay(field, overridesFor(row));
+    const message = fieldInputError(field, display);
+    if (message !== undefined) {
+      fieldErrors[rowKey] = { ...(fieldErrors[rowKey] ?? {}), [dimension]: message };
+      await focusById(`active-${row.key}-${dimension}`);
+      return;
+    }
     const result = await tapUnitPill({
       exercise,
       dimension: field.dimension,
@@ -361,6 +395,13 @@
     const forRow = overrides[rowKey] ?? {};
     forRow[field.dimension] = result.display;
     overrides[rowKey] = forRow;
+
+    // PreferenceService keeps its working document outside Svelte state. Tell
+    // the registry that the existing service changed so `model` rebuilds with
+    // the new unit. Without this, only the number changes and the pill keeps
+    // the old label; another tap then converts the number a second time from
+    // that stale unit.
+    publishServices();
   }
 
   /** The container result key for one group, as the session stores it. */
@@ -427,10 +468,40 @@
     }
   }
 
+  function validateContainer(group: GroupModel, text: string): boolean {
+    const message = wholeCountError(text);
+    if (message === undefined) delete containerErrors[group.key];
+    else containerErrors[group.key] = message;
+    return message === undefined;
+  }
+
+  function restoreContainerAfterInvalid(group: GroupModel): void {
+    const service = sessionService;
+    if (service === null || session === null) return;
+    if (group.score !== undefined) {
+      service.queueSetContainerScore(session.id, {
+        workoutId: session.workoutId,
+        executionPath: group.storedPath,
+        status: 'completed',
+        score: group.score
+      });
+    } else {
+      service.queueClearContainerResult(session.id, containerKeyFor(group));
+    }
+  }
+
   /** Queue a typed container score while its field is focused. */
   function queueContainerScore(group: GroupModel, text: string): void {
     const service = sessionService;
-    if (service === null || session === null || group.scoreType === undefined) return;
+    if (
+      service === null ||
+      session === null ||
+      group.scoreType === undefined
+    ) return;
+    if (!validateContainer(group, text)) {
+      restoreContainerAfterInvalid(group);
+      return;
+    }
     const trimmed = text.trim();
     if (trimmed === '') {
       service.queueClearContainerResult(session.id, containerKeyFor(group));
@@ -451,7 +522,12 @@
   /** Save a typed container score. */
   async function saveContainerScore(group: GroupModel, text: string): Promise<void> {
     const service = sessionService;
-    if (service === null || session === null || group.scoreType === undefined) return;
+    if (
+      service === null ||
+      session === null ||
+      group.scoreType === undefined ||
+      !validateContainer(group, text)
+    ) return;
     queueContainerScore(group, text);
     try {
       await service.queueFlush();
@@ -464,7 +540,15 @@
   /** Queue AMRAP extra reps while the field is focused. */
   function queueAmrapPartial(group: GroupModel, text: string): void {
     const service = sessionService;
-    if (service === null || session === null || group.scoreType !== 'rounds_and_reps') return;
+    if (
+      service === null ||
+      session === null ||
+      group.scoreType !== 'rounds_and_reps'
+    ) return;
+    if (!validateContainer(group, text)) {
+      restoreContainerAfterInvalid(group);
+      return;
+    }
     const trimmed = text.trim();
     if (trimmed === '') {
       service.queueClearContainerResult(session.id, containerKeyFor(group));
@@ -483,7 +567,12 @@
   /** Save the AMRAP extra-reps field. */
   async function saveAmrapPartial(group: GroupModel, text: string): Promise<void> {
     const service = sessionService;
-    if (service === null || session === null || group.scoreType !== 'rounds_and_reps') return;
+    if (
+      service === null ||
+      session === null ||
+      group.scoreType !== 'rounds_and_reps' ||
+      !validateContainer(group, text)
+    ) return;
     queueAmrapPartial(group, text);
     try {
       await service.queueFlush();
@@ -491,6 +580,56 @@
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not save that score.';
     }
+  }
+
+  function containerInputId(group: GroupModel): string {
+    if (group.isAmrap) return `${group.key}-partial`;
+    if (group.isEmom) return `${group.key}-intervals`;
+    return `${group.key}-score`;
+  }
+
+  async function focusById(id: string): Promise<void> {
+    await tick();
+    const target = document.getElementById(id);
+    target?.scrollIntoView?.({ block: 'center' });
+    target?.focus();
+  }
+
+  async function focusMissingRow(rowKey: string): Promise<void> {
+    await tick();
+    const row = document.getElementById(`active-${rowKey}-row`);
+    const target = row?.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled)') ?? row;
+    target?.scrollIntoView?.({ block: 'center' });
+    target?.focus();
+  }
+
+  async function validateBeforeFinish(): Promise<boolean> {
+    let firstInvalidId = '';
+    for (const row of model?.rows ?? []) {
+      if (!validateRow(row) && firstInvalidId === '') {
+        const dimension = row.fields.find(
+          (field) => fieldErrors[row.key]?.[field.dimension] !== undefined
+        )?.dimension;
+        if (dimension !== undefined) firstInvalidId = `active-${row.key}-${dimension}`;
+      }
+    }
+    for (const group of model?.groups ?? []) {
+      let text: string | undefined;
+      if (group.isAmrap && Object.prototype.hasOwnProperty.call(amrapPartialDrafts, group.key)) {
+        text = amrapPartialDrafts[group.key];
+      } else if (group.isEmom && Object.prototype.hasOwnProperty.call(emomDrafts, group.key)) {
+        text = emomDrafts[group.key];
+      } else if (Object.prototype.hasOwnProperty.call(containerDrafts, group.key)) {
+        text = containerDrafts[group.key];
+      }
+      if (text !== undefined && !validateContainer(group, text) && firstInvalidId === '') {
+        firstInvalidId = containerInputId(group);
+      }
+    }
+    if (firstInvalidId === '') return true;
+    errorText = 'Correct the highlighted value before you finish the workout.';
+    await focusById(firstInvalidId);
+    return false;
   }
 
   /**
@@ -503,6 +642,7 @@
   async function finishWorkout(): Promise<void> {
     const service = sessionService;
     if (service === null || session === null || busy) return;
+    if (!(await validateBeforeFinish())) return;
     busy = true;
     try {
       await service.queueFlush();
@@ -525,6 +665,7 @@
   async function finishIncomplete(): Promise<void> {
     const service = sessionService;
     if (service === null || session === null || busy) return;
+    if (!(await validateBeforeFinish())) return;
     busy = true;
     promptOpen = false;
     try {
@@ -595,6 +736,9 @@
       blocks={model.blocks}
       idPrefix="active"
       rowOverrides={overrides}
+      rowFieldErrors={fieldErrors}
+      {missingRowKeys}
+      {statusDrafts}
       {sideDrafts}
       {startingSideDrafts}
       {effortDrafts}
@@ -621,6 +765,7 @@
               additionalReps={amrapPartialDrafts[group.key] ?? ''}
               disabled={sessionService === null}
               {busy}
+              error={containerErrors[group.key]}
               onaddround={() => void addAmrapRound(group)}
               onpartialchange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
@@ -637,6 +782,7 @@
               {group}
               completed={emomDrafts[group.key] ?? ''}
               disabled={sessionService === null}
+              error={containerErrors[group.key]}
               onchange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
                 emomDrafts[group.key] = target.value;
@@ -652,6 +798,7 @@
               {group}
               scoreText={containerDrafts[group.key] ?? ''}
               disabled={sessionService === null}
+              error={containerErrors[group.key]}
               onscorechange={(event: Event) => {
                 const target = event.target as HTMLInputElement;
                 containerDrafts[group.key] = target.value;
@@ -696,6 +843,8 @@
         onFinish={() => void finishWorkout()}
         onReturn={() => {
           promptOpen = false;
+          const first = missingItems[0];
+          if (first !== undefined) void focusMissingRow(first.rowKey);
         }}
         onFinishIncomplete={() => void finishIncomplete()}
         onAbandon={() => void abandonWorkout()}

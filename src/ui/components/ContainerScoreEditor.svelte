@@ -24,6 +24,7 @@
     group,
     scoreText = '',
     disabled = false,
+    error = undefined,
     onscorechange = undefined,
     onscoreblur = undefined
   }: {
@@ -32,6 +33,7 @@
     /** The score text. Its shape follows the container's score type. */
     scoreText?: string;
     disabled?: boolean;
+    error?: string;
     onscorechange?: ((event: Event) => void) | undefined;
     onscoreblur?: ((event: FocusEvent) => void) | undefined;
   } = $props();
@@ -63,7 +65,12 @@
     value={scoreText}
     oninput={onscorechange}
     onblur={onscoreblur}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={error ? `${group.key}-score-error` : undefined}
   />
+  {#if error}
+    <p class="container-score__error" id={`${group.key}-score-error`} aria-live="polite">{error}</p>
+  {/if}
   {#if readOnly}
     <p class="container-score__note">Set by the recorded detail below.</p>
   {/if}

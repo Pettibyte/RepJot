@@ -26,6 +26,7 @@
     id = undefined,
     disabled = false,
     pillLabel = undefined,
+    error = undefined,
     oninput = undefined,
     onblur = undefined,
     onunit = undefined
@@ -38,6 +39,8 @@
     disabled?: boolean;
     /** Accessible name for the unit pill. */
     pillLabel?: string;
+    /** Validation message for nonblank invalid text. */
+    error?: string;
     /**
      * Runs on every keystroke. The caller stores the draft text.
      *
@@ -52,9 +55,15 @@
   } = $props();
 
   const pillShown = $derived(field.compatibleUnits.length > 1);
+  const errorId = $derived(`${id ?? field.dimension}-error`);
+  const describedBy = $derived(
+    [pillShown ? `${id ?? field.dimension}-unit` : '', error ? errorId : '']
+      .filter(Boolean)
+      .join(' ') || undefined
+  );
 </script>
 
-<div class="value-input">
+<div class="value-input" class:value-input--invalid={error !== undefined}>
   <label class="value-input__label" for={id}>{field.label}</label>
   <div class="value-input__row">
     <input
@@ -67,7 +76,8 @@
       bind:value
       {oninput}
       {onblur}
-      aria-describedby={pillShown ? `${id ?? field.dimension}-unit` : undefined}
+      aria-invalid={error ? 'true' : undefined}
+      aria-describedby={describedBy}
     />
     <span id={`${id ?? field.dimension}-unit`} class="value-input__unit-hint">
       <UnitPill
@@ -79,4 +89,7 @@
       />
     </span>
   </div>
+  {#if error}
+    <p class="value-input__error" id={errorId} aria-live="polite">{error}</p>
+  {/if}
 </div>

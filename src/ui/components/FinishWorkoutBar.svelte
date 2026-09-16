@@ -45,21 +45,27 @@
   } = $props();
 
   const hasMissing = $derived(missing.length > 0);
+
+  const reasonLabel: Record<MissingWorkItem['reason'], string> = {
+    no_result: 'No result recorded',
+    incomplete: 'Marked incomplete',
+    skipped: 'Skipped'
+  };
 </script>
 
 <div class="finish-bar">
   {#if promptOpen && hasMissing}
     <div class="finish-bar__prompt" role="alert">
       <h3 class="finish-bar__prompt-title">
-        {missing.length} {missing.length === 1 ? 'item is' : 'items are'} not recorded
+        {missing.length} {missing.length === 1 ? 'item needs' : 'items need'} attention
       </h3>
       <ul class="finish-bar__list">
         {#each missing as item, index (`missing-${index}`)}
           <li class="finish-bar__item">
             <span class="finish-bar__item-path">
-              {item.compactPathLabel === '' ? 'Workout' : item.compactPathLabel}
+              {item.compactPathLabel === '' ? item.exerciseName : `${item.compactPathLabel} / ${item.exerciseName}`}
             </span>
-            <span class="finish-bar__item-reason">{item.reason}</span>
+            <span class="finish-bar__item-reason">— {reasonLabel[item.reason]}</span>
           </li>
         {/each}
       </ul>

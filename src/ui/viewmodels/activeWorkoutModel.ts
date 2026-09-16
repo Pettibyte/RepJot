@@ -127,8 +127,8 @@ export interface FieldModel {
   /**
    * True when a saved result carries this value.
    *
-   * False means the shown text is the prescription default, not recorded work.
-   * The screen uses it to keep a default from reading as a saved value.
+   * False means the field is blank because no actual work is recorded.
+   * The prescription stays on its separate guidance line.
    * REQUIREMENTS 10.16, 11.1.
    */
   stored: boolean;
@@ -338,40 +338,6 @@ export function prescribedRepsValue(reps: RepsPrescription | undefined): number 
   return undefined;
 }
 
-/**
- * The prescribed reps for one row, as the display string.
- *
- * Reps never convert: the unit is always `reps`. The value is read from the
- * three `RepsPrescription` shapes and rounded to the reps step.
- */
-function prescribedRepsText(reps: RepsPrescription | undefined, step: number): string {
-  const value = prescribedRepsValue(reps);
-  if (value === undefined) return '';
-  return formatStep(value, step);
-}
-
-/**
- * The prescribed quantity for one measured dimension, as the display string.
- *
- * The value is converted to the preferred unit before it is shown. Reps do
- * not come through here; they have no unit to convert.
- */
-function prescribedText(
-  quantity: Quantity | undefined,
-  preferredUnit: string | undefined,
-  step: number
-): string {
-  if (quantity === undefined || preferredUnit === undefined) return '';
-  try {
-    const converted = convert(quantity, preferredUnit);
-    return formatStep(converted.value, step);
-  } catch {
-    // A prescription the conversion table cannot read is a data fault, not a
-    // screen fault. Show nothing rather than a wrong number.
-    return '';
-  }
-}
-
 /** The stored value for one dimension, as the display string in the preferred unit. */
 function storedText(
   values: ResultValues | undefined,
@@ -395,15 +361,13 @@ function storedText(
  * One field per dimension the exercise declares, in the fixed dimension order,
  * so the input order never follows a JSON key order. REQUIREMENTS 3.17, 19.9.
  *
- * A field starts with the recorded value when one exists and with the
- * prescription otherwise, so the input opens showing what the user is
- * expected to do. Reps take the prescription path because a reps
- * prescription is a union, not a quantity; every other dimension converts
- * its prescribed quantity to the preferred unit.
+ * A field starts with the recorded value when one exists and stays blank
+ * otherwise. The prescription is shown separately above the inputs. It must
+ * never look like recorded actual work or become recorded merely because the
+ * user focused and blurred a control.
  */
 function buildFields(
   exercise: Exercise,
-  effective: import('../../domain/types').Prescription,
   values: ResultValues | undefined,
   preferences: PreferenceService
 ): FieldModel[] {
@@ -416,15 +380,7 @@ function buildFields(
     const preferred = preferences.getUnit(exercise.id, dimension);
     const step = stepFor(dimension);
     const stored = values?.[dimension] !== undefined;
-    let shown = '';
-    if (stored) {
-      shown = storedText(values, dimension, preferred, step);
-    } else if (dimension === 'reps') {
-      shown = prescribedRepsText(effective.reps, step);
-    } else {
-      const prescribed = effective[dimension as keyof typeof effective] as Quantity | undefined;
-      shown = prescribedText(prescribed, preferred, step);
-    }
+    const shown = stored ? storedText(values, dimension, preferred, step) : '';
 
     fields.push({
       dimension,
@@ -683,7 +639,7 @@ export function buildActiveWorkoutModel(
         fields:
           exercise === undefined
             ? []
-            : buildFields(exercise, node.effectivePrescription, values, preferences),
+            : buildFields(exercise, values, preferences),
         lastTime: buildLastTime(exerciseNode.exerciseId, lookup, session.id),
         side,
         attempt,
@@ -788,13 +744,25 @@ export function fieldDisplay(
  * A value is stored in the unit the field shows, so the number the user read
  * is the number recorded. REQUIREMENTS 11.2, 11.8, 12.7.
  */
+export function fieldInputError(field: FieldModel, display: string): string | undefined {
+  const trimmed = display.trim();
+  if (trimmed === '') return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return field.dimension === 'reps'
+      ? 'Enter a whole number of 0 or more.'
+      : 'Enter a number of 0 or more.';
+  }
+  if (field.dimension === 'reps' && !Number.isInteger(parsed)) {
+    return 'Enter a whole number of 0 or more.';
+  }
+  return undefined;
+}
+
 export function parseFieldValue(field: FieldModel, display: string): Quantity | null {
   const trimmed = display.trim();
-  if (trimmed === '') return null;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  const value = field.dimension === 'reps' ? Math.round(parsed) : parsed;
-  return { value, unit: field.unit };
+  if (trimmed === '' || fieldInputError(field, display) !== undefined) return null;
+  return { value: Number(trimmed), unit: field.unit };
 }
 
 /** Collect one row's non-blank fields into `ResultValues`. */
