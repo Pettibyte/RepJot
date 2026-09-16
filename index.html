@@ -4,8 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>REP JOT Google Drive prototype</title>
+  <!--
+    The Content-Security-Policy meta tag is absent here on purpose. The build
+    injects it through the kindle-classic-entry plugin in vite.config.ts, which
+    runs only for the production build. The policy blocks the ws:// socket that
+    Vite hot reload opens, so a copy in this file would break development.
+    check-browser-compat.ts check 10 enforces the shipped policy.
+  -->
+  <title>REP JOT</title>
 
+  <link rel="stylesheet" crossorigin href="./style.css">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src https://www.googleapis.com https://oauth2.googleapis.com; form-action https://oauth2.googleapis.com; frame-src https://accounts.google.com; base-uri 'self'; object-src 'none'" />
 </head>
 
 <body>
@@ -45,7 +54,7 @@
       };
     }());
   </script>
-<script>window.__repjotLoadApp("./app.js?v=mteuar1z");</script>
+<script>window.__repjotLoadApp("./app.js?v=mu4f9tin");</script>
 </body>
 
 </html>
