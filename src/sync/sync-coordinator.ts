@@ -484,9 +484,16 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
    * The badge for a settled account: `saved`, unless some file is still
    * failed. A failure outranks a success, because the failure is the state a
    * person has to act on.
+   *
+   * `fallback` is what the badge shows when no file is failed. A caller that
+   * settled nothing passes `'idle'`, so a failed local write does not claim a
+   * save that did not happen. A caller that committed a local write passes
+   * nothing and gets `'saved'`. Either way another file's failure still
+   * shows, because the badge is one value over every file this account
+   * holds. REQUIREMENTS 4.3, 4.20.
    */
-  function settledStatus(): SaveStatus {
-    return failedFiles.size === 0 ? 'saved' : 'sync_failed';
+  function settledStatus(fallback: SaveStatus = 'saved'): SaveStatus {
+    return failedFiles.size === 0 ? fallback : 'sync_failed';
   }
 
   /**
@@ -1288,11 +1295,13 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       });
     } catch (error: unknown) {
       // The local half failed, so the edit never became durable. The badge
-      // must not stay at `saving` with no work in flight, and a local
-      // failure must not read as `sync_failed`, which means the edit is
-      // safe but unsynchronized. The caller still sees the real error.
-      // REQUIREMENTS 4.3, 4.4.
-      setSaveStatus('idle');
+      // must not stay at `saving` with no work in flight, and this file's own
+      // failure must not read as `sync_failed`, which means the edit is safe
+      // but unsynchronized. The fallback is `idle` for that reason. It is
+      // still not the whole answer: another file can sit in `sync_failed`
+      // with a pending delta on disk, and this failed write must not clear
+      // that. The caller still sees the real error. REQUIREMENTS 4.3, 4.4.
+      setSaveStatus(settledStatus('idle'));
       logDiagnostic({
         severity: 'error',
         code: 'local_edit_failed',
