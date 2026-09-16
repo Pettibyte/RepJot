@@ -24,7 +24,14 @@ const CSP_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data:",
-  'connect-src https://www.googleapis.com https://oauth2.googleapis.com',
+  // `'self'` is required. The app loads its exercise and workout bundles from
+  // the same origin, for example `./data/exercises.json`. An explicit
+  // `connect-src` replaces `default-src` for that directive instead of
+  // adding to it, so without `'self'` the browser refuses the same-origin
+  // fetch and the app cannot start. Production reported:
+  //   Refused to load .../data/exercises.json because it violates the
+  //   directive "connect-src https://www.googleapis.com https://oauth2.googleapis.com"
+  "connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com",
   'form-action https://oauth2.googleapis.com',
   'frame-src https://accounts.google.com',
   "base-uri 'self'",

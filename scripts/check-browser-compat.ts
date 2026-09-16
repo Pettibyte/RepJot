@@ -304,7 +304,11 @@ const REQUIRED_POLICY: Readonly<Record<string, readonly string[]>> = {
   'style-src': ["'self'", "'unsafe-inline'"],
   'font-src': ["'self'"],
   'img-src': ["'self'", 'data:'],
-  'connect-src': ['https://www.googleapis.com', 'https://oauth2.googleapis.com'],
+  // `'self'` carries the same-origin fetch of the exercise and workout
+  // bundles. An explicit `connect-src` replaces `default-src` for that
+  // directive, so `'self'` must be named here or the app cannot load its own
+  // data. See "CSP decision" in `docs/RELEASE.md`.
+  'connect-src': ["'self'", 'https://www.googleapis.com', 'https://oauth2.googleapis.com'],
   'form-action': ['https://oauth2.googleapis.com'],
   'frame-src': ['https://accounts.google.com'],
   'base-uri': ["'self'"],

@@ -172,7 +172,7 @@ script-src 'self' 'unsafe-inline' 'unsafe-eval';
 style-src 'self' 'unsafe-inline';
 font-src 'self';
 img-src 'self' data:;
-connect-src https://www.googleapis.com https://oauth2.googleapis.com;
+connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com;
 form-action https://oauth2.googleapis.com;
 frame-src https://accounts.google.com;
 base-uri 'self';
@@ -185,6 +185,23 @@ generates validator source code and builds it with the `Function` constructor.
 A policy without `'unsafe-eval'` blocks that constructor, so the strict policy
 written in the original `docs/implementation/PHASE-20.md` draft stops schema
 validation at startup. That document now records the policy above.
+
+`connect-src` carries `'self'` for one reason. The app loads its exercise and
+workout bundles from the same origin. `src/documents/static-loader.ts` fetches
+`./data/exercises.json` and `./data/workouts.json`. A browser applies an
+explicit `connect-src` in place of `default-src` for that directive. It does
+not add to it. A `connect-src` that names only the Google origins therefore
+blocks the same-origin fetch, and the app cannot start. Production reported:
+
+```text
+Content-Security-Policy: The page's settings blocked the loading of a resource
+(connect-src) at https://repjot.com/data/exercises.json because it violates
+the following directive: "connect-src https://www.googleapis.com
+https://oauth2.googleapis.com"
+```
+
+Check 10 in `scripts/check-browser-compat.ts` pins the directive list, so a
+future edit that drops `'self'` fails the release gate.
 
 Two facts drove the decision:
 
