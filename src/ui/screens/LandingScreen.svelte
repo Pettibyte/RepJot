@@ -89,5 +89,7 @@
 
   <p class="landing__privacy">
     <a class="landing__privacy-link" href="./privacy.html">Privacy policy</a>
+    <span aria-hidden="true"> · </span>
+    <a class="landing__privacy-link" href="./terms.html">Terms of service</a>
   </p>
 </div>

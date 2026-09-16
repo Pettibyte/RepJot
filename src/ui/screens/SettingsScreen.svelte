@@ -355,6 +355,9 @@
       <a href="./privacy.html">Privacy policy</a>. It explains how REP JOT
       accesses, stores, uses, exports, and deletes your data.
     </p>
+    <p class="settings-license__text">
+      <a href="./terms.html">Terms of service</a>.
+    </p>
   </div>
 
   {#if signedIn || deleteOpen}
