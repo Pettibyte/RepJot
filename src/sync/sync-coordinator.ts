@@ -35,8 +35,8 @@ import { shardName } from '../domain/time';
 import type { LoadedStaticData } from '../documents/static-loader';
 import { semanticStageFor } from '../documents/semantic-stage';
 import { processDocument, type SemanticStage } from '../documents/document-pipeline';
-import type { DriveAdapter, DriveFileMeta } from '../drive/drive-interface';
-import { setSaveStatus } from '../state/app-state';
+import type { DriveAdapter, DriveFileContent, DriveFileMeta } from '../drive/drive-interface';
+import { setSaveStatus, type SaveStatus } from '../state/app-state';
 import { baseKey, cacheKey, pendingKey, type LocalStore, type LocalStoreEntry } from '../storage/local-store';
 import { highestSupportedVersion, type DocFamily } from '../validation/schema-validator';
 import { validatePreferences, validateShard } from '../validation/semantic-validator';
@@ -137,6 +137,14 @@ export interface Coordinator {
   queueEdit(logicalName: string, mutate: (doc: unknown) => unknown): void;
   /** Reconcile every known logical file for this account. */
   syncAll(): Promise<void>;
+  /**
+   * The logical files that still hold a pending local delta.
+   *
+   * A caller that must not leave local intent behind reads this after a flush.
+   * A name in the list means the delta is durable here and has not been
+   * confirmed on Drive. REQUIREMENTS 4.4, 4.20.
+   */
+  pendingEdits(): Promise<string[]>;
   /** Flush pending local edits. Called on pagehide. */
   flush(): Promise<void>;
   /**
@@ -250,6 +258,61 @@ function guardBlocked(result: ConsolidateResult, logicalName: string): void {
 function isResponseLost(error: AppError): boolean {
   if (error.kind !== 'network') return false;
   return !('status' in error.detail);
+}
+
+/**
+ * True when one Drive read's bytes and metadata describe the same remote state.
+ *
+ * `readFile` issues a media request and then a metadata request, so a write
+ * from another device between them can hand back old bytes under the marker of
+ * new content. That pair is not a lie the merge can detect from the content,
+ * but the metadata carries the size the bytes should have. A length that
+ * disagrees with the metadata is proof the two halves came from different
+ * states, so the read is refused and taken again.
+ *
+ * A metadata size of zero means Drive reported no size. There is then nothing
+ * to check the bytes against, and the read passes.
+ *
+ * REQUIREMENTS 4.6, 4.16. `specs/storage-and-lookup.md`, synchronization
+ * preflight.
+ */
+function readIsPaired(read: DriveFileContent): boolean {
+  if (read.meta.size <= 0) return true;
+  return read.bytes.byteLength === read.meta.size;
+}
+
+/**
+ * True when a read still agrees with the catalog row it was taken from.
+ *
+ * The catalog is listed before the file is read, so it carries the marker the
+ * file held at the start of the window. A read whose metadata reports a
+ * different marker moved during that window, and the bytes behind it cannot
+ * be trusted to match. This catches what the size check cannot: a concurrent
+ * write that left the file the same length, where the bytes and the metadata
+ * are each internally consistent and describe different states.
+ *
+ * REQUIREMENTS 4.6, 4.8, 4.16.
+ */
+function readMatchesCatalog(
+  entry: DriveFileMeta | null,
+  read: DriveFileContent | null
+): boolean {
+  if (entry === null || read === null) return true;
+  return remoteMarker(entry) === remoteMarker(read.meta);
+}
+
+/**
+ * Throw the retryable error for a read whose halves came from different states.
+ *
+ * The retry is the whole remedy. The next attempt lists the catalog again and
+ * reads the file again, and a fresh read of a settled folder pairs correctly.
+ */
+function stalePairError(logicalName: string): AppError {
+  return new AppError(
+    'network',
+    { reason: 'read_pair_mismatch', logicalName },
+    'The content read from Drive did not match the metadata read with it.'
+  );
 }
 
 /**
@@ -403,6 +466,27 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       }
     );
     return result;
+  }
+
+  /**
+   * Logical files whose last reconciliation failed and whose local intent is
+   * still unresolved.
+   *
+   * The save badge is one global value, but a failure belongs to one file. A
+   * successful commit of a different file must not read as "everything is
+   * synchronized" while a failed delta still sits in local storage waiting.
+   * The badge reports the worst state any known file is in. REQUIREMENTS 4.3,
+   * 4.20. ARCHITECTURE section 11.
+   */
+  const failedFiles = new Set<string>();
+
+  /**
+   * The badge for a settled account: `saved`, unless some file is still
+   * failed. A failure outranks a success, because the failure is the state a
+   * person has to act on.
+   */
+  function settledStatus(): SaveStatus {
+    return failedFiles.size === 0 ? 'saved' : 'sync_failed';
   }
 
   /**
@@ -624,6 +708,15 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     const cleanBefore = isCleanRow(await readSlots(logicalName), entry);
     const writesBefore = writeCount(logicalName);
     const remote = cleanBefore || entry === null ? null : await deps.drive.readFile(entry.id);
+    // The two halves of a read are taken in sequence, so a write from another
+    // device between them can return old bytes under the marker of new
+    // content. The merge would then treat content this device never read as
+    // the remote state. The size the metadata reports is what the bytes must
+    // match, and the catalog row listed before the read must still carry the
+    // marker the read reports. REQUIREMENTS 4.6, 4.8, 4.16.
+    if (remote !== null && (!readIsPaired(remote) || !readMatchesCatalog(entry, remote))) {
+      throw stalePairError(logicalName);
+    }
 
     return withLocal(logicalName, async (): Promise<LoadedDoc> => {
       // A local save landed while this load read Drive. That save is newer
@@ -811,6 +904,17 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     const catalog = (await loadCatalog(logicalName)).catalog;
     const entry = catalogEntry(catalog, logicalName);
     const remote = entry === null ? null : await deps.drive.readFile(entry.id);
+    // The preflight read is the one the merge is built from, so its two halves
+    // must describe one remote state. A write from another device between the
+    // media request and the metadata request makes them disagree, and the
+    // merge would then run against content this device never read while the
+    // marker says it read the newest. The size the metadata reports is what
+    // the bytes must match, and the catalog row listed before the read must
+    // still carry the marker the read reports.
+    // REQUIREMENTS 4.6, 4.8, 4.16.
+    if (remote !== null && (!readIsPaired(remote) || !readMatchesCatalog(entry, remote))) {
+      throw stalePairError(logicalName);
+    }
     const remoteText = remote === null ? null : decodeUtf8(remote.bytes);
     const remoteMeta = remote === null ? null : remote.meta;
 
@@ -1058,7 +1162,10 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         // A successful reconciliation supersedes an earlier failure for this
         // file. The newest edit is durable and its pending delta has either
         // committed or remains represented by a newer queued reconciliation.
-        setSaveStatus('saved');
+        // Another file's unresolved failure still shows, because the badge is
+        // one value over every file this account holds.
+        failedFiles.delete(logicalName);
+        setSaveStatus(settledStatus());
         return;
       } catch (error: unknown) {
         lastError = error;
@@ -1083,6 +1190,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       }
     }
 
+    failedFiles.add(logicalName);
     setSaveStatus('sync_failed');
     throw lastError instanceof Error
       ? lastError
@@ -1196,8 +1304,10 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       throw error;
     }
 
-    // The local write is durable. The user's intent is safe from here on.
-    setSaveStatus('saved');
+    // The local write is durable. The user's intent is safe from here on. The
+    // badge reports the worst state any known file is in, so a save here does
+    // not hide another file's unresolved failure. REQUIREMENTS 4.3, 4.20.
+    setSaveStatus(settledStatus());
 
     const synced = withSync(logicalName, async (): Promise<void> => {
       await reconcileOne(logicalName);
@@ -1261,7 +1371,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
         failed = true;
       }
     }
-    if (!failed && names.length > 0) setSaveStatus('saved');
+    if (!failed && names.length > 0) setSaveStatus(settledStatus());
   }
 
   /**
@@ -1318,6 +1428,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     docs.clear();
     localLock.clear();
     syncLock.clear();
+    failedFiles.clear();
     inFlight.clear();
     detachPagehide();
     registerPagehide();
@@ -1346,6 +1457,19 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
       queue.schedule(logicalName, mutate);
     },
     syncAll,
+    pendingEdits: async (): Promise<string[]> => {
+      const names: string[] = [];
+      for (const key of await deps.store.listKeys('pending:')) {
+        const name = key.slice('pending:'.length);
+        if (name.length === 0) continue;
+        // A cleared delta is written as a null row, not removed, so the key
+        // alone does not mean work is waiting. Only a row that still holds a
+        // record counts. REQUIREMENTS 4.4.
+        const row: unknown = await deps.store.get(key);
+        if (row !== null && row !== undefined) names.push(name);
+      }
+      return names.sort();
+    },
     flush,
     reset,
     peek: (logicalName: string): unknown => {

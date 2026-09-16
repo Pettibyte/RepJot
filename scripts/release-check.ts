@@ -34,8 +34,12 @@ const AUTOMATED_GATES: readonly Gate[] = [
     proves: 'TypeScript and Svelte types are clean.'
   },
   {
+    // `bun run test` is the package script that runs the unit suite and the
+    // separate `tests/dom` suite. A bare `bun test` reaches only the root unit
+    // suite, so the gate would report DOM coverage it never collected.
+    // ARCHITECTURE section 17 names the package script.
     name: 'tests',
-    argv: ['bun', 'test'],
+    argv: ['bun', 'run', 'test'],
     proves: 'Unit tests and DOM tests pass.'
   },
   {

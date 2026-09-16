@@ -42,9 +42,10 @@
   import DiagnosticSection from '../components/DiagnosticSection.svelte';
   import DisconnectSection from '../components/DisconnectSection.svelte';
   import ExerciseUnitsSection from '../components/ExerciseUnitsSection.svelte';
+  import SignOutSection from '../components/SignOutSection.svelte';
   import { services, clearServices } from '../../services/registry';
   import { runDeleteAllUserData, runDisconnect, type AccountFlowDeps } from '../../data/account-flows';
-  import { GOOGLE_ACCOUNT_CONNECTIONS_URL, disconnect } from '../../auth/auth-service';
+  import { GOOGLE_ACCOUNT_CONNECTIONS_URL, disconnect, signOut } from '../../auth/auth-service';
   import { isRecognizedName } from '../../sync/recognized-names';
 
   /**
@@ -101,6 +102,16 @@
   let disconnectBusy = $state(false);
   /** True when Google did not confirm the revocation. */
   let revokeFailed = $state(false);
+  /**
+   * Why the disconnect stopped. `pending_sync_failed` means a local edit never
+   * reached Drive, which is a different message from an unconfirmed revoke and
+   * needs a different next step from the user.
+   */
+  let disconnectReason = $state<'' | 'pending_sync_failed' | 'revoke_unconfirmed'>('');
+  /** Names of the files whose edit is still pending after a failed flush. */
+  let disconnectPending = $state<string[]>([]);
+  /** True while the sign out runs. */
+  let signOutBusy = $state(false);
 
   const accountKey = $derived($services.accountKey);
   const drive = $derived($services.drive);
@@ -108,7 +119,7 @@
   const signedIn = $derived(accountKey !== null && drive !== null && store !== null);
 
   /** True once either destructive flow is running, so nothing else starts. */
-  const busy = $derived(deleteBusy || disconnectBusy);
+  const busy = $derived(deleteBusy || disconnectBusy || signOutBusy);
 
   /**
    * Open the delete confirmation with a live count.
@@ -232,25 +243,64 @@
    * Cut the Google grant and clear this device's local copy.
    *
    * `runDisconnect` owns the ordering. A failed revoke leaves everything in
-   * place and shows the Google Account connections link.
+   * place and shows the Google Account connections link. A flush that could
+   * not upload a pending edit also stops the flow, and says so in its own
+   * words, because the user's next step is to get Drive answering again
+   * rather than to go finish the job at Google.
    */
   async function confirmDisconnect(): Promise<void> {
     const deps = flowDeps();
     if (deps === null || busy) return;
     disconnectBusy = true;
     revokeFailed = false;
+    disconnectReason = '';
+    disconnectPending = [];
     try {
       const result = await runDisconnect(deps);
       if (result.kind === 'revoke_failed') {
         revokeFailed = true;
+        disconnectReason = result.reason ?? 'revoke_unconfirmed';
+        disconnectPending = result.pendingNames ?? [];
         return;
       }
       clearServices();
       onExitToLanding();
     } catch {
       revokeFailed = true;
+      disconnectReason = 'revoke_unconfirmed';
     } finally {
       disconnectBusy = false;
+    }
+  }
+
+  /**
+   * End this session and keep everything else.
+   *
+   * The flush runs first so a queued edit reaches local storage before the
+   * session ends. Sign out then clears the authorization state and nothing
+   * else: the local cache, the pending rows, and the Drive files all stay.
+   * REQUIREMENTS 2.12.
+   */
+  async function confirmSignOut(): Promise<void> {
+    if (busy) return;
+    signOutBusy = true;
+    try {
+      const coordinator = $services.coordinator;
+      if (coordinator !== null) {
+        await coordinator.flush();
+      }
+      signOut();
+      clearServices();
+      onExitToLanding();
+    } catch {
+      // A flush that threw left the edit durable locally. Sign out still ends
+      // the session, because that is what the person asked for, and the local
+      // copy is where the edit already is.
+      signOut();
+      clearServices();
+      onExitToLanding();
+    } finally {
+      signOutBusy = false;
     }
   }
 
@@ -291,6 +341,10 @@
 
       <DiagnosticSection disabled={busy} />
     </div>
+  {/if}
+
+  {#if signedIn}
+    <SignOutSection busy={busy} onconfirm={() => void confirmSignOut()} />
   {/if}
 
   <div class="settings-section settings-license" role="region" aria-label="License">
@@ -340,9 +394,13 @@
         <DisconnectSection
           busy={disconnectBusy}
           {revokeFailed}
+          failureReason={disconnectReason}
+          pendingNames={disconnectPending}
           onconfirm={() => void confirmDisconnect()}
           oncancel={(): void => {
             revokeFailed = false;
+            disconnectReason = '';
+            disconnectPending = [];
           }}
         />
       {/if}

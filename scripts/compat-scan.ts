@@ -65,28 +65,49 @@ const NETWORK_CONTEXT_PATTERNS: readonly RegExp[] = [
   /location\s*\.\s*(?:assign|replace)\s*\(/,
   /location\s*\.\s*href\s*=/,
   /\bsrc\s*=/,
-  /\bhref\s*=/
+  /\bhref\s*=/,
+  // `element.setAttribute('src', url)` reaches the network through the same
+  // element the `src =` assignment reaches. A scanner that reads only the
+  // assignment misses the call form.
+  /\.setAttribute\(\s*['"`](?:src|href|xlink:href|srcset|action|data|poster|background)['"`]\s*,/,
+  // A CSS `url(...)` loads a stylesheet, a font, an image, or a mask. The
+  // `@import` form and the property form both go through it.
+  /\burl\s*\(/i,
+  /@import\b/i
 ];
 
 /** Window of text searched before each URL for a network context. */
 const CONTEXT_WINDOW = 90;
 
 /**
- * One call shape plus the capture group that holds the URL argument.
+ * One call shape plus the capture groups that may hold the URL argument.
  *
- * Each shape carries its own group number on purpose. The `src` and `href`
+ * Each shape carries its own group numbers on purpose. The `src` and `href`
  * shapes put the quote in group 1 and the value in group 2, so reading a fixed
  * group for every shape returns the quote character instead of the URL.
+ *
+ * A shape lists every group that can hold the value because a form such as CSS
+ * `url(...)` accepts a single-quoted, a double-quoted, or a bare value, and
+ * only one of the three alternatives matches at a time. The first defined
+ * group wins.
  */
-const CALL_SHAPES: ReadonlyArray<{ re: RegExp; group: number }> = [
-  { re: /\bfetch\(\s*([^)]{0,160})/g, group: 1 },
-  { re: /\.open\(\s*['"`][A-Za-z]+['"`]\s*,\s*([^)]{0,160})/g, group: 1 },
-  { re: /\bnew\s+URL\(\s*([^),]{0,160})/g, group: 1 },
-  { re: /\bsendBeacon\(\s*([^,)]{0,160})/g, group: 1 },
-  { re: /\bimportScripts\(\s*([^)]{0,160})/g, group: 1 },
-  { re: /location\s*\.\s*(?:assign|replace)\s*\(\s*([^)]{0,160})/g, group: 1 },
-  { re: /\bsrc\s*=\s*(['"`])([^'"`]*)/g, group: 2 },
-  { re: /\bhref\s*=\s*(['"`])([^'"`]*)/g, group: 2 }
+const CALL_SHAPES: ReadonlyArray<{ re: RegExp; groups: number[] }> = [
+  { re: /\bfetch\(\s*([^)]{0,160})/g, groups: [1] },
+  { re: /\.open\(\s*['"`][A-Za-z]+['"`]\s*,\s*([^)]{0,160})/g, groups: [1] },
+  { re: /\bnew\s+URL\(\s*([^),]{0,160})/g, groups: [1] },
+  { re: /\bsendBeacon\(\s*([^,)]{0,160})/g, groups: [1] },
+  { re: /\bimportScripts\(\s*([^)]{0,160})/g, groups: [1] },
+  { re: /location\s*\.\s*(?:assign|replace)\s*\(\s*([^)]{0,160})/g, groups: [1] },
+  { re: /\bsrc\s*=\s*(['"`])([^'"`]*)/g, groups: [2] },
+  { re: /\bhref\s*=\s*(['"`])([^'"`]*)/g, groups: [2] },
+  // `setAttribute` carries the URL in the second argument. The attribute name
+  // is the first, so the shape reads past it and captures the value.
+  {
+    re: /\.setAttribute\(\s*['"`](?:src|href|xlink:href|srcset|action|data|poster|background)['"`]\s*,\s*([^)]{0,160})/g,
+    groups: [1]
+  },
+  // CSS `url(...)`. The value may be single-quoted, double-quoted, or bare.
+  { re: /\burl\(\s*(?:'([^']{0,160})'|"([^"]{0,160})"|([^)\s]{0,160}))\s*\)/gi, groups: [1, 2, 3] }
 ];
 
 /** True when the file holds text the scans can read. */
@@ -162,10 +183,13 @@ export function resolveArgument(arg: string, bindings: Map<string, string>): str
 export function callArguments(text: string): string[] {
   const args: string[] = [];
   for (const shape of CALL_SHAPES) {
-    const re = new RegExp(shape.re.source, 'g');
+    const re = new RegExp(shape.re.source, shape.re.flags);
     let match: RegExpExecArray | null;
     while ((match = re.exec(text)) !== null) {
-      args.push(match[shape.group] ?? '');
+      const value = shape.groups
+        .map((group: number): string | undefined => match?.[group])
+        .find((candidate: string | undefined): boolean => candidate !== undefined);
+      args.push(value ?? '');
     }
   }
   return args;

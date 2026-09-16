@@ -157,31 +157,82 @@ function compareIds(a: string, b: string): number {
 }
 
 /**
+ * One RFC 3339 instant, split into the part a `Date` holds and the part it
+ * drops.
+ *
+ * `Date` stops at milliseconds. RFC 3339 permits more digits, and REQUIREMENTS
+ * 3.5 allows them. Two stamps that differ only below the millisecond are two
+ * different instants, so the leftover digits are kept beside the millisecond
+ * value instead of being thrown away.
+ */
+interface Instant {
+  /** Milliseconds since the epoch, from the whole-second part and the first three fraction digits. */
+  ms: number;
+  /** The fraction digits past the millisecond, with no leading point. Empty when there are none. */
+  subMillisecond: string;
+}
+
+/**
+ * Compare two sub-millisecond digit strings.
+ *
+ * The digits are compared after both are padded to the longer of the two
+ * lengths, so `'1'` and `'10'` are equal and `'1'` and `'2'` are not. Padding
+ * on the right is what makes the comparison positional: a shorter run of
+ * digits has zeros where the longer one has digits.
+ */
+function compareSubMillisecond(a: string, b: string): number {
+  const width = Math.max(a.length, b.length);
+  const left = a.padEnd(width, '0');
+  const right = b.padEnd(width, '0');
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+/** Compare two instants. Negative when `a` is earlier, positive when later. */
+function compareInstants(a: Instant, b: Instant): number {
+  if (a.ms !== b.ms) return a.ms < b.ms ? -1 : 1;
+  return compareSubMillisecond(a.subMillisecond, b.subMillisecond);
+}
+
+/**
  * Compare two `(updatedAtUtc, Drive file ID)` tuples, greatest first.
  *
  * The time is compared as an instant, not as text. Two RFC 3339 stamps that
  * differ only by a fractional part compare wrong as text, because `'Z'` sorts
- * above `'.'`. A stamp that does not parse loses to one that does, so a broken
- * value never beats a good one, and two broken values still resolve by file ID.
+ * above `'.'`. The instant keeps the digits below the millisecond, so
+ * `.0001Z` and `.0002Z` are ordered and the file ID breaks only a real tie.
+ * A stamp that does not parse loses to one that does, so a broken value never
+ * beats a good one, and two broken values still resolve by file ID.
  * REQUIREMENTS 4.24.
  */
 function greaterTuple(candidate: Candidate, current: Candidate): boolean {
   const candidateTime = instantOf(candidate.updatedAtUtc);
   const currentTime = instantOf(current.updatedAtUtc);
 
-  if (candidateTime !== null && currentTime !== null && candidateTime !== currentTime) {
-    return candidateTime > currentTime;
+  if (candidateTime !== null && currentTime !== null) {
+    const order = compareInstants(candidateTime, currentTime);
+    if (order !== 0) return order > 0;
+  } else if (candidateTime === null && currentTime !== null) {
+    return false;
+  } else if (candidateTime !== null && currentTime === null) {
+    return true;
   }
-  if (candidateTime === null && currentTime !== null) return false;
-  if (candidateTime !== null && currentTime === null) return true;
   return compareIds(candidate.fileId, current.fileId) > 0;
 }
 
-/** Milliseconds for an RFC 3339 stamp, or `null` when it does not parse. */
-function instantOf(value: unknown): number | null {
+/**
+ * One parsed RFC 3339 instant, or `null` when the value does not parse.
+ *
+ * The fraction is split at the millisecond boundary. `Date` carries everything
+ * up to it, and the remainder is returned as digits so a comparison can see
+ * it. REQUIREMENTS 3.5, 4.24.
+ */
+function instantOf(value: unknown): Instant | null {
   if (typeof value !== 'string') return null;
   try {
-    return parseUtc(value).getTime();
+    const ms = parseUtc(value).getTime();
+    const fraction = /\.(\d+)Z$/.exec(value);
+    return { ms, subMillisecond: fraction === null ? '' : fraction[1].slice(3) };
   } catch {
     return null;
   }

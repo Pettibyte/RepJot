@@ -16,6 +16,11 @@
   Account connections link and keeps the local data. The revoke may still land
   later, and a user who cannot confirm it should finish the job where Google
   can see it. REQUIREMENTS 21.7.
+
+  A disconnect can also stop before the revoke, when the pre-disconnect flush
+  could not upload a pending edit. That failure gets its own copy, because the
+  user's next step is to get Drive answering again, not to visit Google
+  Account connections. REQUIREMENTS 4.4, 4.20.
 -->
 <script lang="ts">
   import Button from './Button.svelte';
@@ -24,18 +29,32 @@
   let {
     busy = false,
     revokeFailed = false,
+    failureReason = '',
+    pendingNames = [],
     onconfirm = (): void => {},
     oncancel = (): void => {}
   }: {
     /** True while the revoke call runs. */
     busy?: boolean;
-    /** True when Google did not confirm the revocation. */
+    /** True when the disconnect did not complete. */
     revokeFailed?: boolean;
+    /**
+     * Why the disconnect stopped. `pending_sync_failed` means a local edit
+     * never reached Drive. `revoke_unconfirmed` means Google would not
+     * confirm the revoke. Empty falls back to the unconfirmed copy, so a
+     * caller that passes no reason still reads correctly.
+     */
+    failureReason?: '' | 'pending_sync_failed' | 'revoke_unconfirmed';
+    /** Logical files whose edit is still pending after a failed flush. */
+    pendingNames?: string[];
     /** Run the disconnect. */
     onconfirm?: () => void;
     /** Leave the confirmation open state. */
     oncancel?: () => void;
   } = $props();
+
+  /** True when the stop was a failed upload rather than a failed revoke. */
+  const uploadBlocked = $derived(failureReason === 'pending_sync_failed');
 
   /** True while the second-step confirmation is showing. */
   let confirming = $state(false);
@@ -84,16 +103,34 @@
   {/if}
 
   {#if revokeFailed}
-    <p class="settings-section__error" role="alert">
-        Google did not confirm that it revoked REP JOT access. Your local data
-      is still on this device. Open your Google Account connections and remove
-      REP JOT there, then try again.
-    </p>
+    {#if uploadBlocked}
+      <p class="settings-section__error" role="alert">
+        REP JOT could not send your last change to Google Drive, so it did not
+        disconnect. Your change is safe on this device. Check your connection
+        and try again.
+      </p>
 
-    <div class="settings-section__actions">
-      <Button variant="secondary" href={GOOGLE_ACCOUNT_CONNECTIONS_URL}>
-        Open Google Account connections
-      </Button>
-    </div>
+      <p class="settings-section__hint">
+        Files still waiting to upload: {pendingNames.join(', ')}.
+      </p>
+
+      <div class="settings-section__actions">
+        <Button variant="secondary" disabled={busy} onclick={confirm}>
+          Try the disconnect again
+        </Button>
+      </div>
+    {:else}
+      <p class="settings-section__error" role="alert">
+        Google did not confirm that it revoked REP JOT access. Your local data
+        is still on this device. Open your Google Account connections and remove
+        REP JOT there, then try again.
+      </p>
+
+      <div class="settings-section__actions">
+        <Button variant="secondary" href={GOOGLE_ACCOUNT_CONNECTIONS_URL}>
+          Open Google Account connections
+        </Button>
+      </div>
+    {/if}
   {/if}
 </div>

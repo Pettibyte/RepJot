@@ -146,6 +146,25 @@ function assertNestingDepth(value: unknown): void {
 }
 
 /**
+ * Deep-copy a JSON value.
+ *
+ * The migration chain needs a copy because a migration is a function someone
+ * else wrote. A migration that writes into its argument would change the
+ * caller's object, and a rejected document would leave that change behind.
+ * The pipeline clones the value before the first step runs, so a step owns its
+ * argument and nothing it does reaches the caller. REQUIREMENTS 5.4.
+ *
+ * A JSON round trip is the copy REP JOT uses everywhere. `structuredClone` is
+ * absent from the targeted Kindle browser. See `src/sync/patcher.ts`.
+ */
+function deepCopy<T>(value: T): T {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
  * Read a text document through the full pipeline.
  *
  * Stages: parse, envelope, family check, version gate, historical schema,
@@ -216,11 +235,17 @@ export function processJson<T = unknown>(
     validateAgainst(family, sourceVersion, raw);
   }
 
+  const migrated = sourceVersion < maxSupportedVersion;
+
   // Stage 6, migrate. Apply `vN -> vN+1` steps in order. A missing step is a
   // typed error, never a silent repair. REQUIREMENTS 5.9, 5.10.
-  let current: unknown = raw;
+  //
+  // The chain runs on a copy. A migration owns its argument, so an impure step
+  // cannot reach the caller's object even when the pipeline rejects the result
+  // later. The copy is taken only when a step will actually run, because the
+  // no-migration path is the hot one. REQUIREMENTS 5.4.
+  let current: unknown = migrated ? deepCopy(raw) : raw;
   let version = sourceVersion;
-  const migrated = sourceVersion < maxSupportedVersion;
 
   while (version < maxSupportedVersion) {
     const step = findStep(family, version);

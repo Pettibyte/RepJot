@@ -24,10 +24,12 @@
 //
 //   1. `coordinator.flush()`. Disconnect keeps the remote files, so a
 //      pending edit belongs there before the grant goes away.
-//   2. The revoke.
-//   3. The local namespace clears, and only after the revoke confirms.
+//   2. `coordinator.pendingEdits()`. A row still pending after the flush
+//      never reached Drive, and the flow stops there. See `runDisconnect`.
+//   3. The revoke.
+//   4. The local namespace clears, and only after the revoke confirms.
 //
-//   Step 1 cannot move after step 2. Once the grant is gone the device
+//   Step 1 cannot move after step 3. Once the grant is gone the device
 //   cannot write, and an edit left only on this device is the one thing the
 //   user could not get back by signing in again.
 //
@@ -82,8 +84,22 @@ export interface DeleteFlowResult {
 
 /** How the disconnect flow ended. */
 export interface DisconnectFlowResult {
-  /** `disconnected` when Google confirmed. `revoke_failed` when it did not. */
+  /**
+   * `disconnected` when Google confirmed and nothing was left behind.
+   * `revoke_failed` when the flow stopped before it could safely cut the
+   * grant. That covers an unconfirmed revoke and a flush that could not
+   * upload a pending edit.
+   */
   kind: 'disconnected' | 'revoke_failed';
+  /**
+   * Why the flow stopped. `pending_sync_failed` means a local edit never
+   * reached Drive, so revoking would leave the only copy of that edit on a
+   * device that can no longer send it. `revoke_unconfirmed` means Google
+   * did not confirm the revoke. Absent on a completed run.
+   */
+  reason?: 'pending_sync_failed' | 'revoke_unconfirmed';
+  /** Logical files whose edit is still pending here after a failed flush. */
+  pendingNames?: string[];
 }
 
 /**
@@ -131,18 +147,34 @@ export async function runDeleteAllUserData(deps: AccountFlowDeps): Promise<Delet
  * Run Disconnect Google Account.
  *
  * The flush comes first so pending edits reach Drive while the grant still
- * works. The local namespace clears only after the revoke confirms, so a
- * failed revoke leaves the device exactly as it was and the user can retry.
+ * works. The flush waits for the network and swallows its failures, because
+ * its other caller is a hidden page with nobody to report to. That is not
+ * good enough here: a pending edit that never landed is the one thing the
+ * user cannot get back after the grant is gone and the local namespace is
+ * cleared. So the flow reads the pending rows back after the flush and
+ * stops when any remain.
+ *
+ * Stopping is the safe half-answer. The grant stays live, the local rows
+ * stay, and the user can retry once Drive answers again. Revoking over an
+ * unsent edit would destroy it, and REQUIREMENTS 4.4 and 4.20 say a failed
+ * synchronization must not discard local edits.
  *
  * @throws Anything the flush throws. Nothing is revoked on that path.
  */
 export async function runDisconnect(deps: AccountFlowDeps): Promise<DisconnectFlowResult> {
   if (deps.coordinator !== null) {
     await deps.coordinator.flush();
+
+    // A pending row that survived the flush did not reach Drive. Disconnect
+    // would remove the only path it had left.
+    const pending = await deps.coordinator.pendingEdits();
+    if (pending.length > 0) {
+      return { kind: 'revoke_failed', reason: 'pending_sync_failed', pendingNames: pending };
+    }
   }
 
   if (!(await deps.revoke())) {
-    return { kind: 'revoke_failed' };
+    return { kind: 'revoke_failed', reason: 'revoke_unconfirmed' };
   }
 
   await clearAccountNamespace(deps.store);
