@@ -16,6 +16,7 @@
 // coordinator produced rather than guessing from the end state.
 
 import { AppError, type AppErrorKind } from '../../src/domain/errors';
+import { decodeUtf8, encodeUtf8 } from '../../src/bytes/utf8';
 import type {
   DriveAccountProfile,
   DriveAdapter,
@@ -27,7 +28,14 @@ import type {
 interface FakeFile {
   id: string;
   name: string;
-  text: string;
+  /**
+   * The stored content, as bytes.
+   *
+   * Bytes rather than text, because the real adapter hands bytes up and the
+   * export path must be testable against a file that is not valid UTF-8.
+   * `textOf` decodes for the tests that only ever hold JSON.
+   */
+  bytes: Uint8Array;
   /** Bumped on every write, so the version marker always changes. */
   version: number;
   modifiedTime: string;
@@ -97,17 +105,27 @@ export class FakeDrive implements DriveAdapter {
 
   private nextId = 1;
 
-  /** Seed one file. Returns its ID. */
+  /** Seed one file from text. Returns its ID. */
   addFile(name: string, text: string, id?: string): string {
+    return this.addBytes(name, encodeUtf8(text), id);
+  }
+
+  /**
+   * Seed one file from raw bytes. Returns its ID.
+   *
+   * The byte-level entry point. A test that needs a file the app cannot decode
+   * starts here, because `addFile` cannot express one.
+   */
+  addBytes(name: string, bytes: Uint8Array, id?: string): string {
     const fileId = id ?? `f${String(this.nextId++)}`;
     this.files.set(fileId, {
       id: fileId,
       name,
-      text,
+      bytes,
       version: 1,
       modifiedTime: '2026-08-15T00:00:00Z',
       md5: `md5-${fileId}-1`,
-      size: text.length
+      size: bytes.byteLength
     });
     return fileId;
   }
@@ -115,7 +133,15 @@ export class FakeDrive implements DriveAdapter {
   /** Current text of the file with this name. `undefined` when absent. */
   textOf(name: string): string | undefined {
     for (const file of this.files.values()) {
-      if (file.name === name) return file.text;
+      if (file.name === name) return decodeUtf8(file.bytes);
+    }
+    return undefined;
+  }
+
+  /** Current bytes of the file with this name. `undefined` when absent. */
+  bytesOf(name: string): Uint8Array | undefined {
+    for (const file of this.files.values()) {
+      if (file.name === name) return file.bytes;
     }
     return undefined;
   }
@@ -129,15 +155,20 @@ export class FakeDrive implements DriveAdapter {
 
   /** Another device writes this file. Bumps the version marker. */
   remoteWrite(name: string, text: string): void {
+    this.remoteWriteBytes(name, encodeUtf8(text));
+  }
+
+  /** Another device writes raw bytes into this file. */
+  remoteWriteBytes(name: string, bytes: Uint8Array): void {
     for (const file of this.files.values()) {
       if (file.name !== name) continue;
-      file.text = text;
+      file.bytes = bytes;
       file.version += 1;
       file.md5 = `md5-${file.id}-${String(file.version)}`;
-      file.size = text.length;
+      file.size = bytes.byteLength;
       return;
     }
-    this.addFile(name, text);
+    this.addBytes(name, bytes);
   }
 
   /** Make the next write wait until `release()` is called. */
@@ -243,10 +274,11 @@ export class FakeDrive implements DriveAdapter {
       file.md5 = `md5-${file.id}-${String(file.version)}`;
       return this.meta(file);
     }
-    file.text = text;
+    const bytes = encodeUtf8(text);
+    file.bytes = bytes;
     file.version += 1;
     file.md5 = `md5-${file.id}-${String(file.version)}`;
-    file.size = text.length;
+    file.size = bytes.byteLength;
     return this.meta(file);
   }
 
@@ -277,21 +309,22 @@ export class FakeDrive implements DriveAdapter {
       this.awaitingReadBack = false;
       await this.waitReadBackGate();
     }
-    return { text: file.text, meta: this.meta(file) };
+    return { bytes: file.bytes, meta: this.meta(file) };
   }
 
   async createFile(name: string, text: string): Promise<DriveFileMeta> {
     this.calls.push(`createFile:${name}`);
     await this.fail('createFile');
     await this.waitUploadGate();
+    const bytes = encodeUtf8(text);
     const file: FakeFile = {
       id: `f${String(this.nextId++)}`,
       name,
-      text,
+      bytes,
       version: 1,
       modifiedTime: '2026-08-15T00:00:00Z',
       md5: `md5-new-${name}`,
-      size: text.length
+      size: bytes.byteLength
     };
     this.files.set(file.id, file);
     if (this.loseResponseOnNextWrite) {

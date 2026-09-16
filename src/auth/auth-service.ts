@@ -10,6 +10,7 @@
 
 import { AppError, isAppError } from '../domain/errors';
 import { reportError } from '../state/app-state';
+import { clearRawPayloads } from '../state/raw-payload-store';
 import {
   clearAllAuthState,
   hasStoredToken,
@@ -155,10 +156,13 @@ export async function restoreAndBind(deps: BindDependencies): Promise<AuthSessio
  * Forget this device's authorization without revoking the Google grant.
  *
  * REQUIREMENTS 2.12. Clears tokens, request state, the receipt, and the account
- * selection. Local caches and pending edits stay in place.
+ * selection, and drops every held raw payload. A raw JSON view opened under
+ * this account must not stay readable once the account is gone. Local caches
+ * and pending edits stay in place.
  */
 export function signOut(): void {
   clearAllAuthState();
+  clearRawPayloads();
   boundSession = null;
 }
 
@@ -176,6 +180,7 @@ export async function disconnect(deps: DisconnectDependencies): Promise<Disconne
 
   if (accessToken === null) {
     clearAllAuthState();
+    clearRawPayloads();
     boundSession = null;
     return { kind: 'revoked' };
   }
@@ -183,11 +188,13 @@ export async function disconnect(deps: DisconnectDependencies): Promise<Disconne
   try {
     await deps.revoke(accessToken);
     clearAllAuthState();
+    clearRawPayloads();
     boundSession = null;
     return { kind: 'revoked' };
   } catch (error: unknown) {
     if (httpStatusOf(error) === 401) {
       clearAllAuthState();
+      clearRawPayloads();
       boundSession = null;
       return { kind: 'revoked' };
     }
@@ -204,6 +211,7 @@ export async function disconnect(deps: DisconnectDependencies): Promise<Disconne
  */
 export function expireSession(reason: ExpiryReason): void {
   clearAllAuthState();
+  clearRawPayloads();
   boundSession = null;
   reportError(
     new AppError(

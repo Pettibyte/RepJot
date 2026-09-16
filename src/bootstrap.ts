@@ -57,6 +57,7 @@ import { setServices, publishServices } from './services/registry';
 import { createSessionService, type SessionService } from './sessions/session-service';
 import { warmResultShards } from './sync/warm-result-shards';
 import { reportError, setStartupStatus } from './state/app-state';
+import { clearRawPayloads } from './state/raw-payload-store';
 import { createLocalStore as createLocalStoreDefault } from './storage/create-local-store';
 import type { LocalStore } from './storage/local-store';
 import {
@@ -285,6 +286,7 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
   // Step 4. The account namespace opens only now, after the bind resolved.
   // REQUIREMENTS 2.11 and 3.21.
   result.account = toShellAccount(session);
+  clearPayloadsForAccountSwitch(session.accountKey);
   scheduleExpiryWatch();
 
   let store: LocalStore;
@@ -336,12 +338,20 @@ export async function bootstrap(deps: BootstrapDeps): Promise<BootstrapResult> {
 
   // Publish the signed-in services before the mount, so the chooser draws from
   // the real registry on its first render rather than waiting one tick.
+  //
+  // The Drive adapter, the local store, and the account key publish alongside
+  // the rest. Settings reads them for the raw export and the delete flow.
+  // A screen must still handle them as null, because an anonymous visitor
+  // never reaches this line.
   setServices({
     lookup: result.lookup,
     sessionService: result.sessionService,
     preferences: result.preferences,
     coordinator,
-    staticData
+    staticData,
+    drive,
+    store,
+    accountKey: session.accountKey
   });
 
   finishMount(ports, result, target, deps.clientId, coordinator);
@@ -417,6 +427,28 @@ function finishMount(
     target
   );
   result.mounted = true;
+}
+
+/**
+ * Guard the raw payload store against an account switch.
+ *
+ * A raw payload is one account's private document, held in this page's memory
+ * behind a short key. If a second account binds inside the same page, a key
+ * the first account opened would still resolve. Clearing on a key change closes
+ * that window.
+ *
+ * The sign-out path clears the store too, so a switch normally passes through
+ * an empty store already. This guard covers a bind that lands without a sign-out
+ * between, which is the case that would otherwise leak.
+ */
+let lastBoundAccountKey: string | null = null;
+
+/** Clear held raw payloads when the bound account differs from the last one. */
+function clearPayloadsForAccountSwitch(accountKey: string): void {
+  if (lastBoundAccountKey !== null && lastBoundAccountKey !== accountKey) {
+    clearRawPayloads();
+  }
+  lastBoundAccountKey = accountKey;
 }
 
 /**

@@ -17,9 +17,11 @@
 import { writable, type Readable } from 'svelte/store';
 
 import type { LoadedStaticData } from '../documents/static-loader';
+import type { DriveAdapter } from '../drive/drive-interface';
 import type { LookupService } from '../indexes/lookup-service';
 import type { PreferenceService } from '../preferences/preference-service';
 import type { SessionService } from '../sessions/session-service';
+import type { LocalStore } from '../storage/local-store';
 import type { Coordinator } from '../sync/sync-coordinator';
 
 /** The services a signed-in session needs. Each is null until bootstrap sets it. */
@@ -34,6 +36,29 @@ export interface AppServices {
   coordinator: Coordinator | null;
   /** The bundled exercise directory and workout definitions. */
   staticData: LoadedStaticData | null;
+  /**
+   * The Drive adapter for the bound account.
+   *
+   * Settings needs it for two things the coordinator does not expose: a raw
+   * file read for export, and a delete by file ID. Both are user-requested
+   * reads and removals of whole files, not merged documents, so they bypass
+   * the sync layer on purpose. ARCHITECTURE §10.
+   */
+  drive: DriveAdapter | null;
+  /**
+   * The local store for the bound account.
+   *
+   * Delete-all and disconnect clear the account's local rows. Only the store
+   * can do that, so Settings reads it here.
+   */
+  store: LocalStore | null;
+  /**
+   * The bound account key, or `null` while anonymous.
+   *
+   * A screen reads this to tell "no account yet" from "account with no data",
+   * which the service fields alone cannot distinguish.
+   */
+  accountKey: string | null;
 }
 
 /** The registry before bootstrap publishes anything. */
@@ -43,7 +68,10 @@ function emptyServices(): AppServices {
     sessionService: null,
     preferences: null,
     coordinator: null,
-    staticData: null
+    staticData: null,
+    drive: null,
+    store: null,
+    accountKey: null
   };
 }
 

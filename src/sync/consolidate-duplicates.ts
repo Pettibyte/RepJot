@@ -26,6 +26,7 @@
 // REQUIREMENTS 4.24.
 
 import { logDiagnostic } from '../diagnostics/diagnostic-log';
+import { decodeUtf8 } from '../bytes/utf8';
 import { AppError, isAppError } from '../domain/errors';
 import { parseUtc } from '../domain/time';
 import { processDocument } from '../documents/document-pipeline';
@@ -264,7 +265,7 @@ async function loadCopy(
   const read = await drive.readFile(meta.id);
   try {
     const processed = processDocument<Record<string, unknown>>(
-      read.text,
+      decodeUtf8(read.bytes),
       family,
       semanticStageFor(logicalName, staticData)
     );
@@ -535,7 +536,7 @@ export async function consolidateGroup(
   // deleted. REQUIREMENTS 4.25.
   const written = await deps.drive.updateFile(primary.id, text);
   const readBack = await deps.drive.readFile(primary.id);
-  if (!sameJson(readBack.text, text)) {
+  if (!sameJson(decodeUtf8(readBack.bytes), text)) {
     logDiagnostic({
       severity: 'error',
       code: 'duplicate_group_blocked',

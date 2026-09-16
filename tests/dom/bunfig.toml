@@ -1,0 +1,10 @@
+# Client-mode test harness. Run from this directory: `cd tests/dom && bun test`.
+#
+# The root `bunfig.toml` compiles `.svelte` in SSR mode, which renders the
+# initial value and nothing more. It cannot tap a pill, log an event after
+# mount, or drive a dialog, so every finding in the Phase 19 audit was invisible
+# to it. This config compiles the same components in client mode over happy-dom.
+#
+# The root run skips this directory. `bun run test` runs both.
+[test]
+preload = ["./preload.ts"]

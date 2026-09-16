@@ -6,6 +6,7 @@
 
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { resetDiagnosticLog } from '../src/diagnostics/diagnostic-log';
+import { decodeUtf8 } from '../src/bytes/utf8';
 import { AppError } from '../src/domain/errors';
 import type { Session } from '../src/domain/types';
 import { saveStatus } from '../src/state/app-state';
@@ -225,7 +226,7 @@ describe('the surviving file ID is recorded locally', () => {
       (JSON.parse(cached.contentText) as { exerciseUnits: Record<string, unknown> }).exerciseUnits
     ).sort();
     const primaryUnits = Object.keys(
-      (JSON.parse(primaryNow.text) as { exerciseUnits: Record<string, unknown> }).exerciseUnits
+      (JSON.parse(decodeUtf8(primaryNow.bytes)) as { exerciseUnits: Record<string, unknown> }).exerciseUnits
     ).sort();
     expect(cachedUnits).toEqual(primaryUnits);
     expect(cachedUnits).toEqual(['back-squat', 'push-up']);

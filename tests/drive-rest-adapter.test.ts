@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { decodeUtf8 } from '../src/bytes/utf8';
 import { AppError, type AppErrorKind } from '../src/domain/errors';
 import {
   createDriveRestAdapter,
@@ -199,7 +200,7 @@ describe('listCatalog', () => {
 });
 
 describe('readFile', () => {
-  test('returns the media text with fresh metadata', async () => {
+  test('returns the media bytes with fresh metadata', async () => {
     const { fetch, calls } = stubFetch([
       raw('{"hello":"world"}'),
       json(filePayload('f-1'))
@@ -208,10 +209,24 @@ describe('readFile', () => {
 
     const content = await adapter.readFile('f-1');
 
-    expect(content.text).toBe('{"hello":"world"}');
+    expect(decodeUtf8(content.bytes)).toBe('{"hello":"world"}');
     expect(content.meta.id).toBe('f-1');
     expect(calls[0].url).toContain('/drive/v3/files/f-1?alt=media');
     expect(calls[1].url).toContain(`/drive/v3/files/f-1?fields=${META_FIELDS}`);
+  });
+
+  test('bytes that are not valid UTF-8 come back unchanged', async () => {
+    // The export requirement in one case. `Response.text()` would replace each
+    // invalid byte with U+FFFD and grow these 5 bytes to 11, so the adapter
+    // must not decode. REQUIREMENTS 12.10.
+    const source = new Uint8Array([255, 254, 65, 128, 66]);
+    const { fetch } = stubFetch([new Response(source, { status: 200 }), json(filePayload('f-1'))]);
+    const adapter = createDriveRestAdapter(tokenSource, { fetchImpl: fetch });
+
+    const content = await adapter.readFile('f-1');
+
+    expect(Array.from(content.bytes)).toEqual([255, 254, 65, 128, 66]);
+    expect(content.bytes.byteLength).toBe(5);
   });
 
   test('a 404 on the media read rejects with invalid_document and reason not_found', async () => {

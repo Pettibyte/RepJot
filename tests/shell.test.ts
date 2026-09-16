@@ -222,12 +222,15 @@ describe('shell route outlet', () => {
     expect(out).toContain('Continue with Google');
   });
 
-  test('an unbuilt route renders not-found with its own address', () => {
+  test('the settings route renders the Settings screen', () => {
     setStartupStatus('ready');
     const out = html(App, { route: routeStore({ name: 'settings' }), account: ACCOUNT, clientId: 'cid' });
 
-    expect(out).toContain('No screen for that address');
-    expect(out).toContain('#/settings');
+    // Phase 19 registered this route. It no longer resolves to the not-found
+    // screen, so the address the shell shows is the settings screen itself.
+    expect(out).toContain('Settings');
+    expect(out).not.toContain('No screen for that address');
+    expect(out).toContain('For non-commercial use only.');
   });
 
   test('an unmatched route shows the text the user typed', () => {

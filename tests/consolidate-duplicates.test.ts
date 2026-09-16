@@ -8,6 +8,7 @@
 
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { resetDiagnosticLog } from '../src/diagnostics/diagnostic-log';
+import { encodeUtf8 } from '../src/bytes/utf8';
 import type { Session } from '../src/domain/types';
 import type { DriveFileMeta } from '../src/drive/drive-interface';
 import {
@@ -476,7 +477,7 @@ describe('a blocked group writes nothing', () => {
     drive.updateFile = async (id: string, text: string): Promise<DriveFileMeta> => {
       const meta = await originalUpdate(id, text);
       const file = drive.files.get(id);
-      if (file !== undefined) file.text = '{"format":"repjot/results"}';
+      if (file !== undefined) file.bytes = encodeUtf8('{"format":"repjot/results"}');
       return meta;
     };
 

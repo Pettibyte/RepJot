@@ -1413,3 +1413,211 @@
   margin: 0;
   padding: 0;
 }
+
+/* Settings screen ---------------------------------------------------- */
+/* Phase 19. Units list, raw export, diagnostics, license, danger zone. */
+
+.settings-screen__title {
+  font-size: var(--text-headline-md);
+  margin-bottom: var(--space-3);
+}
+
+/* One bordered block per section. The sections sit in a plain column, so the
+   spacing is a top margin on the sibling, never a flex `gap`. */
+.settings-section {
+  background-color: var(--color-surface-raised);
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.settings-section + .settings-section,
+.settings-stack + .settings-section,
+.settings-license + .settings-section {
+  margin-top: var(--space-3);
+}
+
+.settings-stack > .settings-section + .settings-section {
+  margin-top: var(--space-3);
+}
+
+.settings-section__title {
+  color: var(--color-on-surface);
+  font-size: var(--text-headline-sm);
+  font-weight: var(--weight-bold);
+}
+
+.settings-section__hint {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-body);
+  margin-top: var(--space-1);
+}
+
+.settings-section__empty {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-body);
+  margin-top: var(--space-2);
+}
+
+.settings-section__count {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  margin-top: var(--space-2);
+}
+
+.settings-section__error {
+  color: var(--color-error);
+  font-size: var(--text-body);
+  margin-top: var(--space-2);
+}
+
+.settings-section__actions {
+  margin-top: var(--space-3);
+}
+
+.settings-section__actions .btn + .btn {
+  margin-left: var(--space-2);
+}
+
+/* Exercise unit list. One row per exercise: the name on the left, every
+   switchable unit on the right. The row wraps on a narrow page. */
+.unit-list,
+.export-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.unit-row,
+.export-row {
+  align-items: baseline;
+  border-top: var(--border-weight) solid var(--color-outline-variant);
+  display: flex;
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+}
+
+.unit-row__name,
+.export-row__name {
+  color: var(--color-on-surface);
+  flex: 1 1 auto;
+  font-size: var(--text-body);
+  min-width: 40%;
+}
+
+.unit-row__cells {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* No flex `gap`: the targeted Kindle browser has none. The margin sits on
+   every pill after the first. */
+.unit-row__cells > * + * {
+  margin-left: var(--space-2);
+}
+
+.unit-row__static {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+}
+
+.export-row__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.export-row__meta > * + * {
+  margin-left: var(--space-2);
+}
+
+.export-row__size {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+}
+
+.export-row__actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.export-row__error {
+  color: var(--color-error);
+  flex: 1 1 100%;
+  font-size: var(--text-body);
+  margin-top: var(--space-1);
+}
+
+/* License. Always rendered, so the terms are reachable without scrolling
+   past a long danger zone. */
+.settings-license__text {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-label);
+  line-height: var(--lh-body);
+}
+
+/* Danger zone. Heavier border, and the two actions stay visibly apart so one
+   is never mistaken for the other. */
+.settings-danger {
+  border-width: calc(var(--border-weight) * 2);
+}
+
+.settings-danger__divider {
+  border-top: var(--border-weight) solid var(--color-outline-variant);
+  margin-top: var(--space-3);
+}
+
+/* A section nested inside the danger zone reads as content, not a second
+   box. The danger zone carries the border. */
+.settings-danger .settings-section {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* Typed-phrase and second-press confirmations. Both live inside the danger
+   zone as panels, not overlays. */
+.danger-confirm {
+  border: var(--border-weight) solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.danger-confirm__title {
+  font-size: var(--text-headline-sm);
+  font-weight: var(--weight-bold);
+}
+
+.danger-confirm__count {
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  margin-top: var(--space-2);
+}
+
+.danger-confirm__warning {
+  color: var(--color-on-surface);
+  font-size: var(--text-body);
+  margin-top: var(--space-2);
+}
+
+.danger-confirm__error {
+  color: var(--color-error);
+  font-size: var(--text-body);
+  margin-top: var(--space-2);
+}
+
+.danger-confirm__actions {
+  margin-top: var(--space-3);
+}
+
+.danger-confirm__actions .btn + .btn {
+  margin-left: var(--space-2);
+}

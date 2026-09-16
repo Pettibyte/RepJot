@@ -27,15 +27,22 @@ export interface DriveFileMeta {
 }
 
 /**
- * One file read: text read at one moment, metadata read a moment shortly after.
+ * One file read: bytes read at one moment, metadata read a moment shortly after.
  *
  * `readFile` issues two requests, because Drive offers no single call that
  * returns both. A write from another device between them makes `meta` describe
- * bytes newer than `text`. They are not an atomic pair. REQUIREMENTS 4.16 says
+ * bytes newer than `bytes`. They are not an atomic pair. REQUIREMENTS 4.16 says
  * the preflight read narrows the race window and does not close it.
+ *
+ * The content is bytes, not text. A caller that must parse decodes with
+ * `decodeUtf8`; a caller that hands the file back to the user writes the bytes
+ * straight through. Decoding is lossy for bytes that are not valid UTF-8, so
+ * the contract does not decide it for the caller. REQUIREMENTS 12.10.
  */
 export interface DriveFileContent {
-  text: string;
+  /** The file content, byte for byte as Drive served it. */
+  bytes: Uint8Array;
+  /** Metadata read after the content. See the note above. */
   meta: DriveFileMeta;
 }
 
@@ -79,7 +86,7 @@ export interface DriveAdapter {
   listCatalog(): Promise<DriveFileMeta[]>;
 
   /**
-   * Read one file's text with fresh metadata.
+   * Read one file's bytes with fresh metadata.
    *
    * This is the preflight read the merge needs before an upload. The two parts
    * are read in sequence, not atomically. REQUIREMENTS 4.6, 4.16.

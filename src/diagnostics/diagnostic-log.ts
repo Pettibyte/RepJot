@@ -61,7 +61,36 @@ export type DiagnosticInput = Omit<DiagnosticEvent, 'recordedAtUtc'>;
 /** The ring. Oldest at index 0, newest at the end. Never persisted. */
 const ring: DiagnosticEvent[] = [];
 
-/** Append one event and trim the oldest beyond the cap. */
+/**
+ * Change listeners.
+ *
+ * The ring is a plain array, so a reader cannot subscribe to it. A component
+ * that shows a live count needs one, because a dependency-free `$derived`
+ * computes once and caches for the life of the instance. Every ring write
+ * therefore calls these listeners, and a listener re-reads what it wants.
+ */
+type DiagnosticListener = () => void;
+const listeners = new Set<DiagnosticListener>();
+
+/** Tell every listener the ring changed. */
+function notifyListeners(): void {
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Watch the ring for changes.
+ *
+ * Returns the unsubscribe function. A listener must re-read the ring itself;
+ * it is told that something moved, not what moved.
+ */
+export function onDiagnosticChange(listener: DiagnosticListener): () => void {
+  listeners.add(listener);
+  return (): void => {
+    listeners.delete(listener);
+  };
+}
+
+/** Append one event and trim the oldest beyond the cap. Silent by design. */
 function append(event: DiagnosticEvent): void {
   ring.push(event);
   if (ring.length > MAX_DIAGNOSTIC_EVENTS) ring.splice(0, ring.length - MAX_DIAGNOSTIC_EVENTS);
@@ -130,6 +159,7 @@ export function logDiagnostic(event: DiagnosticInput): void {
     ring.pop();
     append(source);
     append(guard);
+    notifyListeners();
     return;
   }
 
@@ -142,11 +172,24 @@ export function logDiagnostic(event: DiagnosticInput): void {
       context: { sourceCode: event.code, refusedKeys, redactedValues }
     });
   }
+  // One notification per recorded event. `append` is silent so a coalesce,
+  // which writes two entries, does not wake a listener twice for one call.
+  notifyListeners();
 }
 
 /** Read a guard counter, treating a missing or non-numeric value as zero. */
 function numberOr(value: string | number | undefined): number {
   return typeof value === 'number' ? value : 0;
+}
+
+/**
+ * How many events the ring holds right now.
+ *
+ * Cheaper than `diagnosticSnapshot()` for a reader that only wants the size,
+ * because it copies nothing.
+ */
+export function diagnosticCount(): number {
+  return ring.length;
 }
 
 /**
@@ -200,4 +243,5 @@ export function downloadDiagnosticLog(): void {
  */
 export function resetDiagnosticLog(): void {
   ring.length = 0;
+  notifyListeners();
 }

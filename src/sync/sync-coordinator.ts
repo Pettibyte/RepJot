@@ -28,6 +28,7 @@
 // text that Drive has never seen. REQUIREMENTS 4.5.
 
 import { logDiagnostic } from '../diagnostics/diagnostic-log';
+import { decodeUtf8 } from '../bytes/utf8';
 import { AppError, type AppErrorKind } from '../domain/errors';
 import type { ResultsShard } from '../domain/types';
 import { shardName } from '../domain/time';
@@ -663,7 +664,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
             logicalName,
             family,
             slots,
-            remote === null ? null : remote.text,
+            remote === null ? null : decodeUtf8(remote.bytes),
             remote === null ? null : remote.meta
           )
         );
@@ -810,7 +811,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
     const catalog = (await loadCatalog(logicalName)).catalog;
     const entry = catalogEntry(catalog, logicalName);
     const remote = entry === null ? null : await deps.drive.readFile(entry.id);
-    const remoteText = remote === null ? null : remote.text;
+    const remoteText = remote === null ? null : decodeUtf8(remote.bytes);
     const remoteMeta = remote === null ? null : remote.meta;
 
     const baseText = loaded.baseText;
@@ -898,7 +899,7 @@ export function createCoordinator(deps: SyncDeps): Coordinator {
 
     // Step 14: read the bytes back and compare exactly.
     const readBack = await deps.drive.readFile(written.id);
-    if (readBack.text !== text) {
+    if (decodeUtf8(readBack.bytes) !== text) {
       throw new AppError(
         'network',
         { reason: 'read_back_mismatch' },

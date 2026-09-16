@@ -1,2 +1,7 @@
 [test]
 preload = ["./tests/support/svelte-ssr.ts"]
+# The client-mode harness compiles `.svelte` a different way and carries its own
+# `bunfig.toml`. It runs through `bun run test:dom`, and `bun run test` runs
+# both. Skipping it here keeps one `bun test` invocation from mixing the two
+# compile modes in one process.
+pathIgnorePatterns = ["tests/dom/*"]

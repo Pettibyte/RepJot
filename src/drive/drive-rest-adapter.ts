@@ -303,9 +303,13 @@ export function createDriveRestAdapter(
       `${DRIVE_API}/files/${encodeURIComponent(id)}?alt=media`,
       { method: 'GET', cache: 'no-store' }
     );
-    const text: string = await mediaResponse.text();
+    // Bytes, not text. `Response.text()` decodes UTF-8 and replaces every
+    // invalid byte with U+FFFD, so a file that is not valid UTF-8 would come
+    // back changed and the export would write the changed file. The export must
+    // hand the user the bytes Drive holds. REQUIREMENTS 12.10.
+    const bytes: Uint8Array = new Uint8Array(await mediaResponse.arrayBuffer());
     const meta: DriveFileMeta = await fetchMeta(id, operation);
-    return { text, meta };
+    return { bytes, meta };
   }
 
   async function createFile(name: string, text: string): Promise<DriveFileMeta> {

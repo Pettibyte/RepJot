@@ -8,6 +8,7 @@
 
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { resetDiagnosticLog } from '../src/diagnostics/diagnostic-log';
+import { decodeUtf8 } from '../src/bytes/utf8';
 import { AppError } from '../src/domain/errors';
 import type { Exercise, PreferencesDoc } from '../src/domain/types';
 import { createMemoryLocalStore } from '../src/storage/memory-local-store';
@@ -256,10 +257,10 @@ describe('setUnit', () => {
     const { service, drive } = makeSetup([{ name: PREFERENCES_NAME, text: JSON.stringify(seed) }]);
     await service.ensureDoc();
     const id = drive.idsOf(PREFERENCES_NAME)[0];
-    const before = (await drive.readFile(id)).text;
+    const before = decodeUtf8((await drive.readFile(id)).bytes);
 
     await kindOfRejection(() => service.setUnit('jump-rope', 'weight', 'kg'));
-    expect((await drive.readFile(id)).text).toBe(before);
+    expect(decodeUtf8((await drive.readFile(id)).bytes)).toBe(before);
   });
 });
 
@@ -455,7 +456,7 @@ describe('a preference change does not touch stored results', () => {
     // The shard on Drive is byte-identical. The preference write touched only
     // preferences.json, so a recorded set keeps its value and unit.
     // REQUIREMENTS 12.7.
-    expect((await drive.readFile(shardId)).text).toBe(shardText);
+    expect(decodeUtf8((await drive.readFile(shardId)).bytes)).toBe(shardText);
   });
 
   test('a stored 100 lb result still reads 100 lb after the default flips to kg', async () => {
@@ -466,11 +467,11 @@ describe('a preference change does not touch stored results', () => {
     ]);
     await service.ensureDoc();
     const shardId = drive.idsOf(SHARD_NAME)[0];
-    const before = (await drive.readFile(shardId)).text;
+    const before = decodeUtf8((await drive.readFile(shardId)).bytes);
 
     // Flip the preference, then read the stored result back out of the shard.
     await service.setUnit('back-squat', 'weight', 'kg');
-    const after = JSON.parse((await drive.readFile(shardId)).text) as typeof shard;
+    const after = JSON.parse(decodeUtf8((await drive.readFile(shardId)).bytes)) as typeof shard;
 
     // Find the recorded 100 lb squat set. The preference now says kg, which
     // changes what the pill shows next time, not what this result holds.

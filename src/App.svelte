@@ -20,9 +20,8 @@
   //
   // Route outlet. Phase 17 registers the Active Workout screen, so a started
   // session opens into the editor instead of the typed not-found state. Phase
-  // 18 registers the summary, history, and exercise-history screens. The
-  // settings route belongs to Phase 19 and still resolves to the not-found
-  // screen until its component is registered here.
+  // 18 registers the summary, history, and exercise-history screens. Phase 19
+  // registers the Settings screen.
 
   import type { Readable } from 'svelte/store';
   import AppHeader from './ui/components/AppHeader.svelte';
@@ -33,6 +32,7 @@
   import LandingScreen from './ui/screens/LandingScreen.svelte';
   import NotFoundScreen from './ui/screens/NotFoundScreen.svelte';
   import RawJsonScreen from './ui/screens/RawJsonScreen.svelte';
+  import SettingsScreen from './ui/screens/SettingsScreen.svelte';
   import ActiveWorkoutScreen from './ui/screens/ActiveWorkoutScreen.svelte';
   import ExerciseHistoryScreen from './ui/screens/ExerciseHistoryScreen.svelte';
   import WorkoutHistoryScreen from './ui/screens/WorkoutHistoryScreen.svelte';
@@ -222,6 +222,8 @@
         <ExerciseHistoryScreen exerciseId={current.exerciseId} />
       {:else if current.name === 'raw-json'}
         <RawJsonScreen source={current.source} />
+      {:else if current.name === 'settings'}
+        <SettingsScreen {clientId} {onSignIn} />
       {:else}
         <NotFoundScreen attempted={attemptedAddress} />
       {/if}
