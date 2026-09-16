@@ -127,26 +127,26 @@ in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
 
 ### Implementation
 
-- [ ] Implement `buildActiveWorkoutModel` with one row per editable exercise
+- [x] Implement `buildActiveWorkoutModel` with one row per editable exercise
       occurrence and one group per container.
-- [ ] Implement `ValueInput.svelte` with dimension-driven `inputmode` and unit pill.
+- [x] Implement `ValueInput.svelte` with dimension-driven `inputmode` and unit pill.
 - [ ] Implement `UnitPill.svelte` using `nextCompatibleUnit` and
       `preferences.setUnit`.
 - [ ] Implement `LastTimeBadge.svelte` using `lookup.getLastTime`.
-- [ ] Implement `ExerciseRow.svelte` with status control and the skip reason select.
-- [ ] Implement `AmrapControls.svelte` with the large `+` and the partial-round field.
-- [ ] Implement `EmomControls.svelte` with per-interval entry.
-- [ ] Implement `ContainerScoreEditor.svelte` with the `Detailed` indicator for a
+- [x] Implement `ExerciseRow.svelte` with status control and the skip reason select.
+- [x] Implement `AmrapControls.svelte` with the large `+` and the partial-round field.
+- [x] Implement `EmomControls.svelte` with per-interval entry.
+- [x] Implement `ContainerScoreEditor.svelte` with the `Detailed` indicator for a
       `nonstandard` score.
-- [ ] Implement `AggregateExpander.svelte` with the `Inferred` label on every draft
+- [x] Implement `AggregateExpander.svelte` with the `Inferred` label on every draft
       value.
-- [ ] Implement `FinishWorkoutBar.svelte` with Finish, Abandon, and the incomplete
+- [x] Implement `FinishWorkoutBar.svelte` with Finish, Abandon, and the incomplete
       prompt.
-- [ ] Implement `ActiveWorkoutScreen.svelte`: load, build the model, wire blur saves
+- [x] Implement `ActiveWorkoutScreen.svelte`: load, build the model, wire blur saves
       through `src/sync/debounce.ts`, and flush on route change.
-- [ ] Render `DataError` inline for any unresolved row without dropping the rest of
+- [x] Render `DataError` inline for any unresolved row without dropping the rest of
       the tree.
-- [ ] Keep the save-status indicator visible in the back header.
+- [x] Keep the save-status indicator visible in the back header.
 - [ ] Confirm every new `.svelte` file uses runes: `$props()`, `$bindable()`, and
       snippets, with no `export let`, no `<slot>`, and no `on:click`.
 

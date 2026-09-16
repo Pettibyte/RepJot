@@ -123,19 +123,19 @@ in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
 
 ### Implementation
 
-- [ ] Implement `buildSummaryModel` with grouping by encoded path and a fallback sort
+- [x] Implement `buildSummaryModel` with grouping by encoded path and a fallback sort
       by the encoded path string when the tree cannot resolve.
-- [ ] Implement `SummaryTree.svelte` that renders recorded work without requiring the
+- [x] Implement `SummaryTree.svelte` that renders recorded work without requiring the
       workout tree.
-- [ ] Implement `LoadOlder.svelte` with a disabled state while a load runs.
-- [ ] Implement `buildWorkoutHistoryModel` and `buildExerciseHistoryModel`.
-- [ ] Implement `WorkoutSummaryScreen.svelte` with the **Edit** action.
-- [ ] Implement `WorkoutHistoryScreen.svelte` with paging through
+- [x] Implement `LoadOlder.svelte` with a disabled state while a load runs.
+- [x] Implement `buildWorkoutHistoryModel` and `buildExerciseHistoryModel`.
+- [x] Implement `WorkoutSummaryScreen.svelte` with the **Edit** action.
+- [x] Implement `WorkoutHistoryScreen.svelte` with paging through
       `lookup.getWorkoutHistory` and `extendHistory`.
-- [ ] Implement `ExerciseHistoryScreen.svelte` with paging through
+- [x] Implement `ExerciseHistoryScreen.svelte` with paging through
       `getExerciseHistory`.
-- [ ] Confirm no screen computes a volume total.
-- [ ] Render `DataError` per unresolved result without dropping the list.
+- [x] Confirm no screen computes a volume total.
+- [x] Render `DataError` per unresolved result without dropping the list.
 - [ ] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
       `export let`, no `<slot>`, and no `on:click`.
 

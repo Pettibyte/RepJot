@@ -129,27 +129,27 @@ in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
 
 ### Implementation
 
-- [ ] Implement `buildExportList` with the duplicate-name suffix rule.
-- [ ] Implement `downloadText` and `downloadBytes` with Blob, object URL, and the
+- [x] Implement `buildExportList` with the duplicate-name suffix rule.
+- [x] Implement `downloadText` and `downloadBytes` with Blob, object URL, and the
       `download` attribute.
-- [ ] Implement `deleteAllUserData` with the five steps and a re-list bound to avoid
+- [x] Implement `deleteAllUserData` with the five steps and a re-list bound to avoid
       an infinite loop.
-- [ ] Implement `ExerciseUnitsSection.svelte` with one pill per exercise.
-- [ ] Implement `DataExportSection.svelte` with per-file download and a failed-row
+- [x] Implement `ExerciseUnitsSection.svelte` with one pill per exercise.
+- [x] Implement `DataExportSection.svelte` with per-file download and a failed-row
       state that leaves other rows usable.
-- [ ] Implement `DiagnosticSection.svelte` calling `downloadDiagnosticLog`.
-- [ ] Implement `DeleteAllDataDialog.svelte` with the exact-phrase gate and the
+- [x] Implement `DiagnosticSection.svelte` calling `downloadDiagnosticLog`.
+- [x] Implement `DeleteAllDataDialog.svelte` with the exact-phrase gate and the
       warning copy.
-- [ ] Implement `DisconnectSection.svelte` with the revoke call and the fallback link
+- [x] Implement `DisconnectSection.svelte` with the revoke call and the fallback link
       to Google Account connections.
-- [ ] Implement `SettingsScreen.svelte` assembling the sections plus the license line.
-- [ ] After a complete deletion, clear the account namespace, pending edits, and
+- [x] Implement `SettingsScreen.svelte` assembling the sections plus the license line.
+- [x] After a complete deletion, clear the account namespace, pending edits, and
       in-memory indexes, then route to the landing screen.
-- [ ] After disconnect, clear the selected account cache and route to the landing
+- [x] After disconnect, clear the selected account cache and route to the landing
       screen.
-- [ ] Call `clearRawPayloads()` in the sign-out path and in the account-switch
+- [x] Call `clearRawPayloads()` in the sign-out path and in the account-switch
       path, so a raw payload opened under one account cannot open under another.
-- [ ] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
+- [x] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
       `export let`, no `<slot>`, and no `on:click`.
 
 ### Tests

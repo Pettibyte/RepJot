@@ -125,18 +125,18 @@ in `src/App.svelte`, `src/ui/components/DataError.svelte`, and the screens under
 
 ### Implementation
 
-- [ ] Implement `buildChooserModel` with the date label rule: today shows the time,
+- [x] Implement `buildChooserModel` with the date label rule: today shows the time,
       an earlier day shows the date, and a non-current year includes the year.
-- [ ] Implement `buildOverviewModel` walking `resolveTree` output.
-- [ ] Implement `SessionListItem.svelte` with a status badge and a link.
-- [ ] Implement `WorkoutTreeReadOnly.svelte` with indentation by depth using
+- [x] Implement `buildOverviewModel` walking `resolveTree` output.
+- [x] Implement `SessionListItem.svelte` with a status badge and a link.
+- [x] Implement `WorkoutTreeReadOnly.svelte` with indentation by depth using
       `--space-*` tokens only.
-- [ ] Implement `LandingScreen.svelte` with the checkbox and the sign-in button.
-- [ ] Implement `WorkoutChooserScreen.svelte` with the two sections and `Load older`.
-- [ ] Implement `WorkoutOverviewScreen.svelte` with the `Start Workout` action and a
+- [x] Implement `LandingScreen.svelte` with the checkbox and the sign-in button.
+- [x] Implement `WorkoutChooserScreen.svelte` with the two sections and `Load older`.
+- [x] Implement `WorkoutOverviewScreen.svelte` with the `Start Workout` action and a
       pending state while the session write resolves.
-- [ ] Wire all three into the Phase 15 route outlet.
-- [ ] Show `DataError` for an unresolved workout reference inside the chooser list
+- [x] Wire all three into the Phase 15 route outlet.
+- [x] Show `DataError` for an unresolved workout reference inside the chooser list
       without dropping the other rows.
 - [ ] Confirm every new `.svelte` file uses runes: `$props()` and snippets, with no
       `export let`, no `<slot>`, and no `on:click`.

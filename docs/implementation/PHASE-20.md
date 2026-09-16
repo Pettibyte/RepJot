@@ -122,20 +122,20 @@ It then prints the gate table from `docs/RELEASE.md` for manual sign-off.
 - [ ] Add the CSP meta policy to the production build through the
       `kindle-classic-entry` plugin in `vite.config.ts`, and confirm the app
       still runs in development with hot reload and in the built bundle.
-- [ ] Set the final page title and the `lang` attribute.
-- [ ] Extend `scripts/check-browser-compat.ts` with checks 4 through 8.
-- [ ] Create `scripts/release-check.ts` and register `bun run release:check`.
-- [ ] Write `src/public/privacy.html` covering access, storage, use, export,
+- [x] Set the final page title and the `lang` attribute.
+- [x] Extend `scripts/check-browser-compat.ts` with checks 4 through 8.
+- [x] Create `scripts/release-check.ts` and register `bun run release:check`.
+- [x] Write `src/public/privacy.html` covering access, storage, use, export,
       deletion, the local-storage disclosure, and the contact process.
-- [ ] Link the privacy policy from the landing screen and from the Settings license
+- [x] Link the privacy policy from the landing screen and from the Settings license
       area.
-- [ ] Write `docs/RELEASE.md` with the gate table, the recorded bundle budget, the
+- [x] Write `docs/RELEASE.md` with the gate table, the recorded bundle budget, the
       file-count budget, and the Kindle smoke checklist.
-- [ ] Confirm `bun.lock` is committed and `bun install --frozen-lockfile` succeeds
+- [x] Confirm `bun.lock` is committed and `bun install --frozen-lockfile` succeeds
       from a clean checkout.
-- [ ] Confirm no client secret appears in source, `.env.example`, or `dist/`.
-- [ ] Confirm `src/public/CNAME` contains `repjot.com`.
-- [ ] Confirm no `.svelte` file in the tree uses legacy syntax: no `export let`,
+- [x] Confirm no client secret appears in source, `.env.example`, or `dist/`.
+- [x] Confirm `src/public/CNAME` contains `repjot.com`.
+- [x] Confirm no `.svelte` file in the tree uses legacy syntax: no `export let`,
       no `<slot>`, and no `on:click`. Every component uses Svelte 5 runes. See
       the runes rule in `docs/implementation/README.md` and the **Component
       syntax** section in Phases 16 through 19.
