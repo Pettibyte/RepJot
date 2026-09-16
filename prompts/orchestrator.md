@@ -68,14 +68,14 @@ You use the tools `spawn_subsession`, `yield_to_subsessions` (never poll, always
 Invoke Builder with `spawn_subsession`, the above specified model, and the following prompt, saving its session ID to your state file:
 
 ```
-You are a software engineer. Review @docs/implementation/PHASE-${CURRENT_PHASE}.md. Use `ask_user` to resolve any questions you need before building. If you call `ask_user`, stop and leave `builder` as `pending` and `state` as `builder`; do not stage changes or advance the state until the user answers and you are resumed. When the build is complete, stage the changes. Only then, in `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `builder` to `complete` and `state` to `judge`. Preserve all other values and keep the file valid JSON.
+You are a software engineer. Review @docs/implementation/PHASE-${CURRENT_PHASE}.md. Use `ask_user` to resolve any questions you need before building. If you call `ask_user`, stop and leave `builder` as `pending` and `state` as `builder`; do not stage changes or advance the state until the user answers and you are resumed. Mark checklist items complete in current phase implementation document. When the build is complete, stage the changes. Only then, in `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `builder` to `complete` and `state` to `judge`. Preserve all other values and keep the file valid JSON.
 ```
 
 When Builder finishes, invoke Judge with `spawn_subsession`, the above specified model, and the following prompt, saving its session ID to your state file:
 
 ```
 You are a software engineer. Review the staged changes. They represent work for Phase ${CURRENT_PHASE} as defined in @docs/implementation/PHASE-${CURRENT_PHASE}.md.
-Assess them for correctness. Any correctness issue you report must cite the specific requirement that is violated and include steps to reproduce it. Save your findings to `.agent-work/phase-${CURRENT_PHASE}/audit.md`. In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `judge` to `complete` and `state` to `verifier`. Preserve all other values and keep the file valid JSON.
+Assess them for correctness. Any correctness issue you report must cite the specific requirement that is violated and include steps to reproduce it. All probes or tests you write to assess findings must add to the existing test suite--leave behind tests that fail because of the issues you identified. Save your findings to `.agent-work/phase-${CURRENT_PHASE}/audit.md`. In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `judge` to `complete` and `state` to `verifier`. Preserve all other values and keep the file valid JSON.
 ```
 
 When Judge finishes, invoke Verifier using `continue_subsession`, reusing the session ID from Builder. *Important*: Be certain you reuse Builder's session ID. Use this prompt:
@@ -84,7 +84,7 @@ When Judge finishes, invoke Verifier using `continue_subsession`, reusing the se
 Review and verify the key technical claims in `.agent-work/phase-${CURRENT_PHASE}/audit.md`. Save all work that you agree must be fixed to `.agent-work/phase-${CURRENT_PHASE}/to-fix.md`. In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `verifier` to `complete` and `state` to `fixer`. Preserve all other values and keep the file valid JSON.
 ```
 
-When Verifier finish, invoke Fixer with `spawn_subsession`, the above specified model, and the following prompt, saving its session ID to your state file:
+When Verifier finishes, invoke Fixer with `spawn_subsession`, the above specified model, and the following prompt, saving its session ID to your state file:
 
 ```
 Fix all issues identified in `.agent-work/phase-${CURRENT_PHASE}/to-fix.md` and stage the changes. In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `fixer` to `complete` and `state` to `committer`. Preserve all other values and keep the file valid JSON.
@@ -93,5 +93,5 @@ Fix all issues identified in `.agent-work/phase-${CURRENT_PHASE}/to-fix.md` and 
 Finally, return control to Builder-Verifier, reusing the session ID from before. *Important*: Be certain you reuse Builder's session ID. Use this prompt:
 
 ```
-In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `committer` to `complete` and `state` to `complete`. Preserve all other values, keep the file valid JSON, and stage it. Commit the work with a commit message in this exact format: first line, the headline commit message (for example, `Phase ${CURRENT_PHASE}: phase title`); then a blank line; then a Markdown list of significant simplifications and changes.
+In `.agent-work/phase-${CURRENT_PHASE}/status.json`, set `committer` to `complete` and `state` to `complete`. Preserve all other values, keep the file valid JSON. Commit the work with a commit message in this exact format: first line, the headline commit message (for example, `Phase ${CURRENT_PHASE}: phase title`); then a blank line; then a Markdown list of significant simplifications and changes.
 ```
