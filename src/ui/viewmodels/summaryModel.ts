@@ -19,7 +19,7 @@
 //    its row and adds one entry to `unresolved`, which the screen turns into
 //    one `DataError` card. REQUIREMENTS 6.10.
 
-import type { ReasonCode, ResultStatus, Side } from '../../domain/enums';
+import type { ReasonCode, ResultStatus, SetType, Side, Stimulus } from '../../domain/enums';
 import type {
   ContainerResult,
   ExerciseResult,
@@ -42,6 +42,7 @@ import {
 import { unitLabel, formatAlternatingReps } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
 import { formatHistoryDate } from './historyModel';
+import { workoutSectionLabel } from './overviewModel';
 
 /**
  * The result dimensions, in the order a row prints them.
@@ -134,6 +135,9 @@ export interface SummaryExerciseRow {
   href?: string;
   /** The stored result, re-serialized for **View Raw JSON**. */
   rawJson: string;
+  /** Presentation metadata from the current tree when the row resolves. */
+  setType?: SetType;
+  stimulus?: Stimulus;
 }
 
 /** One recorded container score, shaped for the summary. */
@@ -192,6 +196,19 @@ export interface SummaryGroup {
   sortIteration: number;
 }
 
+/** Repeated recorded sets shown under one exercise heading. */
+export interface SummarySetTable {
+  key: string;
+  title: string;
+  sectionTitle: string;
+  label: string;
+  rows: Array<SummaryExerciseRow & { setNumber: number }>;
+}
+
+export type SummaryDisplayBlock =
+  | { kind: 'group'; group: SummaryGroup; sectionTitle?: string }
+  | { kind: 'set-table'; table: SummarySetTable };
+
 /** Everything the Workout Summary draws. */
 export interface SummaryModel {
   /** The workout name, or the stored `workoutId` when the bundle lacks it. */
@@ -204,6 +221,8 @@ export interface SummaryModel {
   completedLabel: string;
   /** Recorded work, grouped and ordered. */
   groups: SummaryGroup[];
+  /** Semantic presentation with repeated exercise sets collapsed. */
+  blocks: SummaryDisplayBlock[];
   /**
    * The results the current bundle cannot resolve.
    *
@@ -486,6 +505,7 @@ function buildExerciseRow(
   const exercise = staticData.exerciseById.get(result.exerciseId);
 
   let unresolvedReason: SummaryUnresolvedReason | undefined;
+  let matchedNode: WorkoutNode | null = null;
   if (workout === undefined) {
     unresolvedReason = 'unknown_workout';
   } else if (exercise === undefined) {
@@ -495,6 +515,7 @@ function buildExerciseRow(
   } else {
     const resolved = resolveRecordedPath(workout, path);
     const node = resolved !== null && resolved.ok ? resolved.node : null;
+    matchedNode = node;
     if (node === null) {
       unresolvedReason = 'broken_path';
     } else if (node.type === 'exercise' && node.exerciseId !== result.exerciseId) {
@@ -515,6 +536,10 @@ function buildExerciseRow(
     unresolved: false,
     rawJson: JSON.stringify(result, null, 2)
   };
+  if (matchedNode?.type === 'exercise') {
+    if (matchedNode.setType !== undefined) row.setType = matchedNode.setType;
+    if (matchedNode.stimulus !== undefined) row.stimulus = matchedNode.stimulus;
+  }
   if (result.side !== undefined) row.side = result.side;
   if (result.reasonCode !== undefined) {
     row.reasonCode = result.reasonCode;
@@ -582,6 +607,95 @@ function buildContainerRow(
     row.unresolved = false;
   }
   return row;
+}
+
+function repeatedSetScope(group: SummaryGroup): string | null {
+  if (group.containers.length > 0 || group.rows.length === 0) return null;
+  const exerciseIds = new Set(group.rows.map((row) => row.exerciseId));
+  if (exerciseIds.size !== 1 || group.rows.some((row) => row.unresolved)) return null;
+
+  let scope: string | null = null;
+  for (const row of group.rows) {
+    const parent = row.path.slice(0, -1).map((segment) => ({ ...segment }));
+    const repeated = parent[parent.length - 1];
+    if (repeated?.iteration === undefined) return null;
+    delete repeated.iteration;
+    const encoded = safeEncodePath(parent);
+    if (scope !== null && scope !== encoded) return null;
+    scope = encoded;
+  }
+  return scope;
+}
+
+function firstExerciseBelow(node: WorkoutNode | null): Extract<WorkoutNode, { type: 'exercise' }> | null {
+  if (node === null) return null;
+  if (node.type === 'exercise') return node;
+  for (const child of node.children) {
+    const found = firstExerciseBelow(child);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function buildDisplayBlocks(
+  groups: SummaryGroup[],
+  workout: Workout | undefined
+): SummaryDisplayBlock[] {
+  const byScope = new Map<string, SummaryGroup[]>();
+  for (const group of groups) {
+    const scope = repeatedSetScope(group);
+    if (scope === null) continue;
+    const bucket = byScope.get(scope);
+    if (bucket === undefined) byScope.set(scope, [group]);
+    else bucket.push(group);
+  }
+
+  const emitted = new Set<string>();
+  const blocks: SummaryDisplayBlock[] = [];
+  for (const group of groups) {
+    const scope = repeatedSetScope(group);
+    const occurrences = scope === null ? undefined : byScope.get(scope);
+    if (scope !== null && occurrences !== undefined) {
+      if (emitted.has(scope)) continue;
+      emitted.add(scope);
+      const rows = occurrences.flatMap((occurrence) => occurrence.rows.map((row) => {
+        const parent = row.path[row.path.length - 2];
+        return { ...row, setNumber: parent?.iteration ?? 1 };
+      }));
+      const first = rows[0];
+      if (first !== undefined) {
+        blocks.push({
+          kind: 'set-table',
+          table: {
+            key: scope,
+            title: first.label,
+            sectionTitle: workoutSectionLabel(first.setType, first.stimulus),
+            label: first.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
+            rows
+          }
+        });
+      }
+      continue;
+    }
+
+    const first = group.rows[0];
+    const groupPath = group.containers[0]?.path ?? first?.path.slice(0, -1) ?? [];
+    const programmedExercise = firstExerciseBelow(resolvedNode(workout, groupPath));
+    const sectionTitle = first !== undefined && !first.unresolved
+      ? workoutSectionLabel(first.setType, first.stimulus)
+      : programmedExercise === null
+        ? undefined
+        : workoutSectionLabel(programmedExercise.setType, programmedExercise.stimulus);
+    blocks.push({
+      kind: 'group',
+      group,
+      sectionTitle:
+        sectionTitle !== undefined && sectionTitle.toLowerCase() !== group.title.toLowerCase()
+          ? sectionTitle
+          : undefined
+    });
+  }
+  return blocks;
 }
 
 /**
@@ -692,6 +806,7 @@ export function buildSummaryModel(input: SummaryModelInput): SummaryModel {
     startedLabel: formatHistoryDate(session.startedAtUtc, nowValue, localTimeZone),
     completedLabel: formatHistoryDate(session.completedAtUtc, nowValue, localTimeZone),
     groups: orderedGroups,
+    blocks: buildDisplayBlocks(orderedGroups, workout),
     unresolved,
     isEmpty: orderedGroups.length === 0,
     workoutUnresolved: workout === undefined,

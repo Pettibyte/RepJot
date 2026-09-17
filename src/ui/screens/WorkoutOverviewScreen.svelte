@@ -67,12 +67,14 @@
       <Button variant="primary" href={formatRoute({ name: 'home' })}>Back to workouts</Button>
     </div>
   {:else}
-    <h1 class="overview__title">{model.title}</h1>
-    {#if model.notes !== undefined}
-      <p class="overview__notes">{model.notes}</p>
-    {/if}
+    <header class="overview__header">
+      <h1 class="overview__title">{model.title}</h1>
+      {#if model.notes !== undefined}
+        <p class="overview__notes">{model.notes}</p>
+      {/if}
+    </header>
 
-    <WorkoutTreeReadOnly nodes={model.nodes} idPrefix="overview" />
+    <WorkoutTreeReadOnly nodes={model.nodes} blocks={model.blocks} idPrefix="overview" />
 
     {#if startError !== ''}
       <p class="overview__error" role="alert">{startError}</p>

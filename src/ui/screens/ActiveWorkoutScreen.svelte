@@ -66,6 +66,8 @@
   } from './activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
   import { containerResultKey, type PathSegment } from '../../domain/execution-path';
+  import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
+  import { convert, formatEditable } from '../../units/conversion';
 
   let { sessionId = '' }: { sessionId?: string } = $props();
 
@@ -78,6 +80,8 @@
 
   /** Draft field text, keyed by row key then by dimension. */
   let overrides = $state<Record<string, Record<string, string>>>({});
+  /** Fields the user edited; unit-only display conversion does not mark these. */
+  let editedFields = $state<Record<string, Record<string, boolean>>>({});
   /** Inline field errors, keyed by row key then by dimension. */
   let fieldErrors = $state<Record<string, Record<string, string>>>({});
   /** Inline scored-container errors, keyed by group key. */
@@ -129,6 +133,12 @@
   /** The session ended, so no terminal action may run again. */
   const isTerminal = $derived(!terminalActionsAllowed(session?.status ?? 'in_progress'));
 
+  const startedLabel = $derived(
+    session === null
+      ? ''
+      : formatTimeLabel(session.startedAtUtc, new Date().toISOString(), resolveLocalTimeZone())
+  );
+
   /** What the finish bar shows right now. */
   const finish = $derived(finishPlan(missingItems, promptOpen));
   const missingRowKeys = $derived(missingItems.map((item) => item.rowKey));
@@ -170,6 +180,7 @@
       workoutId: session?.workoutId ?? '',
       row,
       overrides: overridesFor(row),
+      editedFields: editedFields[row.key] ?? {},
       status: statusDrafts[row.key],
       reasonCode: reasonFor(row),
       side: sideDrafts[row.key],
@@ -230,7 +241,7 @@
     if (row.hasSavedResult) {
       service.queueSaveExerciseResult(
         session.id,
-        buildRowDraft({ workoutId: session.workoutId, row, overrides: {} })
+        buildRowDraft({ workoutId: session.workoutId, row, overrides: {}, editedFields: {} })
       );
     } else {
       service.queueClearExerciseResult(session.id, row.resultKey, row.path);
@@ -241,6 +252,7 @@
     const forRow = overrides[rowKey] ?? {};
     forRow[dimension] = value;
     overrides[rowKey] = forRow;
+    editedFields[rowKey] = { ...(editedFields[rowKey] ?? {}), [dimension]: true };
 
     const service = sessionService;
     const row = rowsByKey.get(rowKey);
@@ -377,13 +389,23 @@
     if (field === undefined) return;
 
     const exercise = $services.staticData?.exerciseById.get(row.exerciseId);
-    const display = fieldDisplay(field, overridesFor(row));
-    const message = fieldInputError(field, display);
-    if (message !== undefined) {
-      fieldErrors[rowKey] = { ...(fieldErrors[rowKey] ?? {}), [dimension]: message };
-      await focusById(`active-${row.key}-${dimension}`);
-      return;
+    const affected = (model?.rows ?? []).filter((candidate) =>
+      candidate.exerciseId === row.exerciseId &&
+      candidate.fields.some((candidateField) => candidateField.dimension === dimension)
+    );
+    for (const candidate of affected) {
+      const candidateField = candidate.fields.find((item) => item.dimension === dimension);
+      if (candidateField === undefined) continue;
+      const candidateDisplay = fieldDisplay(candidateField, overridesFor(candidate));
+      const message = fieldInputError(candidateField, candidateDisplay);
+      if (message !== undefined) {
+        fieldErrors[candidate.key] = { ...(fieldErrors[candidate.key] ?? {}), [dimension]: message };
+        await focusById(`active-${candidate.key}-${dimension}`);
+        return;
+      }
     }
+
+    const display = fieldDisplay(field, overridesFor(row));
     const result = await tapUnitPill({
       exercise,
       dimension: field.dimension,
@@ -392,9 +414,22 @@
       preferences
     });
     if (result.nextUnit === null) return;
-    const forRow = overrides[rowKey] ?? {};
-    forRow[field.dimension] = result.display;
-    overrides[rowKey] = forRow;
+
+    for (const candidate of affected) {
+      const candidateField = candidate.fields.find((item) => item.dimension === dimension);
+      if (candidateField === undefined) continue;
+      const current = fieldDisplay(candidateField, overridesFor(candidate));
+      const converted = current.trim() === ''
+        ? ''
+        : formatEditable(
+            convert({ value: Number(current), unit: candidateField.unit }, result.nextUnit),
+            candidateField.step
+          );
+      overrides[candidate.key] = {
+        ...(overrides[candidate.key] ?? {}),
+        [dimension]: candidate.key === row.key ? result.display : converted
+      };
+    }
 
     // PreferenceService keeps its working document outside Svelte state. Tell
     // the registry that the existing service changed so `model` rebuilds with
@@ -402,6 +437,24 @@
     // the old label; another tap then converts the number a second time from
     // that stale unit.
     publishServices();
+  }
+
+  /** Saved score text is the fallback until the user types a draft. */
+  function savedScoreText(group: GroupModel): string {
+    const score = group.score;
+    if (score === undefined) return '';
+    if (score.type === 'cycles') return String(score.completedCycles);
+    if (score.type === 'intervals') return String(score.completedIntervals);
+    if (score.type === 'rounds_and_reps') return String(score.completedRounds);
+    return '';
+  }
+
+  function savedPartialText(group: GroupModel): string {
+    return group.score?.type === 'rounds_and_reps' ? String(group.score.additionalReps) : '';
+  }
+
+  function draftText(drafts: Record<string, string>, key: string, fallback: string): string {
+    return Object.prototype.hasOwnProperty.call(drafts, key) ? (drafts[key] ?? '') : fallback;
   }
 
   /** The container result key for one group, as the session stores it. */
@@ -732,6 +785,78 @@
       <Button variant="primary" href="#/">Back to workouts</Button>
     </div>
   {:else}
+    <header class="active-workout__header">
+      <h1 class="active-workout__title">{model.workoutName}</h1>
+      {#if startedLabel !== ''}
+        <p class="active-workout__started">Started {startedLabel}</p>
+      {/if}
+    </header>
+
+    {#snippet groupControls(group: GroupModel)}
+      {#if group.scored && group.isAmrap}
+        <div class="active-workout__inline-controls" aria-label="{group.title} controls">
+          <AmrapControls
+            {group}
+            additionalReps={draftText(amrapPartialDrafts, group.key, savedPartialText(group))}
+            disabled={sessionService === null}
+            {busy}
+            error={containerErrors[group.key]}
+            onaddround={() => void addAmrapRound(group)}
+            onpartialchange={(event: Event) => {
+              const target = event.target as HTMLInputElement;
+              amrapPartialDrafts[group.key] = target.value;
+              queueAmrapPartial(group, target.value);
+            }}
+            onpartialblur={() => void saveAmrapPartial(group, draftText(amrapPartialDrafts, group.key, savedPartialText(group)))}
+          />
+        </div>
+      {:else if group.scored && group.isEmom}
+        <div class="active-workout__inline-controls" aria-label="{group.title} controls">
+          <EmomControls
+            {group}
+            completed={draftText(emomDrafts, group.key, savedScoreText(group))}
+            disabled={sessionService === null}
+            error={containerErrors[group.key]}
+            onchange={(event: Event) => {
+              const target = event.target as HTMLInputElement;
+              emomDrafts[group.key] = target.value;
+              queueContainerScore(group, target.value);
+            }}
+            onblur={() => void saveContainerScore(group, draftText(emomDrafts, group.key, savedScoreText(group)))}
+          />
+        </div>
+      {:else if group.scored && group.scoreType !== undefined}
+        <div class="active-workout__inline-controls" aria-label="{group.title} score">
+          <ContainerScoreEditor
+            {group}
+            scoreText={draftText(containerDrafts, group.key, savedScoreText(group))}
+            disabled={sessionService === null}
+            error={containerErrors[group.key]}
+            onscorechange={(event: Event) => {
+              const target = event.target as HTMLInputElement;
+              containerDrafts[group.key] = target.value;
+              queueContainerScore(group, target.value);
+            }}
+            onscoreblur={() => void saveContainerScore(group, draftText(containerDrafts, group.key, savedScoreText(group)))}
+          />
+        </div>
+      {/if}
+
+      {#if group.canExpand}
+        <div class="active-workout__inline-controls" aria-label="{group.title} detail">
+          <AggregateExpander
+            {group}
+            drafts={inferredDrafts[group.key] ?? []}
+            expanded={expandedGroups[group.key] === true}
+            disabled={sessionService === null}
+            {busy}
+            onexpand={() => void expandAggregate(group)}
+            onsave={() => void saveInferred(group)}
+          />
+        </div>
+      {/if}
+    {/snippet}
+
     <WorkoutTreeEditable
       blocks={model.blocks}
       idPrefix="active"
@@ -742,6 +867,7 @@
       {sideDrafts}
       {startingSideDrafts}
       {effortDrafts}
+      groupcontrols={groupControls}
       {busy}
       disabled={sessionService === null}
       onfieldchange={onFieldChange}
@@ -754,76 +880,6 @@
       oneffortchange={onEffortChange}
       onaddattempt={(rowKey) => void onAddAttempt(rowKey)}
     />
-
-    <div class="active-workout__containers">
-      {#each model.groups as group (group.key)}
-        {#if group.scored && group.isAmrap}
-          <section class="active-workout__block" aria-label="{group.title} controls">
-            <h3 class="active-workout__block-title">{group.title}</h3>
-            <AmrapControls
-              {group}
-              additionalReps={amrapPartialDrafts[group.key] ?? ''}
-              disabled={sessionService === null}
-              {busy}
-              error={containerErrors[group.key]}
-              onaddround={() => void addAmrapRound(group)}
-              onpartialchange={(event: Event) => {
-                const target = event.target as HTMLInputElement;
-                amrapPartialDrafts[group.key] = target.value;
-                queueAmrapPartial(group, target.value);
-              }}
-              onpartialblur={() => void saveAmrapPartial(group, amrapPartialDrafts[group.key] ?? '')}
-            />
-          </section>
-        {:else if group.scored && group.isEmom}
-          <section class="active-workout__block" aria-label="{group.title} controls">
-            <h3 class="active-workout__block-title">{group.title}</h3>
-            <EmomControls
-              {group}
-              completed={emomDrafts[group.key] ?? ''}
-              disabled={sessionService === null}
-              error={containerErrors[group.key]}
-              onchange={(event: Event) => {
-                const target = event.target as HTMLInputElement;
-                emomDrafts[group.key] = target.value;
-                queueContainerScore(group, target.value);
-              }}
-              onblur={() => void saveContainerScore(group, emomDrafts[group.key] ?? '')}
-            />
-          </section>
-        {:else if group.scored && group.scoreType !== undefined}
-          <section class="active-workout__block" aria-label="{group.title} score">
-            <h3 class="active-workout__block-title">{group.title}</h3>
-            <ContainerScoreEditor
-              {group}
-              scoreText={containerDrafts[group.key] ?? ''}
-              disabled={sessionService === null}
-              error={containerErrors[group.key]}
-              onscorechange={(event: Event) => {
-                const target = event.target as HTMLInputElement;
-                containerDrafts[group.key] = target.value;
-                queueContainerScore(group, target.value);
-              }}
-              onscoreblur={() => void saveContainerScore(group, containerDrafts[group.key] ?? '')}
-            />
-          </section>
-        {/if}
-
-        {#if group.canExpand}
-          <section class="active-workout__block" aria-label="{group.title} detail">
-            <AggregateExpander
-              {group}
-              drafts={inferredDrafts[group.key] ?? []}
-              expanded={expandedGroups[group.key] === true}
-              disabled={sessionService === null}
-              {busy}
-              onexpand={() => void expandAggregate(group)}
-              onsave={() => void saveInferred(group)}
-            />
-          </section>
-        {/if}
-      {/each}
-    </div>
 
     {#if errorText !== ''}
       <p class="active-workout__error" role="alert">{errorText}</p>

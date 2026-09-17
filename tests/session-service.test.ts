@@ -439,6 +439,58 @@ describe('addAttempt', () => {
     expect(opened?.reasonCode).toBe('not_completed');
   });
 
+  test('adding from an earlier attempt uses the maximum and preserves every existing attempt', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'squat-sets', iteration: 1 },
+      { nodeId: 'back-squat-set' }
+    ];
+
+    for (const attempt of [1, 2, 3]) {
+      await service.saveExerciseResult(SESSION_KEY, {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'back-squat',
+        executionPath: path,
+        side: 'left',
+        attempt,
+        status: 'completed',
+        values: {
+          reps: { value: attempt + 4, unit: 'reps' },
+          weight: { value: 100, unit: 'lb' }
+        }
+      });
+    }
+
+    // A higher attempt for another side must not affect the left-side maximum.
+    await service.saveExerciseResult(SESSION_KEY, {
+      workoutId: WORKOUT_ID,
+      exerciseId: 'back-squat',
+      executionPath: path,
+      side: 'right',
+      attempt: 9,
+      status: 'completed',
+      values: {
+        reps: { value: 5, unit: 'reps' },
+        weight: { value: 100, unit: 'lb' }
+      }
+    });
+
+    const secondKey = exerciseResultKey(path, 'left', 2);
+    const rightKey = exerciseResultKey(path, 'right', 9);
+    const newKey = await service.addAttempt(
+      SESSION_KEY,
+      exerciseResultKey(path, 'left', 1)
+    );
+
+    expect(newKey).toBe(exerciseResultKey(path, 'left', 4));
+    const results = workingSession(coordinator).exerciseResults;
+    expect(results[secondKey]?.values?.reps?.value).toBe(6);
+    expect(results[rightKey]?.values?.reps?.value).toBe(5);
+    expect(results[newKey]?.attempt).toBe(4);
+    expect(Object.keys(results)).toHaveLength(5);
+  });
+
   test('an attempt on an unknown result is refused', async () => {
     const { service } = await makeEmptySetup();
     const kind = await kindOfRejection(() => service.addAttempt(SESSION_KEY, 'nope|both|1'));

@@ -43,6 +43,8 @@
     startingSide = 'left',
     effortChoice = undefined,
     busy = false,
+    compact = false,
+    setLabel = '',
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -74,6 +76,10 @@
     effortChoice?: string;
     /** True while a row-level action is in flight, so a double tap cannot repeat. */
     busy?: boolean;
+    /** Compact mode is used inside one shared exercise set table. */
+    compact?: boolean;
+    /** Visible identity such as `Set 2` or `Set 2 · Attempt 2`. */
+    setLabel?: string;
     /**
      * Runs on every keystroke in a value field.
      *
@@ -124,23 +130,105 @@
   });
 </script>
 
+{#snippet resultControls()}
+  {#if showInputs}
+    <SideControl
+      {row}
+      side={currentSide}
+      startingSide={startingSide}
+      {overrides}
+      {disabled}
+      {idPrefix}
+      onsidechange={(nextSide: Side) => onsidechange?.(nextSide)}
+      onstartingchange={(next: StartingSide) => onstartingchange?.(next)}
+    />
+
+    {#if row.effortTarget !== undefined}
+      <EffortControl
+        target={row.effortTarget}
+        value={currentEffort}
+        {disabled}
+        id={domId('effort')}
+        onchange={(event: Event) => {
+          const target = event.target as HTMLSelectElement;
+          oneffortchange?.(target.value);
+        }}
+      />
+    {/if}
+  {/if}
+
+  <div class="exercise-row__status">
+    <label class="exercise-row__label" for={domId('status')}>Status</label>
+    <select
+      class="exercise-row__select"
+      id={domId('status')}
+      {disabled}
+      value={currentStatus}
+      onchange={(event: Event) => {
+        const target = event.target as HTMLSelectElement;
+        onstatuschange?.(target.value as ResultStatus);
+      }}
+    >
+      {#each STATUS_OPTIONS as option (option.value)}
+        <option value={option.value}>{option.label}</option>
+      {/each}
+    </select>
+  </div>
+
+  {#if showReason}
+    <div class="exercise-row__status">
+      <label class="exercise-row__label" for={domId('reason')}>Reason</label>
+      <select
+        class="exercise-row__select"
+        id={domId('reason')}
+        {disabled}
+        value={row.reasonCode ?? 'not_completed'}
+        onchange={(event: Event) => {
+          const target = event.target as HTMLSelectElement;
+          onreasonchange?.(target.value as ReasonCode);
+        }}
+      >
+        {#each REASON_OPTIONS as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
+    </div>
+  {/if}
+
+  {#if canAddAttempt(row)}
+    <div class="exercise-row__attempt">
+      <Button variant="secondary" disabled={disabled || busy} onclick={() => onaddattempt?.()}>
+        {busy ? 'Opening…' : 'Add another attempt'}
+      </Button>
+    </div>
+  {/if}
+{/snippet}
+
 <div
   class="exercise-row"
+  class:exercise-row--compact={compact}
   class:exercise-row--unresolved={row.unresolved}
   class:exercise-row--missing={missing}
   id={domId('row')}
   role="group"
   aria-label={row.exerciseName}
 >
-  {#if row.showCompactPath && row.compactPathLabel !== ''}
-    <p class="exercise-row__path">{row.compactPathLabel}</p>
-  {/if}
+  {#if compact}
+    <div class="exercise-row__set-head">
+      <span class="exercise-row__set-label">{setLabel}</span>
+      {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
+    </div>
+  {:else}
+    {#if row.showCompactPath && row.compactPathLabel !== ''}
+      <p class="exercise-row__path">{row.compactPathLabel}</p>
+    {/if}
 
-  <div class="exercise-row__head">
-    <h4 class="exercise-row__name">{row.exerciseName}</h4>
-    {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
-    <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
-  </div>
+    <div class="exercise-row__head">
+      <h4 class="exercise-row__name">{row.exerciseName}</h4>
+      {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
+      <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
+    </div>
+  {/if}
 
   {#if row.prescriptionText !== ''}
     <p class="exercise-row__prescription">{row.prescriptionText}</p>
@@ -173,75 +261,15 @@
         {/each}
       </div>
 
-      <SideControl
-        {row}
-        side={currentSide}
-        startingSide={startingSide}
-        {overrides}
-        {disabled}
-        {idPrefix}
-        onsidechange={(nextSide: Side) => onsidechange?.(nextSide)}
-        onstartingchange={(next: StartingSide) => onstartingchange?.(next)}
-      />
-
-      {#if row.effortTarget !== undefined}
-        <EffortControl
-          target={row.effortTarget}
-          value={currentEffort}
-          {disabled}
-          id={domId('effort')}
-          onchange={(event: Event) => {
-            const target = event.target as HTMLSelectElement;
-            oneffortchange?.(target.value);
-          }}
-        />
-      {/if}
     {/if}
 
-    <div class="exercise-row__status">
-      <label class="exercise-row__label" for={domId('status')}>Status</label>
-      <select
-        class="exercise-row__select"
-        id={domId('status')}
-        {disabled}
-        value={currentStatus}
-        onchange={(event: Event) => {
-          const target = event.target as HTMLSelectElement;
-          onstatuschange?.(target.value as ResultStatus);
-        }}
-      >
-        {#each STATUS_OPTIONS as option (option.value)}
-          <option value={option.value}>{option.label}</option>
-        {/each}
-      </select>
-    </div>
-
-    {#if showReason}
-      <div class="exercise-row__status">
-        <label class="exercise-row__label" for={domId('reason')}>Reason</label>
-        <select
-          class="exercise-row__select"
-          id={domId('reason')}
-          {disabled}
-          value={row.reasonCode ?? 'not_completed'}
-          onchange={(event: Event) => {
-            const target = event.target as HTMLSelectElement;
-            onreasonchange?.(target.value as ReasonCode);
-          }}
-        >
-          {#each REASON_OPTIONS as option (option.value)}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-      </div>
-    {/if}
-
-    {#if canAddAttempt(row)}
-      <div class="exercise-row__attempt">
-        <Button variant="secondary" disabled={disabled || busy} onclick={() => onaddattempt?.()}>
-          {busy ? 'Opening…' : 'Add another attempt'}
-        </Button>
-      </div>
+    {#if compact}
+      <details class="exercise-row__options">
+        <summary class="exercise-row__options-summary">Set options · {currentStatus}</summary>
+        <div class="exercise-row__options-body">{@render resultControls()}</div>
+      </details>
+    {:else}
+      {@render resultControls()}
     {/if}
   {/if}
 </div>

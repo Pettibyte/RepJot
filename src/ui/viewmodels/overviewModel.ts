@@ -9,13 +9,14 @@
 // applies each iteration's overrides, so an override shows as the effective
 // value on that iteration's row. REQUIREMENTS 19.2.
 
-import type { Stimulus } from '../../domain/enums';
+import type { SetType, Stimulus } from '../../domain/enums';
 import type {
   CaloriesQuantity,
   ContainerNode,
   DistanceQuantity,
   DurationQuantity,
   Exercise,
+  ExerciseNode,
   Prescription,
   Quantity,
   RepsPrescription,
@@ -23,6 +24,7 @@ import type {
   Workout
 } from '../../domain/types';
 import { resolveTree } from '../../sessions/tree-resolver';
+import { encodePath, type PathSegment } from '../../domain/execution-path';
 import { unitLabel } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
 import { formatRoute } from '../../routing/routes';
@@ -47,11 +49,30 @@ export interface OverviewNodeModel {
   unresolved?: boolean;
 }
 
+/** One compact read-only set list. */
+export interface OverviewSetTable {
+  key: string;
+  title: string;
+  sectionTitle: string;
+  label: string;
+  depth: number;
+  rows: Array<OverviewNodeModel & { setNumber: number }>;
+}
+
+/** One visual block in the semantic overview document. */
+export type OverviewBlock =
+  | { kind: 'group'; node: OverviewNodeModel; sectionTitle?: string }
+  | { kind: 'exercise'; node: OverviewNodeModel }
+  | { kind: 'set-table'; table: OverviewSetTable };
+
 /** The whole overview. */
 export interface OverviewModel {
   title: string;
   notes?: string;
+  /** Kept as the complete resolved tree for callers that inspect its shape. */
   nodes: OverviewNodeModel[];
+  /** Semantic presentation with repeated sets collapsed. */
+  blocks: OverviewBlock[];
 }
 
 /** The exercise directory the model needs. */
@@ -202,6 +223,23 @@ export function stimulusLabel(stimulus: Stimulus | undefined): string {
   return STIMULUS_LABELS[stimulus] ?? stimulus;
 }
 
+/** Shared semantic section names for Active Workout and Workout Overview. */
+export function workoutSectionLabel(
+  setType: SetType | undefined,
+  stimulus: Stimulus | undefined
+): string {
+  if (setType === 'warmup' || stimulus === 'mobility') return 'Warmup';
+  if (stimulus === 'conditioning') return 'Conditioning';
+  return 'Strength';
+}
+
+function withoutLastIteration(path: PathSegment[]): PathSegment[] {
+  const copy = path.map((segment) => ({ ...segment }));
+  const last = copy[copy.length - 1];
+  if (last !== undefined) delete last.iteration;
+  return copy;
+}
+
 /**
  * Build the overview model.
  *
@@ -215,62 +253,150 @@ export function buildOverviewModel(
 ): OverviewModel | null {
   if (workout === undefined || workout === null) return null;
 
-  const nodes: OverviewNodeModel[] = resolveTree(workout).map((resolved) => {
-    const node = resolved.node;
+  const nodeById = new Map<string, ContainerNode | ExerciseNode>();
+  const indexNode = (node: ContainerNode | ExerciseNode): void => {
+    nodeById.set(node.id, node);
+    if (node.type === 'container') {
+      for (const child of node.children) indexNode(child);
+    }
+  };
+  indexNode(workout.root);
 
+  interface RawOverviewNode {
+    model: OverviewNodeModel;
+    path: PathSegment[];
+    source: ContainerNode | ExerciseNode;
+    setScope?: string;
+    setNumber?: number;
+  }
+
+  const raw: RawOverviewNode[] = resolveTree(workout).map((resolved): RawOverviewNode => {
+    const node = resolved.node;
     if (node.type !== 'exercise') {
       const baseName = node.name ?? CONTAINER_FALLBACK_NAMES[node.strategy] ?? 'Section';
-      // A repeated container emits one row per iteration. The first row carries
-      // the container's own name; a later row says which round it is, so the
-      // page reads `Cindy`, then `Round 2`, instead of the same heading over
-      // and over with nothing to tell them apart.
       const label =
         resolved.iteration !== undefined && resolved.iteration > 1
           ? `Round ${resolved.iteration}`
           : baseName;
-      // The round count belongs on the heading that opens the block, not on
-      // every round inside it.
       const summary =
         resolved.iteration !== undefined && resolved.iteration > 1 ? '' : formatContainerSummary(node);
       return {
-        label,
-        depth: resolved.level,
-        prescriptionText: summary,
-        isExercise: false
+        model: { label, depth: resolved.level, prescriptionText: summary, isExercise: false },
+        path: resolved.path,
+        source: node
       };
     }
 
     const exercise = staticData.exerciseById.get(node.exerciseId);
-    // The stimulus rides on the prescription line so a row reads as one fact:
-    // what to do and what it trains. A row with no numbers shows the stimulus
-    // alone rather than an empty field.
     const prescriptionText = joinText(
       formatPrescription(resolved.effectivePrescription),
       stimulusLabel(node.stimulus)
     );
+    const model: OverviewNodeModel = exercise === undefined
+      ? {
+          label: node.exerciseId,
+          depth: resolved.level,
+          prescriptionText,
+          isExercise: true,
+          unresolved: true
+        }
+      : {
+          label: exercise.name,
+          depth: resolved.level,
+          prescriptionText,
+          isExercise: true,
+          exerciseHref: formatRoute({ name: 'exercise-history', exerciseId: node.exerciseId })
+        };
 
-    if (exercise === undefined) {
-      // A missing directory entry falls back to the raw ID so the row still
-      // names what it refers to.
-      return {
-        label: node.exerciseId,
-        depth: resolved.level,
-        prescriptionText,
-        isExercise: true,
-        unresolved: true
-      };
-    }
+    const parentSegment = resolved.path[resolved.path.length - 2];
+    const parent = parentSegment === undefined ? undefined : nodeById.get(parentSegment.nodeId);
+    const singleExerciseRound =
+      parent?.type === 'container' &&
+      parent.strategy === 'rounds' &&
+      parent.children.length === 1 &&
+      parent.children[0]?.type === 'exercise';
+    if (!singleExerciseRound) return { model, path: resolved.path, source: node };
 
+    const parentPath = resolved.path.slice(0, -1);
     return {
-      label: exercise.name,
-      depth: resolved.level,
-      prescriptionText,
-      isExercise: true,
-      exerciseHref: formatRoute({ name: 'exercise-history', exerciseId: node.exerciseId })
+      model,
+      path: resolved.path,
+      source: node,
+      setScope: encodePath(withoutLastIteration(parentPath)),
+      setNumber: parentSegment?.iteration ?? 1
     };
   });
 
-  const model: OverviewModel = { title: workout.name, nodes };
+  const nodes = raw.map((entry) => entry.model);
+  const tableRows = new Map<string, RawOverviewNode[]>();
+  for (const entry of raw) {
+    if (entry.setScope === undefined) continue;
+    const bucket = tableRows.get(entry.setScope);
+    if (bucket === undefined) tableRows.set(entry.setScope, [entry]);
+    else bucket.push(entry);
+  }
+
+  const blocks: OverviewBlock[] = [];
+  const emittedTables = new Set<string>();
+  for (const entry of raw) {
+    if (entry.source.type === 'container') {
+      const scope = encodePath(withoutLastIteration(entry.path));
+      const rows = tableRows.get(scope);
+      if (rows !== undefined) {
+        if (!emittedTables.has(scope)) {
+          emittedTables.add(scope);
+          const first = rows[0];
+          const exercise = first?.source.type === 'exercise' ? first.source : undefined;
+          if (first !== undefined && exercise !== undefined) {
+            blocks.push({
+              kind: 'set-table',
+              table: {
+                key: scope,
+                title: first.model.label,
+                sectionTitle: workoutSectionLabel(exercise.setType, exercise.stimulus),
+                label: exercise.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
+                depth: entry.model.depth,
+                rows: rows.map((row, index) => ({
+                  ...row.model,
+                  setNumber: row.setNumber ?? index + 1
+                }))
+              }
+            });
+          }
+        }
+        continue;
+      }
+
+      const isGenericRoot =
+        entry.model.depth === 1 &&
+        entry.source.strategy === 'sequence' &&
+        entry.source.name === undefined;
+      if (isGenericRoot) continue;
+
+      const parentPath = encodePath(entry.path);
+      const directExercises = raw.filter((candidate) =>
+        candidate.source.type === 'exercise' &&
+        encodePath(candidate.path.slice(0, -1)) === parentPath
+      );
+      const firstExercise = directExercises[0]?.source;
+      const sectionTitle = firstExercise?.type === 'exercise'
+        ? workoutSectionLabel(firstExercise.setType, firstExercise.stimulus)
+        : undefined;
+      blocks.push({
+        kind: 'group',
+        node: entry.model,
+        sectionTitle:
+          sectionTitle !== undefined && sectionTitle.toLowerCase() !== entry.model.label.toLowerCase()
+            ? sectionTitle
+            : undefined
+      });
+      continue;
+    }
+
+    if (entry.setScope === undefined) blocks.push({ kind: 'exercise', node: entry.model });
+  }
+
+  const model: OverviewModel = { title: workout.name, nodes, blocks };
   if (workout.notes !== undefined) model.notes = workout.notes;
   return model;
 }

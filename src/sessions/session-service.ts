@@ -692,35 +692,56 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   }
 
   async function addAttempt(sessionId: string, fromKey: string): Promise<string> {
-    const session = await load(sessionId);
-    const source = session.exerciseResults[fromKey];
-    if (source === undefined) {
-      throw new AppError(
-        'invalid_document',
-        { reason: 'unknown_result', sessionId, resultKey: fromKey },
-        'There is no result to add an attempt to.'
-      );
-    }
+    let newKey: string | undefined;
 
-    const attempt = (source.attempt ?? 1) + 1;
-    const key = exerciseResultKey(source.executionPath, source.side ?? 'both', attempt);
+    // Select and write the attempt in the same shard edit. Computing from a
+    // previously loaded session can collide with a later attempt and overwrite
+    // it. The next attempt is always one above the maximum for this exact path
+    // and side, regardless of which existing attempt the caller selected.
+    await editNow(sessionId, (session: Session): void => {
+      const source = session.exerciseResults[fromKey];
+      if (source === undefined) {
+        throw new AppError(
+          'invalid_document',
+          { reason: 'unknown_result', sessionId, resultKey: fromKey },
+          'There is no result to add an attempt to.'
+        );
+      }
 
-    // A new attempt opens as an incomplete result. It carries the identity of
-    // the attempt it follows and no values, because nothing has been recorded
-    // for it yet. REQUIREMENTS 11.2, 11.4.
-    const draft: ExerciseResultDraft = {
-      workoutId: source.workoutId,
-      exerciseId: source.exerciseId,
-      executionPath: source.executionPath,
-      side: source.side ?? 'both',
-      attempt,
-      status: 'incomplete',
-      reasonCode: 'not_completed'
-    };
-    if (source.startingSide !== undefined) draft.startingSide = source.startingSide;
+      const encodedPath = encodePath(source.executionPath);
+      const side = source.side ?? 'both';
+      let maxAttempt = 0;
+      for (const result of Object.values(session.exerciseResults)) {
+        if (encodePath(result.executionPath) !== encodedPath) continue;
+        if ((result.side ?? 'both') !== side) continue;
+        maxAttempt = Math.max(maxAttempt, result.attempt ?? 1);
+      }
 
-    await saveExerciseResult(sessionId, draft);
-    return key;
+      const attempt = maxAttempt + 1;
+      const key = exerciseResultKey(source.executionPath, side, attempt);
+      newKey = key;
+
+      // A new attempt opens as an incomplete result. It carries the identity of
+      // the selected attempt and no values, because nothing has been recorded
+      // for it yet. REQUIREMENTS 11.2, 11.4.
+      const draft: ExerciseResultDraft = {
+        workoutId: source.workoutId,
+        exerciseId: source.exerciseId,
+        executionPath: source.executionPath,
+        side,
+        attempt,
+        status: 'incomplete',
+        reasonCode: 'not_completed'
+      };
+      if (source.startingSide !== undefined) draft.startingSide = source.startingSide;
+
+      const result = toExerciseResult(draft);
+      session.exerciseResults[key] = clone(result);
+      rescoreAncestors(session, workoutFor(session), result.executionPath);
+    });
+
+    // The mutator always assigns this before a successful edit resolves.
+    return newKey as string;
   }
 
   async function addAmrapRound(

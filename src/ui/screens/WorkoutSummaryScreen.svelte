@@ -82,7 +82,7 @@
       <Button variant="primary" href={formatRoute({ name: 'history' })}>Back to history</Button>
     </div>
   {:else}
-    <div class="summary-screen__head">
+    <header class="summary-screen__head">
       <h1 class="summary-screen__title">{model.title}</h1>
       <p class="summary-screen__meta">
         <span class="badge">{model.statusLabel}</span>
@@ -93,7 +93,7 @@
           <span class="summary-screen__date">Finished {model.completedLabel}</span>
         {/if}
       </p>
-    </div>
+    </header>
 
     {#if model.workoutUnresolved}
       <p class="summary-screen__banner">
@@ -105,7 +105,7 @@
     {#if model.isEmpty}
       <p class="summary-screen__empty">Nothing was recorded for this session.</p>
     {:else}
-      <SummaryTree groups={model.groups} idPrefix="summary" />
+      <SummaryTree groups={model.groups} blocks={model.blocks} idPrefix="summary" />
     {/if}
 
     {#if model.notes !== undefined}

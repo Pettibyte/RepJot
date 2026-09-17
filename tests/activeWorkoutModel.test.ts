@@ -647,6 +647,103 @@ describe('unit pill conversion', () => {
   });
 });
 
+describe('set-table presentation', () => {
+  function repeatedSets(): Workout {
+    return {
+      id: WORKOUT_ID,
+      name: 'Three Squat Sets',
+      root: {
+        id: 'root',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'squat-sets',
+            type: 'container',
+            name: 'Back Squat',
+            strategy: 'rounds',
+            strategyConfig: { rounds: 3 },
+            children: [
+              {
+                id: 'squat-set',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'strength',
+                setType: 'working',
+                prescription: { reps: 5, weight: { value: 100, unit: 'lb' } }
+              }
+            ]
+          }
+        ]
+      }
+    };
+  }
+
+  test('one repeated exercise renders as one reusable table with ordered sets', () => {
+    const workout = repeatedSets();
+    const h = harness(exercises(), [workout]);
+    const model = buildActiveWorkoutModel({
+      workout,
+      session: emptySession(),
+      staticData: h.staticData,
+      preferences: h.preferences.service,
+      lookup: h.lookup
+    });
+
+    const tables = model.blocks.filter((block) => block.kind === 'set-table');
+    expect(tables).toHaveLength(1);
+    expect(tables[0]?.kind === 'set-table' ? tables[0].table.title : '').toBe('Back Squat');
+    expect(tables[0]?.kind === 'set-table' ? tables[0].table.sectionTitle : '').toBe('Strength');
+    expect(tables[0]?.kind === 'set-table' ? tables[0].table.label : '').toBe('Working sets');
+    expect(tables[0]?.kind === 'set-table'
+      ? tables[0].table.rows.map((row) => row.setNumber)
+      : []).toEqual([1, 2, 3]);
+  });
+
+  test('attempts keep their set number and only the latest can add another', () => {
+    const workout = repeatedSets();
+    const h = harness(exercises(), [workout]);
+    const session = emptySession();
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'squat-sets', iteration: 1 },
+      { nodeId: 'squat-set' }
+    ];
+    session.exerciseResults = {
+      'root/squat-sets:1/squat-set|both|1': {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'back-squat',
+        executionPath: path,
+        side: 'both',
+        attempt: 1,
+        status: 'incomplete',
+        reasonCode: 'unsuccessful_attempt'
+      },
+      'root/squat-sets:1/squat-set|both|2': {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'back-squat',
+        executionPath: path,
+        side: 'both',
+        attempt: 2,
+        status: 'completed',
+        values: { reps: { value: 5, unit: 'reps' } }
+      }
+    };
+
+    const model = buildActiveWorkoutModel({
+      workout,
+      session,
+      staticData: h.staticData,
+      preferences: h.preferences.service,
+      lookup: h.lookup
+    });
+    const attempts = model.rows.filter((row) => row.setNumber === 1);
+    expect(attempts.map((row) => row.attempt)).toEqual([1, 2]);
+    expect(attempts.map((row) => row.latestAttempt)).toEqual([false, true]);
+  });
+});
+
 describe('model stability', () => {
   test('a rebuild over the same session produces the same row keys', () => {
     const h = harness(exercises(), [nestedWorkout()]);

@@ -102,6 +102,16 @@ describe('AmrapControls', () => {
     expect(html).toContain('inputmode="numeric"');
   });
 
+  test('the current completed-round count stays visible', () => {
+    const html = renderHtml(AmrapControls, {
+      group: amrapGroup({
+        score: { type: 'rounds_and_reps', completedRounds: 6, additionalReps: 4 }
+      })
+    });
+    expect(html).toContain('Rounds completed:');
+    expect(html).toContain('<strong>6</strong>');
+  });
+
   test('a busy control disables the add button', () => {
     const html = renderHtml(AmrapControls, { group: amrapGroup(), busy: true });
     const button = html.slice(html.indexOf('<button'), html.indexOf('</button>'));

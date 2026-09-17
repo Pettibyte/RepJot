@@ -2,20 +2,23 @@
   The editable workout tree.
   Phase 17. REQUIREMENTS 19.1, 19.2.
 
-  Draws the resolved tree with inputs. The model already flattened the
-  container repetition and interleaved the rows, so this component walks one
-  ordered list and indents by level. There is no recursion, which keeps the
-  DOM shallow on the targeted browser and keeps every row key in one loop.
+  Draws the resolved tree with inputs. The model keeps mixed circuits in one
+  ordered list and collapses repeated single-exercise blocks into shared set
+  editors. There is no recursion, which keeps the DOM shallow on the targeted
+  browser and keeps every row key in one loop.
 
   Depth rule. Levels 1 through 3 get visible indentation. Past that a fourth
   indent costs more width than it tells, so a deep row shows its compact
   named path instead — `Strength / Complex / Round 2` — and stops indenting.
   The row itself carries that decision, so the tree only applies the indent
-  class. REQUIREMENT 19.2.
+  class. Scored-container controls arrive as a snippet so they stay beside the
+  group they edit instead of collecting at the page end. REQUIREMENT 19.2.
 -->
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import ExerciseRow from './ExerciseRow.svelte';
-  import type { DrawBlock } from '../viewmodels/activeWorkoutModel';
+  import ExerciseSetTable from './ExerciseSetTable.svelte';
+  import type { DrawBlock, GroupModel } from '../viewmodels/activeWorkoutModel';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
 
   let {
@@ -30,6 +33,7 @@
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
+    groupcontrols = undefined,
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -60,6 +64,8 @@
     startingSideDrafts?: Record<string, StartingSide>;
     /** Draft effort choice, keyed by row key. */
     effortDrafts?: Record<string, string>;
+    /** Scored-container controls, kept beside their group heading. */
+    groupcontrols?: Snippet<[GroupModel]>;
     onfieldchange?: ((rowKey: string, dimension: string, value: string) => void) | undefined;
     onfieldblur?: ((rowKey: string, dimension: string) => void) | undefined;
     onstatuschange?: ((rowKey: string, status: ResultStatus) => void) | undefined;
@@ -86,17 +92,48 @@
 </script>
 
 <div class="edit-tree">
-  {#each blocks as block (block.kind === 'group' ? `g-${block.group.key}` : `r-${block.row.key}`)}
+  {#each blocks as block (block.kind === 'group' ? `g-${block.group.key}` : block.kind === 'set-table' ? `t-${block.table.key}` : `r-${block.row.key}`)}
     {#if block.kind === 'group'}
       <section
         class="edit-group {depthClass(block.group.level)}"
         aria-label={block.group.title}
       >
+        {#if block.group.sectionTitle !== undefined}
+          <p class="edit-group__section">{block.group.sectionTitle}</p>
+        {/if}
         <h3 class="edit-group__title">{block.group.title}</h3>
         {#if block.group.summaryText !== ''}
           <p class="edit-group__summary">{block.group.summaryText}</p>
         {/if}
+        {#if block.group.showControls && groupcontrols !== undefined}
+          {@render groupcontrols(block.group)}
+        {/if}
       </section>
+    {:else if block.kind === 'set-table'}
+      <div class="edit-set-table {depthClass(block.table.level)}">
+        <ExerciseSetTable
+          table={block.table}
+          {idPrefix}
+          {disabled}
+          {busy}
+          {rowOverrides}
+          {rowFieldErrors}
+          {missingRowKeys}
+          {statusDrafts}
+          {sideDrafts}
+          {startingSideDrafts}
+          {effortDrafts}
+          {onfieldchange}
+          {onfieldblur}
+          {onstatuschange}
+          {onreasonchange}
+          {onunitchange}
+          {onsidechange}
+          {onstartingchange}
+          {oneffortchange}
+          {onaddattempt}
+        />
+      </div>
     {:else}
       <div class="edit-row {depthClass(block.row.level)}">
         <ExerciseRow

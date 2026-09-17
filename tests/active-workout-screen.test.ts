@@ -76,6 +76,36 @@ describe('buildRowDraft', () => {
     expect(isBlankExerciseDraft(draft)).toBe(false);
   });
 
+  test('a unit-only display conversion does not rewrite the stored quantity', () => {
+    const source = row({
+      hasSavedResult: true,
+      storedValues: { weight: { value: 100, unit: 'lb' } },
+      fields: [field({ value: '45.4', unit: 'kg', compatibleUnits: ['lb', 'kg'] })]
+    });
+    const draft = buildRowDraft({
+      workoutId: 'w',
+      row: source,
+      overrides: { weight: '45.4' },
+      editedFields: {}
+    });
+    expect(draft.values?.weight).toEqual({ value: 100, unit: 'lb' });
+  });
+
+  test('editing a converted display records the new displayed quantity', () => {
+    const source = row({
+      hasSavedResult: true,
+      storedValues: { weight: { value: 100, unit: 'lb' } },
+      fields: [field({ value: '45.4', unit: 'kg', compatibleUnits: ['lb', 'kg'] })]
+    });
+    const draft = buildRowDraft({
+      workoutId: 'w',
+      row: source,
+      overrides: { weight: '50' },
+      editedFields: { weight: true }
+    });
+    expect(draft.values?.weight).toEqual({ value: 50, unit: 'kg' });
+  });
+
   test('a non-completed status carries a reason code', () => {
     // The validator refuses a skipped result with no reason. REQUIREMENT 11.14.
     const draft = buildRowDraft({

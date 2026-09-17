@@ -13,12 +13,19 @@ import type {
   Side,
   StartingSide
 } from '../../domain/enums';
-import type { EffortOutcome, EffortTarget, Score } from '../../domain/types';
+import type {
+  EffortOutcome,
+  EffortTarget,
+  Quantity,
+  ResultValues,
+  Score
+} from '../../domain/types';
 import type { MissingWorkItem } from '../../sessions/session-service';
 import type { ExerciseResultDraft } from '../../sessions/drafts';
 import {
   draftRowValues,
   fieldDisplay,
+  parseFieldValue,
   type ActiveExerciseRow,
   type GroupModel
 } from '../viewmodels/activeWorkoutModel';
@@ -31,6 +38,8 @@ export interface RowDraftInput {
   row: ActiveExerciseRow;
   /** Draft field text for this row, keyed by dimension. */
   overrides: Record<string, string>;
+  /** Dimensions the user edited. Unit-only display conversion is not an edit. */
+  editedFields?: Record<string, boolean>;
   /** Draft status. Falls back to the row's own status. */
   status?: ResultStatus;
   /** Draft reason code. Falls back to the row's own reason. */
@@ -65,6 +74,25 @@ export interface RowDraftInput {
  */
 export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
   const status = input.status ?? input.row.status;
+  let values: ResultValues = {};
+  if (status !== 'skipped') {
+    if (input.editedFields === undefined) {
+      values = draftRowValues(input.row.fields, input.overrides);
+    } else {
+      for (const field of input.row.fields) {
+        if (input.editedFields[field.dimension] === true) {
+          const parsed = parseFieldValue(field, input.overrides[field.dimension] ?? field.value);
+          if (parsed !== null) (values as Record<string, Quantity>)[field.dimension] = parsed;
+          continue;
+        }
+        const stored = input.row.storedValues?.[field.dimension];
+        if (stored !== undefined) {
+          (values as Record<string, Quantity>)[field.dimension] = { ...stored };
+        }
+      }
+    }
+  }
+
   const draft: ExerciseResultDraft = {
     workoutId: input.workoutId,
     exerciseId: input.row.exerciseId,
@@ -72,7 +100,7 @@ export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
     side: input.side ?? input.row.side,
     attempt: input.row.attempt,
     status,
-    values: status === 'skipped' ? {} : draftRowValues(input.row.fields, input.overrides)
+    values
   };
   // A starting side belongs to an alternating set only. The validator
   // rejects the pair on any other side, so the guard drops the field rather
@@ -312,5 +340,5 @@ export function choiceForEffort(outcome: EffortOutcome | undefined): string {
  * REQUIREMENT 19.9.
  */
 export function canAddAttempt(row: ActiveExerciseRow): boolean {
-  return row.recordable && !row.unresolved && row.hasSavedResult && row.resultKey !== null;
+  return row.recordable && !row.unresolved && row.hasSavedResult && row.resultKey !== null && row.latestAttempt !== false;
 }

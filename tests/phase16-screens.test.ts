@@ -343,7 +343,7 @@ describe('WorkoutOverviewScreen', () => {
 });
 
 describe('WorkoutOverviewScreen: repeated rounds', () => {
-  test('a repeated container labels its later rows by round number', () => {
+  test('a repeated single exercise uses compact numbered sets', () => {
     setServices({
       lookup: { getWorkout: () => workout() } as never,
       staticData: { exerciseById: exerciseIndex(exercises()) } as never,
@@ -351,9 +351,9 @@ describe('WorkoutOverviewScreen: repeated rounds', () => {
     });
 
     const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
-    // The override lands on round 3, and the heading says so.
-    expect(out).toContain('Round 2');
-    expect(out).toContain('Round 3');
+    // The override lands on set 3 inside the shared read-only set editor.
+    expect(out).toContain('Set 2');
+    expect(out).toContain('Set 3');
     expect(out).toContain('5 reps @ 110 lb');
   });
 });

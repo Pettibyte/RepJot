@@ -22,7 +22,16 @@
 //    input beside it would record work the validator refuses.
 //    REQUIREMENTS 10.10, 10.13.
 
-import type { ChildDetail, ReasonCode, ResultStatus, ScoreType, Side, StartingSide } from '../../domain/enums';
+import type {
+  ChildDetail,
+  ReasonCode,
+  ResultStatus,
+  ScoreType,
+  SetType,
+  Side,
+  StartingSide,
+  Stimulus
+} from '../../domain/enums';
 import {
   containerResultKey,
   encodePath,
@@ -60,7 +69,8 @@ import {
   formatContainerSummary,
   formatPrescription,
   joinText,
-  stimulusLabel
+  stimulusLabel,
+  workoutSectionLabel
 } from './overviewModel';
 
 /** Display step for a repetition count. Reps are whole numbers. */
@@ -222,6 +232,24 @@ export interface ActiveExerciseRow {
   effortTarget?: EffortTarget;
   /** The effort already recorded on this row, when one exists. */
   effort?: EffortOutcome;
+  /** Presentation metadata used to label one shared set editor. */
+  setType?: SetType;
+  stimulus?: Stimulus;
+  /** The programmed set number. Attempts keep the same number. */
+  setNumber?: number;
+  /** Only the newest attempt for one path and side may open another attempt. */
+  latestAttempt?: boolean;
+}
+
+/** One exercise heading with all rows from a repeated, single-exercise block. */
+export interface ActiveSetTable {
+  key: string;
+  title: string;
+  sectionTitle: string;
+  label: string;
+  level: number;
+  rows: ActiveExerciseRow[];
+  lastTime: LastTimeModel;
 }
 
 /** One child of a group: a nested container or an exercise row. */
@@ -266,15 +294,24 @@ export type GroupChild =
   totalIntervals: number;
   /** Keys of the exercise rows that sit directly under this group. */
   rowKeys: string[];
+  /** Stable scope after this container's own repetition is removed. */
+  scopeKey: string;
+  /** Repeated scored containers share a result; only one draws its editor. */
+  showControls: boolean;
+  /** Semantic divider label inferred from the group's direct exercise rows. */
+  sectionTitle?: string;
 }
 
 /** One thing the screen draws, in order. */
 export type DrawBlock =
   | { kind: 'group'; group: GroupModel }
-  | { kind: 'row'; row: ActiveExerciseRow };
+  | { kind: 'row'; row: ActiveExerciseRow }
+  | { kind: 'set-table'; table: ActiveSetTable };
 
 /** Everything the Active Workout screen draws. */
 export interface ActiveWorkoutModel {
+  /** Context shown above the editable document. */
+  workoutName: string;
   /** Every exercise row in prescriptive order. */
   rows: ActiveExerciseRow[];
   /** Every container group in preorder. The root group is the first entry. */
@@ -497,6 +534,15 @@ function hasDetailBelow(session: Session, storedPath: PathSegment[]): boolean {
   return false;
 }
 
+/** The innermost programmed iteration is the set number shown to the user. */
+function setNumberFor(path: PathSegment[]): number {
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const iteration = path[index]?.iteration;
+    if (iteration !== undefined) return iteration;
+  }
+  return 1;
+}
+
 /** Sort recorded results by attempt, then by the fixed side order. */
 function byAttemptThenSide(a: ExerciseResult, b: ExerciseResult): number {
   const attemptA = a.attempt ?? 1;
@@ -528,6 +574,74 @@ function totalIntervalsFor(container: ContainerNode): number {
 }
 
 /**
+ * Collapse a repeated container that directly owns one exercise into one
+ * reusable set table. Mixed circuits keep their programmed row order and use
+ * the ordinary row renderer.
+ */
+function buildDisplayBlocks(
+  source: Array<{ kind: 'group'; group: GroupModel } | { kind: 'row'; row: ActiveExerciseRow }>,
+  groups: GroupModel[],
+  rowsByKey: Map<string, ActiveExerciseRow>
+): DrawBlock[] {
+  const byScope = new Map<string, GroupModel[]>();
+  for (const group of groups) {
+    if (group.strategy !== 'rounds' || group.rowKeys.length === 0) continue;
+    const bucket = byScope.get(group.scopeKey);
+    if (bucket === undefined) byScope.set(group.scopeKey, [group]);
+    else bucket.push(group);
+  }
+
+  const tables = new Map<string, ActiveSetTable>();
+  const hiddenRows = new Set<string>();
+  for (const [scopeKey, occurrences] of byScope) {
+    const tableRows = occurrences.flatMap((group) =>
+      group.rowKeys.map((key) => rowsByKey.get(key)).filter((row): row is ActiveExerciseRow => row !== undefined)
+    );
+    if (tableRows.length === 0) continue;
+    const nodeKeys = new Set(tableRows.map((row) => row.nodeKey));
+    const exerciseIds = new Set(tableRows.map((row) => row.exerciseId));
+    if (nodeKeys.size !== 1 || exerciseIds.size !== 1) continue;
+
+    const first = tableRows[0];
+    const label = first.setType === 'warmup' ? 'Warmup sets' : 'Working sets';
+    const sectionTitle = workoutSectionLabel(first.setType, first.stimulus);
+    tables.set(scopeKey, {
+      key: `sets-${scopeKey}`,
+      title: first.exerciseName,
+      sectionTitle,
+      label,
+      level: Math.max(1, occurrences[0]?.level ?? first.level),
+      rows: tableRows,
+      lastTime: first.lastTime
+    });
+    for (const row of tableRows) hiddenRows.add(row.key);
+  }
+
+  const emittedTables = new Set<string>();
+  const output: DrawBlock[] = [];
+  for (const block of source) {
+    if (block.kind === 'group') {
+      const table = tables.get(block.group.scopeKey);
+      if (table !== undefined) {
+        if (!emittedTables.has(table.key)) {
+          emittedTables.add(table.key);
+          output.push({ kind: 'set-table', table });
+        }
+        continue;
+      }
+      const isGenericRoot =
+        block.group.level === 1 &&
+        block.group.title === (CONTAINER_FALLBACK_NAMES.sequence ?? 'Sequence') &&
+        !block.group.scored;
+      if (!isGenericRoot) output.push(block);
+      continue;
+    }
+    if (!hiddenRows.has(block.row.key)) output.push(block);
+  }
+  return output;
+}
+
+/**
  * Build the Active Workout model.
  *
  * The tree is resolved from the current bundle and the session's recorded
@@ -543,8 +657,11 @@ export function buildActiveWorkoutModel(
 
   const rows: ActiveExerciseRow[] = [];
   const groups: GroupModel[] = [];
-  const blocks: DrawBlock[] = [];
+  const sourceBlocks: Array<
+    { kind: 'group'; group: GroupModel } | { kind: 'row'; row: ActiveExerciseRow }
+  > = [];
   const stack: Array<{ level: number; group: GroupModel }> = [];
+  const controlScopes = new Set<string>();
 
   for (const node of resolved) {
     // Unwind the stack to this node's parent. Preorder plus a level is a
@@ -558,8 +675,9 @@ export function buildActiveWorkoutModel(
       const score = session.containerResults[containerResultKey(storedPath)]?.score;
       const childDetail = container.resultCapture?.childDetail;
       const savedDetail = hasDetailBelow(session, storedPath);
+      const scopeKey = `${workout.id}|${encodePath(storedPath)}`;
       const group: GroupModel = {
-        key: `${workout.id}|${container.id}|${node.iteration ?? 1}`,
+        key: `${workout.id}|${encodePath(node.path)}`,
         nodeKey: `${workout.id}|${container.id}`,
         containerNodeId: container.id,
         storedPath,
@@ -576,8 +694,11 @@ export function buildActiveWorkoutModel(
         isAmrap: container.strategy === 'amrap',
         isEmom: container.strategy === 'emom',
         totalIntervals: totalIntervalsFor(container),
-        rowKeys: []
+        rowKeys: [],
+        scopeKey,
+        showControls: !controlScopes.has(scopeKey)
       };
+      controlScopes.add(scopeKey);
       if (container.resultCapture !== undefined) group.scoreType = container.resultCapture.scoreType;
       if (childDetail !== undefined) group.childDetail = childDetail;
       if (score !== undefined) group.score = score;
@@ -591,7 +712,7 @@ export function buildActiveWorkoutModel(
         group.scored && childDetail !== 'none' && score !== undefined && !savedDetail;
 
       groups.push(group);
-      blocks.push({ kind: 'group', group });
+      sourceBlocks.push({ kind: 'group', group });
       stack.push({ level: node.level, group });
       continue;
     }
@@ -650,8 +771,12 @@ export function buildActiveWorkoutModel(
         showCompactPath: node.level > 3,
         compactPathLabel: node.compactPathLabel,
         hasSavedResult: result !== null,
-        unilateral: exercise?.laterality === 'unilateral'
+        unilateral: exercise?.laterality === 'unilateral',
+        setNumber: setNumberFor(node.path),
+        latestAttempt: true
       };
+      if (exerciseNode.setType !== undefined) row.setType = exerciseNode.setType;
+      if (exerciseNode.stimulus !== undefined) row.stimulus = exerciseNode.stimulus;
       // The effort target rides from the effective prescription, so an
       // `iterations` override decides which round asks for effort. The
       // recorded effort rides from the result, so the control opens showing
@@ -665,14 +790,37 @@ export function buildActiveWorkoutModel(
       if (values !== undefined) row.storedValues = values;
 
       rows.push(row);
-      blocks.push({ kind: 'row', row });
+      sourceBlocks.push({ kind: 'row', row });
       if (parent !== null) {
         parent.rowKeys.push(row.key);
       }
     }
   }
 
-  return { rows, groups, blocks };
+  for (const group of groups) {
+    const directRows = group.rowKeys
+      .map((key) => rows.find((row) => row.key === key))
+      .filter((row): row is ActiveExerciseRow => row !== undefined);
+    if (directRows.length === 0) continue;
+    const first = directRows[0];
+    const sectionTitle = workoutSectionLabel(first?.setType, first?.stimulus);
+    if (sectionTitle.toLowerCase() !== group.title.toLowerCase()) group.sectionTitle = sectionTitle;
+  }
+
+  // Attempts are ordered per path and side. Only the newest one offers the
+  // action, while the service independently guards against key collisions.
+  const latestByOccurrence = new Map<string, number>();
+  for (const row of rows) {
+    const identity = `${encodePath(row.path)}|${row.side}`;
+    latestByOccurrence.set(identity, Math.max(latestByOccurrence.get(identity) ?? 0, row.attempt));
+  }
+  for (const row of rows) {
+    row.latestAttempt = row.attempt === latestByOccurrence.get(`${encodePath(row.path)}|${row.side}`);
+  }
+
+  const rowsByKey = new Map(rows.map((row) => [row.key, row]));
+  const blocks = buildDisplayBlocks(sourceBlocks, groups, rowsByKey);
+  return { workoutName: workout.name, rows, groups, blocks };
 }
 
 /** The label for one reason code. */

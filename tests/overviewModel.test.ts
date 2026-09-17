@@ -8,7 +8,8 @@ import { describe, expect, test } from 'bun:test';
 import type { Exercise } from '../src/domain/types';
 import {
   buildOverviewModel,
-  formatPrescription
+  formatPrescription,
+  workoutSectionLabel
 } from '../src/ui/viewmodels/overviewModel';
 import { exercises, workout } from './fixtures/semantic';
 
@@ -83,6 +84,43 @@ describe('buildOverviewModel: container summaries', () => {
   test('a sequence carries no summary', () => {
     const root = model?.nodes[0];
     expect(root?.prescriptionText).toBe('');
+  });
+});
+
+describe('buildOverviewModel: semantic presentation', () => {
+  const model = buildOverviewModel(workout(), { exerciseById: exerciseIndex(exercises()) });
+
+  test('repeated exercise rounds become one compact set table', () => {
+    if (model === null) throw new Error('expected a model');
+    const table = model.blocks.find(
+      (block) => block.kind === 'set-table' && block.table.title === 'Back Squat'
+    );
+    expect(table?.kind).toBe('set-table');
+    if (table?.kind !== 'set-table') return;
+    expect(table.table.sectionTitle).toBe('Strength');
+    expect(table.table.rows.map((row) => row.setNumber)).toEqual([1, 2, 3]);
+    expect(table.table.rows[2]?.prescriptionText).toContain('@ 110 lb');
+  });
+
+  test('conditioning containers carry a semantic section divider', () => {
+    if (model === null) throw new Error('expected a model');
+    const cindy = model.blocks.find(
+      (block) => block.kind === 'group' && block.node.label === 'Cindy'
+    );
+    expect(cindy?.kind === 'group' ? cindy.sectionTitle : undefined).toBe('Conditioning');
+  });
+
+  test('the unnamed sequence root does not add a decorative nesting level', () => {
+    if (model === null) throw new Error('expected a model');
+    expect(model.blocks.some(
+      (block) => block.kind === 'group' && block.node.label === 'Sequence' && block.node.depth === 1
+    )).toBe(false);
+  });
+
+  test('all workout categories share one section-label rule', () => {
+    expect(workoutSectionLabel('warmup', 'strength')).toBe('Warmup');
+    expect(workoutSectionLabel('working', 'strength')).toBe('Strength');
+    expect(workoutSectionLabel(undefined, 'conditioning')).toBe('Conditioning');
   });
 });
 

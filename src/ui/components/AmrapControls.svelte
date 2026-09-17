@@ -63,6 +63,11 @@
 </script>
 
 <div class="amrap-controls">
+  <p class="amrap-controls__rounds">
+    Rounds completed:
+    <strong>{group.score?.type === 'rounds_and_reps' ? group.score.completedRounds : 0}</strong>
+  </p>
+
   {#if canAddRound}
     <Button
       variant="primary"

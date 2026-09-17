@@ -340,6 +340,33 @@ describe('buildSummaryModel: container scores', () => {
   });
 });
 
+describe('buildSummaryModel: semantic presentation', () => {
+  const model = buildSummaryModel({
+    session: validSession(),
+    staticData: loaded(),
+    localTimeZone: 'UTC',
+    nowUtc: NOW
+  });
+
+  test('repeated recorded sets collapse under one exercise heading', () => {
+    const block = model.blocks.find(
+      (candidate) => candidate.kind === 'set-table' && candidate.table.title === 'Back Squat'
+    );
+    expect(block?.kind).toBe('set-table');
+    if (block?.kind !== 'set-table') return;
+    expect(block.table.sectionTitle).toBe('Strength');
+    expect(block.table.rows.map((row) => row.setNumber)).toEqual([1, 2, 3]);
+    expect(block.table.rows.map((row) => row.valuesLabel)).toContain('5 reps · 105 lb');
+  });
+
+  test('container scores retain a semantic conditioning section', () => {
+    const block = model.blocks.find(
+      (candidate) => candidate.kind === 'group' && candidate.group.title.startsWith('Cindy')
+    );
+    expect(block?.kind === 'group' ? block.sectionTitle : undefined).toBe('Conditioning');
+  });
+});
+
 describe('buildSummaryModel: grouping and ordering', () => {
   test('rows land in the group of their parent container', () => {
     const model = buildSummaryModel({
