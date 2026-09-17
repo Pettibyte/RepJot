@@ -340,10 +340,9 @@
       "laterality": "unilateral",
       "measurements": [
         {
-          "dimension": "duration",
+          "dimension": "reps",
           "compatibleUnits": [
-            "second",
-            "minute"
+            "reps"
           ]
         }
       ],
@@ -375,10 +374,9 @@
       "laterality": "bilateral",
       "measurements": [
         {
-          "dimension": "duration",
+          "dimension": "reps",
           "compatibleUnits": [
-            "second",
-            "minute"
+            "reps"
           ]
         }
       ],

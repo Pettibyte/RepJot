@@ -160,10 +160,9 @@
     "loadSemantics": "total",
     "measurements": [
       {
-        "dimension": "duration",
+        "dimension": "reps",
         "units": [
-          "second",
-          "minute"
+          "reps"
         ]
       }
     ]
@@ -175,10 +174,9 @@
     "loadSemantics": "total",
     "measurements": [
       {
-        "dimension": "duration",
+        "dimension": "reps",
         "units": [
-          "second",
-          "minute"
+          "reps"
         ]
       }
     ]
