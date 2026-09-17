@@ -316,5 +316,228 @@
         ]
       }
     }
+     ,
+    {
+      "id": "arms-day-a",
+      "name": "Arms Day A",
+      "notes": "Mobility, arm and back strength, then a 500 m row for time.",
+      "root": {
+        "id": "arms-day-a-root",
+        "type": "container",
+        "name": "Arms Day A",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "mobility",
+            "type": "container",
+            "name": "Mobility",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "dead-hang",
+                "type": "exercise",
+                "exerciseId": "Dead_Hang",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              },
+              {
+                "id": "hip-stretch",
+                "type": "exercise",
+                "exerciseId": "90_90_Hip_Stretch",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              },
+              {
+                "id": "deep-squat-hold",
+                "type": "exercise",
+                "exerciseId": "Deep_Squat_Hold",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              },
+              {
+                "id": "kettlebell-halos",
+                "type": "exercise",
+                "exerciseId": "Kettlebell_Halo",
+                "stimulus": "mobility",
+                "prescription": {
+                  "reps": 10
+                },
+                "notes": "10 each direction.",
+                "setType": "warmup"
+              },
+              {
+                "id": "wall-sit",
+                "type": "exercise",
+                "exerciseId": "Wall_Sit",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "notes": "Isometric knee prehab.",
+                "setType": "warmup"
+              },
+              {
+                "id": "reverse-tabletop",
+                "type": "exercise",
+                "exerciseId": "Reverse_Tabletop",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              }
+            ]
+          },
+          {
+            "id": "strength",
+            "type": "container",
+            "name": "Strength",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "preacher-curl-sets",
+                "type": "container",
+                "name": "One Arm Dumbbell Preacher Curl",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "preacher-curl",
+                    "type": "exercise",
+                    "exerciseId": "One_Arm_Dumbbell_Preacher_Curl",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "notes": "8 per side.",
+                    "setType": "working"
+                  }
+                ]
+              },
+              {
+                "id": "triceps-extension-sets",
+                "type": "container",
+                "name": "Dumbbell One-Arm Triceps Extension",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "triceps-extension",
+                    "type": "exercise",
+                    "exerciseId": "Dumbbell_One-Arm_Triceps_Extension",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "notes": "8 per side.",
+                    "setType": "working"
+                  }
+                ]
+              },
+              {
+                "id": "rear-delt-raise-sets",
+                "type": "container",
+                "name": "Lying Rear Delt Raise",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "rear-delt-raise",
+                    "type": "exercise",
+                    "exerciseId": "Lying_Rear_Delt_Raise",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "setType": "working"
+                  }
+                ]
+              },
+              {
+                "id": "bent-over-row-sets",
+                "type": "container",
+                "name": "Bent Over Two-Dumbbell Row",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "bent-over-row",
+                    "type": "exercise",
+                    "exerciseId": "Bent_Over_Two-Dumbbell_Row",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "setType": "working"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "conditioning",
+            "type": "container",
+            "name": "500 m Row for Time",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "intervals",
+              "childDetail": "optional"
+            },
+            "children": [
+              {
+                "id": "row-500m",
+                "type": "exercise",
+                "exerciseId": "Rowing_Stationary",
+                "stimulus": "conditioning",
+                "prescription": {
+                  "distance": {
+                    "value": 500,
+                    "unit": "m"
+                  }
+                },
+                "setType": "working"
+              }
+            ]
+          }
+        ]
+      }
+    }
   ]
 }

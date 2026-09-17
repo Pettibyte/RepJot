@@ -1,8 +1,8 @@
 {
   "source": {
-    "repo": "yuhonas/free-exercise-db",
+    "repo": "Pettibyte/free-exercise-db",
     "ref": "main",
-    "commit": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+    "commit": "b332c93a82191d3386bfed2b275ef6e42ee5f72a",
     "path": "dist/exercises.json"
   },
   "allowlist": "scripts/exercise-allowlist.json",
