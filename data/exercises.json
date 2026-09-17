@@ -3,274 +3,6 @@
   "schemaVersion": 1,
   "exercises": [
     {
-      "id": "Barbell_Squat",
-      "name": "Barbell Squat",
-      "instructions": [
-        "This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack to just below shoulder level. Once the correct height is chosen and the bar is loaded, step under the bar and place the back of your shoulders (slightly below the neck) across it.",
-        "Hold on to the bar using both arms at each side and lift it off the rack by first pushing with your legs and at the same time straightening your torso.",
-        "Step away from the rack and position your legs using a shoulder width medium stance with the toes slightly pointed out. Keep your head up at all times and also maintain a straight back. This will be your starting position. (Note: For the purposes of this discussion we will use the medium stance described above which targets overall development; however you can choose any of the three stances discussed in the foot stances section).",
-        "Begin to slowly lower the bar by bending the knees and hips as you maintain a straight posture with the head up. Continue down until the angle between the upper leg and the calves becomes slightly less than 90-degrees. Inhale as you perform this portion of the movement. Tip: If you performed the exercise correctly, the front of the knees should make an imaginary straight line with the toes that is perpendicular to the front. If your knees are past that imaginary line (if they are past your toes) then you are placing undue stress on the knee and the exercise has been performed incorrectly.",
-        "Begin to raise the bar as you exhale by pushing the floor with the heel of your foot as you straighten the legs again and go back to the starting position.",
-        "Repeat for the recommended amount of repetitions."
-      ],
-      "equipment": "barbell",
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "squat",
-      "primaryMuscles": [
-        "quadriceps"
-      ],
-      "secondaryMuscles": [
-        "calves",
-        "glutes",
-        "hamstrings",
-        "lower back"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Barbell_Bench_Press_-_Medium_Grip",
-      "name": "Barbell Bench Press - Medium Grip",
-      "instructions": [
-        "Lie back on a flat bench. Using a medium width grip (a grip that creates a 90-degree angle in the middle of the movement between the forearms and the upper arms), lift the bar from the rack and hold it straight over you with your arms locked. This will be your starting position.",
-        "From the starting position, breathe in and begin coming down slowly until the bar touches your middle chest.",
-        "After a brief pause, push the bar back to the starting position as you breathe out. Focus on pushing the bar using your chest muscles. Lock your arms and squeeze your chest in the contracted position at the top of the motion, hold for a second and then start coming down slowly again. Tip: Ideally, lowering the weight should take about twice as long as raising it.",
-        "Repeat the movement for the prescribed amount of repetitions.",
-        "When you are done, place the bar back in the rack."
-      ],
-      "equipment": "barbell",
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "horizontal_push",
-      "primaryMuscles": [
-        "chest"
-      ],
-      "secondaryMuscles": [
-        "shoulders",
-        "triceps"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Barbell_Deadlift",
-      "name": "Barbell Deadlift",
-      "instructions": [
-        "Stand in front of a loaded barbell.",
-        "While keeping the back as straight as possible, bend your knees, bend forward and grasp the bar using a medium (shoulder width) overhand grip. This will be the starting position of the exercise. Tip: If it is difficult to hold on to the bar with this grip, alternate your grip or use wrist straps.",
-        "While holding the bar, start the lift by pushing with your legs while simultaneously getting your torso to the upright position as you breathe out. In the upright position, stick your chest out and contract the back by bringing the shoulder blades back. Think of how the soldiers in the military look when they are in standing in attention.",
-        "Go back to the starting position by bending at the knees while simultaneously leaning the torso forward at the waist while keeping the back straight. When the weights on the bar touch the floor you are back at the starting position and ready to perform another repetition.",
-        "Perform the amount of repetitions prescribed in the program."
-      ],
-      "equipment": "barbell",
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "intermediate",
-      "movementPattern": "hinge",
-      "primaryMuscles": [
-        "lower back"
-      ],
-      "secondaryMuscles": [
-        "calves",
-        "forearms",
-        "glutes",
-        "hamstrings",
-        "lats",
-        "middle back",
-        "quadriceps",
-        "traps"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Pullups",
-      "name": "Pullups",
-      "instructions": [
-        "Grab the pull-up bar with the palms facing forward using the prescribed grip. Note on grips: For a wide grip, your hands need to be spaced out at a distance wider than your shoulder width. For a medium grip, your hands need to be spaced out at a distance equal to your shoulder width and for a close grip at a distance smaller than your shoulder width.",
-        "As you have both arms extended in front of you holding the bar at the chosen grip width, bring your torso back around 30 degrees or so while creating a curvature on your lower back and sticking your chest out. This is your starting position.",
-        "Pull your torso up until the bar touches your upper chest by drawing the shoulders and the upper arms down and back. Exhale as you perform this portion of the movement. Tip: Concentrate on squeezing the back muscles once you reach the full contracted position. The upper torso should remain stationary as it moves through space and only the arms should move. The forearms should do no other work other than hold the bar.",
-        "After a second on the contracted position, start to inhale and slowly lower your torso back to the starting position when your arms are fully extended and the lats are fully stretched.",
-        "Repeat this motion for the prescribed amount of repetitions."
-      ],
-      "equipment": null,
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "vertical_pull",
-      "primaryMuscles": [
-        "lats"
-      ],
-      "secondaryMuscles": [
-        "biceps",
-        "middle back"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Pushups",
-      "name": "Pushups",
-      "instructions": [
-        "Lie on the floor face down and place your hands about 36 inches apart while holding your torso up at arms length.",
-        "Next, lower yourself downward until your chest almost touches the floor as you inhale.",
-        "Now breathe out and press your upper body back up to the starting position while squeezing your chest.",
-        "After a brief pause at the top contracted position, you can begin to lower yourself downward again for as many repetitions as needed."
-      ],
-      "equipment": null,
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "horizontal_push",
-      "primaryMuscles": [
-        "chest"
-      ],
-      "secondaryMuscles": [
-        "shoulders",
-        "triceps"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Bodyweight_Squat",
-      "name": "Bodyweight Squat",
-      "instructions": [
-        "Stand with your feet shoulder width apart. You can place your hands behind your head. This will be your starting position.",
-        "Begin the movement by flexing your knees and hips, sitting back with your hips.",
-        "Continue down to full depth if you are able,and quickly reverse the motion until you return to the starting position. As you squat, keep your head and chest up and push your knees out."
-      ],
-      "equipment": null,
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "squat",
-      "primaryMuscles": [
-        "quadriceps"
-      ],
-      "secondaryMuscles": [
-        "glutes",
-        "hamstrings"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "One-Arm_Kettlebell_Swings",
-      "name": "One-Arm Kettlebell Swings",
-      "instructions": [],
-      "equipment": "kettlebell",
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "intermediate",
-      "movementPattern": "hinge",
-      "primaryMuscles": [
-        "hamstrings"
-      ],
-      "secondaryMuscles": [
-        "calves",
-        "glutes",
-        "lower back",
-        "shoulders"
-      ],
-      "laterality": "unilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "per_implement"
-    },
-    {
       "id": "Kettlebell_Halo",
       "name": "Kettlebell Halo",
       "instructions": [
@@ -312,166 +44,6 @@
         }
       ],
       "loadSemantics": "per_implement"
-    },
-    {
-      "id": "Alternating_Kettlebell_Row",
-      "name": "Alternating Kettlebell Row",
-      "instructions": [
-        "Place two kettlebells in front of your feet. Bend your knees slightly and push your butt out as much as possible. As you bend over to get into the starting position grab both kettlebells by the handles.",
-        "Pull one kettlebell off of the floor while holding on to the other kettlebell. Retract the shoulder blade of the working side, as you flex the elbow, drawing the kettlebell towards your stomach or rib cage.",
-        "Lower the kettlebell in the working arm and repeat with your other arm."
-      ],
-      "equipment": "kettlebell",
-      "force": "pull",
-      "mechanic": "isolation",
-      "category": "strength",
-      "level": "intermediate",
-      "movementPattern": "horizontal_pull",
-      "primaryMuscles": [
-        "middle back"
-      ],
-      "secondaryMuscles": [
-        "biceps",
-        "lats"
-      ],
-      "laterality": "unilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "per_implement"
-    },
-    {
-      "id": "Double_Kettlebell_Push_Press",
-      "name": "Double Kettlebell Push Press",
-      "instructions": [
-        "Clean two kettlebells to your shoulders.",
-        "Squat down a few inches and reverse the motion rapidly. Use the momentum from the legs to drive the kettlebells overhead.",
-        "Once the kettlebells are locked out, lower the kettlebells to your shoulders and repeat."
-      ],
-      "equipment": "kettlebell",
-      "force": "push",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "intermediate",
-      "movementPattern": "vertical_push",
-      "primaryMuscles": [
-        "shoulders"
-      ],
-      "secondaryMuscles": [
-        "calves",
-        "quadriceps",
-        "triceps"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "weight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "per_implement"
-    },
-    {
-      "id": "Weighted_Pull_Ups",
-      "name": "Weighted Pull Ups",
-      "instructions": [
-        "Attach a weight to a dip belt and secure it around your waist. Grab the pull-up bar with the palms of your hands facing forward. For a medium grip, your hands should be spaced at shoulder width. Both arms should be extended in front of you holding the bar at the chosen grip.",
-        "You'll want to bring your torso back about 30 degrees while creating a curvature in your lower back and sticking your chest out. This will be your starting position.",
-        "Now, exhale and pull your torso up until your head is above your hands. Concentrate on squeezing yourshoulder blades back and down as you reach the top contracted position.",
-        "After a brief moment at the top contracted position, inhale and slowly lower your torso back to the starting position with your arms extended and your lats fully stretched."
-      ],
-      "equipment": "other",
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "intermediate",
-      "movementPattern": "vertical_pull",
-      "primaryMuscles": [
-        "lats"
-      ],
-      "secondaryMuscles": [
-        "biceps",
-        "middle back"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "addedWeight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "added"
-    },
-    {
-      "id": "Band_Assisted_Pull-Up",
-      "name": "Band Assisted Pull-Up",
-      "instructions": [
-        "Choke the band around the center of the pullup bar. You can use different bands to provide varying levels of assistance.",
-        "Pull the end of the band down, and place one bent knee into the loop, ensuring it won't slip out. Take a medium to wide grip on the bar. This will be your starting position.",
-        "Pull yourself upward by contracting the lats as you flex the elbow. The elbow should be driven to your side. Pull to the front, attempting to get your chin over the bar. Avoid swinging or jerking movements.",
-        "After a brief pause, return to the starting position."
-      ],
-      "equipment": "band",
-      "force": null,
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "vertical_pull",
-      "primaryMuscles": [
-        "lats"
-      ],
-      "secondaryMuscles": [
-        "abdominals",
-        "forearms",
-        "middle back"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
-        {
-          "dimension": "assistedWeight",
-          "compatibleUnits": [
-            "kg",
-            "lb"
-          ]
-        }
-      ],
-      "loadSemantics": "assisted"
     },
     {
       "id": "Rowing_Stationary",
@@ -518,75 +90,30 @@
       "loadSemantics": "total"
     },
     {
-      "id": "Rope_Jumping",
-      "name": "Rope Jumping",
+      "id": "Dead_Hang",
+      "name": "Dead Hang",
       "instructions": [
-        "Hold an end of the rope in each hand. Position the rope behind you on the ground. Raise your arms up and turn the rope over your head bringing it down in front of you. When it reaches the ground, jump over it. Find a good turning pace that can be maintained. Different speeds and techniques can be used to introduce variation.",
-        "Rope jumping is exciting, challenges your coordination, and requires a lot of energy. A 150 lb person will burn about 350 calories jumping rope for 30 minutes, compared to over 450 calories running."
-      ],
-      "equipment": "other",
-      "force": null,
-      "mechanic": null,
-      "category": "cardio",
-      "level": "intermediate",
-      "movementPattern": "locomotion",
-      "primaryMuscles": [
-        "quadriceps"
-      ],
-      "secondaryMuscles": [
-        "calves",
-        "hamstrings"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "duration",
-          "compatibleUnits": [
-            "second",
-            "minute"
-          ]
-        },
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Knee_Tuck_Jump",
-      "name": "Knee Tuck Jump",
-      "instructions": [
-        "Begin in a comfortable standing position with your knees slightly bent. Hold your hands in front of you, palms down with your fingertips together at chest height. This will be your starting position.",
-        "Rapidly dip down into a quarter squat and immediately explode upward. Drive the knees towards the chest, attempting to touch them to the palms of the hands.",
-        "Jump as high as you can, raising your knees up, and then ensure a good land be re-extending your legs, absorbing impact through be allowing the knees to rebend."
+        "Stand below a pull-up bar and take an overhand grip slightly wider than shoulder width. Use a step or jump carefully if you cannot reach the bar safely.",
+        "Hang with your arms straight and your feet off the floor. Keep your ribs controlled and allow your shoulders to lengthen without forcing them into pain.",
+        "Breathe steadily as you maintain a relaxed, stable hang. Keep your legs still and avoid swinging.",
+        "Hold for 10-30 seconds, or for as long as you can maintain a comfortable grip and shoulder position. Lower yourself with control."
       ],
       "equipment": null,
-      "force": "push",
-      "mechanic": "compound",
-      "category": "plyometrics",
+      "force": "pull",
+      "mechanic": null,
+      "category": "stretching",
       "level": "beginner",
-      "movementPattern": "other",
+      "movementPattern": "vertical_pull",
       "primaryMuscles": [
-        "hamstrings"
+        "lats"
       ],
       "secondaryMuscles": [
-        "abductors",
-        "adductors",
-        "calves",
-        "glutes",
-        "quadriceps"
+        "shoulders",
+        "forearms",
+        "middle back"
       ],
       "laterality": "bilateral",
       "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
         {
           "dimension": "duration",
           "compatibleUnits": [
@@ -598,26 +125,217 @@
       "loadSemantics": "total"
     },
     {
-      "id": "Worlds_Greatest_Stretch",
-      "name": "World's Greatest Stretch",
+      "id": "Wall_Sit",
+      "name": "Wall Sit",
       "instructions": [
-        "This is a three-part stretch. Begin by lunging forward, with your front foot flat on the ground and on the toes of your back foot. With your knees bent, squat down until your knee is almost touching the ground. Keep your torso erect, and hold this position for 10-20 seconds.",
-        "Now, place the arm on the same side as your front leg on the ground, with the elbow next to the foot. Your other hand should be placed on the ground, parallel to your lead leg, to help support you during this portion of the stretch.",
-        "After 10-20 seconds, place your hands on either side of your front foot. Raise the toes of the front foot off of the ground, and straighten your leg. You may need to reposition your rear leg to do so. Hold for 10-20 seconds, and then repeat the entire sequence for the other side."
+        "Stand with your back against a wall and place your feet about hip width apart, a step or two in front of you.",
+        "Slide your back down the wall until your hips and knees are close to 90-degree angles. Keep your knees above your ankles and your feet flat on the floor.",
+        "Brace your abdomen and press your back gently into the wall. Keep your shoulders relaxed and do not push on your thighs with your hands.",
+        "Hold for 20-60 seconds, or stop sooner if your form changes. Push through your feet to slide back up the wall."
+      ],
+      "equipment": null,
+      "force": "static",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "squat",
+      "primaryMuscles": [
+        "quadriceps"
+      ],
+      "secondaryMuscles": [
+        "glutes",
+        "calves"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "duration",
+          "compatibleUnits": [
+            "second",
+            "minute"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "One_Arm_Dumbbell_Preacher_Curl",
+      "name": "One Arm Dumbbell Preacher Curl",
+      "instructions": [
+        "Grab a dumbbell with the right arm and place the upper arm on top of the preacher bench or the incline bench. The dumbbell should be held at shoulder length. This will be your starting position.",
+        "As you breathe in, slowly lower the dumbbell until your upper arm is extended and the biceps is fully stretched.",
+        "As you exhale, use the biceps to curl the weight up until your biceps is fully contracted and the dumbbell is at shoulder height. Again, remember that to ensure full contraction you need to bring that small finger higher than the thumb.",
+        "Squeeze the biceps hard for a second at the contracted position and repeat for the recommended amount of repetitions.",
+        "Switch arms and repeat the movement."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "flexion",
+      "primaryMuscles": [
+        "biceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "unilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Dumbbell_One-Arm_Triceps_Extension",
+      "name": "Dumbbell One-Arm Triceps Extension",
+      "instructions": [
+        "Grab a dumbbell and either sit on a military press bench or a utility bench that has a back support on it as you place the dumbbells upright on top of your thighs or stand up straight.",
+        "Clean the dumbbell up to bring it to shoulder height and then extend the arm over your head so that the whole arm is perpendicular to the floor and next to your head. The dumbbell should be on top of you. The other hand can be kept fully extended to the side, by the waist, supporting the upper arm that has the dumbbell or grabbing a fixed surface.",
+        "Rotate the wrist so that the palm of your hand is facing forward and the pinkie is facing the ceiling. This will be your starting position.",
+        "Slowly lower the dumbbell behind your head as you hold the upper arm stationary. Inhale as you perform this movement and pause when your triceps are fully stretched.",
+        "Return to the starting position by flexing your triceps as you breathe out. Tip: It is imperative that only the forearm moves. The upper arm should remain at all times stationary next to your head.",
+        "Repeat for the recommended amount of repetitions and switch arms."
+      ],
+      "equipment": "dumbbell",
+      "force": "push",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "intermediate",
+      "movementPattern": "extension",
+      "primaryMuscles": [
+        "triceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "unilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Lying_Rear_Delt_Raise",
+      "name": "Lying Rear Delt Raise",
+      "instructions": [
+        "While holding a dumbbell in each hand, lay with your chest down on a flat bench.",
+        "Position the palms of the hands in a neutral manner (palms facing your torso) as you keep the arms extended with the elbows slightly bent. This will be your starting position.",
+        "Now raise the arms to the side until your elbows are at shoulder height and your arms are roughly parallel to the floor as you exhale. Tip: Maintain your arms perpendicular to the torso while keeping them extended throughout the movement. Also, keep the contraction at the top for a second.",
+        "Slowly lower the dumbbells to the starting position as you inhale.",
+        "Repeat for the recommended amount of repetitions and then switch to the other arm."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "intermediate",
+      "movementPattern": "horizontal_pull",
+      "primaryMuscles": [
+        "shoulders"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Bent_Over_Two-Dumbbell_Row",
+      "name": "Bent Over Two-Dumbbell Row",
+      "instructions": [
+        "With a dumbbell in each hand (palms facing your torso), bend your knees slightly and bring your torso forward by bending at the waist; as you bend make sure to keep your back straight until it is almost parallel to the floor. Tip: Make sure that you keep the head up. The weights should hang directly in front of you as your arms hang perpendicular to the floor and your torso. This is your starting position.",
+        "While keeping the torso stationary, lift the dumbbells to your side (as you breathe out), keeping the elbows close to the body (do not exert any force with the forearm other than holding the weights). On the top contracted position, squeeze the back muscles and hold for a second.",
+        "Slowly lower the weight again to the starting position as you inhale.",
+        "Repeat for the recommended amount of repetitions."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "horizontal_pull",
+      "primaryMuscles": [
+        "middle back"
+      ],
+      "secondaryMuscles": [
+        "biceps",
+        "lats",
+        "shoulders"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "90_90_Hip_Stretch",
+      "name": "90/90 Hip Stretch",
+      "instructions": [
+        "Sit on the floor with your front knee bent about 90 degrees and your shin angled across your body. Bend the opposite knee behind you so both legs form a comfortable 90/90 position.",
+        "Sit tall and keep both sitting bones as close to the floor as your mobility allows. Place your hands beside your hips for support.",
+        "Keeping your chest long and your back controlled, slowly hinge forward over the front leg until you feel a mild stretch around the hip and glute.",
+        "Hold the position for 20-30 seconds while breathing steadily. Do not force the knee or allow sharp pain.",
+        "Return to an upright position, change the leg arrangement, and repeat on the other side for 2-3 rounds."
       ],
       "equipment": null,
       "force": "static",
       "mechanic": null,
       "category": "stretching",
-      "level": "intermediate",
+      "level": "beginner",
       "movementPattern": "rotation",
       "primaryMuscles": [
-        "hamstrings"
+        "glutes"
       ],
       "secondaryMuscles": [
-        "calves",
-        "glutes",
-        "quadriceps"
+        "adductors",
+        "abductors"
       ],
       "laterality": "unilateral",
       "measurements": [
@@ -632,25 +350,27 @@
       "loadSemantics": "total"
     },
     {
-      "id": "Cat_Stretch",
-      "name": "Cat Stretch",
+      "id": "Deep_Squat_Hold",
+      "name": "Deep Squat Hold",
       "instructions": [
-        "Position yourself on the floor on your hands and knees.",
-        "Pull your belly in and round your spine, lower back, shoulders, and neck, letting your head drop.",
-        "Hold for 15 seconds."
+        "Stand with your feet about shoulder width apart, or use a slightly wider stance if that feels more natural. Turn your toes out a little.",
+        "Bend your knees and lower your hips as far as you can while keeping your heels on the floor. Settle into a comfortable deep squat with your chest lifted.",
+        "Use your elbows to gently guide your knees outward, while keeping your knees aligned with your toes. Keep your spine long and breathe slowly.",
+        "Hold for 20-60 seconds. Rise by pressing through your feet, and use support or reduce the depth if you cannot keep your heels down comfortably."
       ],
       "equipment": null,
       "force": "static",
-      "mechanic": null,
+      "mechanic": "compound",
       "category": "stretching",
       "level": "beginner",
-      "movementPattern": "flexion",
+      "movementPattern": "squat",
       "primaryMuscles": [
-        "lower back"
+        "glutes"
       ],
       "secondaryMuscles": [
-        "middle back",
-        "traps"
+        "quadriceps",
+        "adductors",
+        "calves"
       ],
       "laterality": "bilateral",
       "measurements": [
@@ -665,161 +385,31 @@
       "loadSemantics": "total"
     },
     {
-      "id": "Inchworm",
-      "name": "Inchworm",
+      "id": "Reverse_Tabletop",
+      "name": "Reverse Tabletop",
       "instructions": [
-        "Stand with your feet close together. Keeping your legs straight, stretch down and put your hands on the floor directly in front of you. This will be your starting position.",
-        "Begin by walking your hands forward slowly, alternating your left and your right. As you do so, bend only at the hip, keeping your legs straight.",
-        "Keep going until your body is parallel to the ground in a pushup position.",
-        "Now, keep your hands in place and slowly take short steps with your feet, moving only a few inches at a time.",
-        "Continue walking until your feet are by hour hands, keeping your legs straight as you do so."
+        "Sit on the floor with your legs extended in front of you. Place your hands behind your hips with your fingers pointing toward your feet, or turn them slightly outward if needed for comfort.",
+        "Bend your knees and place your feet on the floor. Press your hands and feet down as you lift your hips until your torso and thighs form a nearly straight line.",
+        "Keep your shoulders away from your ears, draw your shoulder blades gently together, and brace your abdomen. Do not let your hips sag or your neck collapse backward.",
+        "Hold for 15-30 seconds while breathing normally. Lower your hips with control and repeat for 2-4 holds."
       ],
       "equipment": null,
-      "force": null,
+      "force": "push",
       "mechanic": "compound",
-      "category": "stretching",
-      "level": "beginner",
-      "movementPattern": "locomotion",
+      "category": "strength",
+      "level": "intermediate",
+      "movementPattern": "other",
       "primaryMuscles": [
+        "glutes"
+      ],
+      "secondaryMuscles": [
+        "shoulders",
+        "triceps",
+        "abdominals",
         "hamstrings"
       ],
-      "secondaryMuscles": [],
       "laterality": "bilateral",
       "measurements": [
-        {
-          "dimension": "duration",
-          "compatibleUnits": [
-            "second",
-            "minute"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Round_The_World_Shoulder_Stretch",
-      "name": "Round The World Shoulder Stretch",
-      "instructions": [
-        "Stand up straight with your legs together, holding a bodybar or broomstick.",
-        "Hold the pole behind your hips with a wider than shoulder width grip. Your palms should be down and your thumbs facing out.",
-        "Slowly lift your arms up behind your head. Don't force it if it gets hard to lift further."
-      ],
-      "equipment": "other",
-      "force": "static",
-      "mechanic": null,
-      "category": "stretching",
-      "level": "beginner",
-      "movementPattern": "rotation",
-      "primaryMuscles": [
-        "shoulders"
-      ],
-      "secondaryMuscles": [
-        "biceps",
-        "chest"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "duration",
-          "compatibleUnits": [
-            "second",
-            "minute"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Scapular_Pull-Up",
-      "name": "Scapular Pull-Up",
-      "instructions": [
-        "Take a pronated grip on a pull-up bar.",
-        "From a hanging position, raise yourself a few inches without using your arms. Do this by depressing your shoulder girdle in a reverse shrugging motion.",
-        "Pause at the completion of the movement, and then slowly return to the starting position before performing more repetitions."
-      ],
-      "equipment": null,
-      "force": "pull",
-      "mechanic": "isolation",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "vertical_pull",
-      "primaryMuscles": [
-        "traps"
-      ],
-      "secondaryMuscles": [
-        "lats",
-        "middle back"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Inverted_Row",
-      "name": "Inverted Row",
-      "instructions": [
-        "Position a bar in a rack to about waist height. You can also use a smith machine.",
-        "Take a wider than shoulder width grip on the bar and position yourself hanging underneath the bar. Your body should be straight with your heels on the ground with your arms fully extended. This will be your starting position.",
-        "Begin by flexing the elbow, pulling your chest towards the bar. Retract your shoulder blades as you perform the movement.",
-        "Pause at the top of the motion, and return yourself to the start position.",
-        "Repeat for the desired number of repetitions."
-      ],
-      "equipment": null,
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "horizontal_pull",
-      "primaryMuscles": [
-        "middle back"
-      ],
-      "secondaryMuscles": [
-        "lats"
-      ],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        }
-      ],
-      "loadSemantics": "total"
-    },
-    {
-      "id": "Monster_Walk",
-      "name": "Monster Walk",
-      "instructions": [
-        "Place a band around both ankles and another around both knees. There should be enough tension that they are tight when your feet are shoulder width apart.",
-        "To begin, take short steps forward alternating your left and right foot.",
-        "After several steps, do just the opposite and walk backward to where you started."
-      ],
-      "equipment": "band",
-      "force": "pull",
-      "mechanic": "compound",
-      "category": "strength",
-      "level": "beginner",
-      "movementPattern": "locomotion",
-      "primaryMuscles": [
-        "abductors"
-      ],
-      "secondaryMuscles": [],
-      "laterality": "bilateral",
-      "measurements": [
-        {
-          "dimension": "reps",
-          "compatibleUnits": [
-            "reps"
-          ]
-        },
         {
           "dimension": "duration",
           "compatibleUnits": [
