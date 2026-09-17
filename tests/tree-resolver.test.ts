@@ -2,9 +2,7 @@
 // the compact path label. Phase 14. REQUIREMENTS 10.2, 10.3, 10.8, 11.17.
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Workout, WorkoutsDoc } from '../src/domain/types';
+import type { Workout } from '../src/domain/types';
 import { encodePath } from '../src/domain/execution-path';
 import {
   applyIterationOverrides,
@@ -208,48 +206,6 @@ describe('resolveTree', () => {
     const nodes = resolveTree(workout());
     expect(nodes.filter((node) => node.node.id === 'root')).toHaveLength(1);
     expect(nodes[0]?.iteration).toBeUndefined();
-  });
-});
-
-describe('resolveTree against the shipped bundle', () => {
-  const bundle = JSON.parse(
-    readFileSync(join(import.meta.dir, '../src/public/data/workouts.json'), 'utf8')
-  ) as WorkoutsDoc;
-
-  test('every shipped workout with a repeated root resolves every cycle', () => {
-    const repeated = bundle.workouts.filter(
-      (candidate) =>
-        candidate.root.type === 'container' && candidate.root.strategy !== 'sequence'
-    );
-    // The guard is only useful if the bundle still holds a repeated root.
-    expect(repeated.length).toBeGreaterThan(0);
-
-    for (const candidate of repeated) {
-      const cycles =
-        (candidate.root.strategyConfig as { cycles?: number }).cycles ??
-        (candidate.root.strategyConfig as { rounds?: number }).rounds ??
-        1;
-      const leaves = resolveTree(candidate).filter((node) => node.node.type === 'exercise');
-      expect(leaves.length).toBe(cycles * candidate.root.children.length);
-    }
-  });
-
-  test('emom-conditioning resolves 16 exercise occurrences under root:1..root:4', () => {
-    const candidate = bundle.workouts.find((w) => w.id === 'emom-conditioning');
-    expect(candidate).toBeDefined();
-    const leaves = resolveTree(candidate as Workout).filter((node) => node.node.type === 'exercise');
-    expect(leaves).toHaveLength(16);
-    const roots = new Set(
-      leaves.map((node) => node.path[0]?.iteration).filter((value) => value !== undefined)
-    );
-    expect([...roots].sort()).toEqual([1, 2, 3, 4]);
-  });
-
-  test('kb-complex resolves 20 exercise occurrences under root:1..root:4', () => {
-    const candidate = bundle.workouts.find((w) => w.id === 'kb-complex');
-    expect(candidate).toBeDefined();
-    const leaves = resolveTree(candidate as Workout).filter((node) => node.node.type === 'exercise');
-    expect(leaves).toHaveLength(20);
   });
 });
 

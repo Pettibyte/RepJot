@@ -51,14 +51,8 @@ and how an `iterations` entry overrides the fields it carries.
 the workout chooser. A workout appears in the chooser when the file lists it, so the
 file holds no lifecycle flag.
 
-The committed file carries four workouts, one per authoring target:
-
-| Workout | Shapes it covers |
-| --- | --- |
-| `strength-and-cindy` | `sequence` root, `rounds` with per-iteration overrides, AMRAP scored `rounds_and_reps` with `childDetail: "optional"`, `benchmark` metadata. |
-| `emom-conditioning` | `emom` with `cycles` and `interval`, scored `intervals` with optional child detail. |
-| `kb-complex` | `complex` with `cycles` and `childDetail: "none"`, `added` and `assisted` load semantics. |
-| `warmup-mobility` | Nested `sequence` containers, `mobility` stimulus, `warmup` set type. |
+The committed file carries the current `arms-day-a` workout. Strategy coverage for
+other shapes lives in synthetic test fixtures, not in the production bundle.
 
 Run `bun run check:static` to check the file on its own. The gate reads both
 bundled data files, runs them through the document pipeline, and reports one line

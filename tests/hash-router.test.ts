@@ -13,7 +13,7 @@ import { get } from 'svelte/store';
 /** Every route in the table, with the hash that must produce it. */
 const CASES: Array<{ hash: string; route: Route }> = [
   { hash: '#/', route: { name: 'home' } },
-  { hash: '#/workouts/strength-and-cindy', route: { name: 'workout-overview', workoutId: 'strength-and-cindy' } },
+  { hash: '#/workouts/arms-day-a', route: { name: 'workout-overview', workoutId: 'arms-day-a' } },
   {
     hash: '#/sessions/session-0f1c2b3a-4d5e-4f60-8a1b-2c3d4e5f6a7b/active',
     route: {
@@ -64,9 +64,9 @@ describe('parseHash and formatRoute', () => {
 
   test('a trailing slash normalizes to the same route', () => {
     expect(parseHash('#/history/')).toEqual({ name: 'history' });
-    expect(parseHash('#/workouts/strength-and-cindy/')).toEqual({
+    expect(parseHash('#/workouts/arms-day-a/')).toEqual({
       name: 'workout-overview',
-      workoutId: 'strength-and-cindy'
+      workoutId: 'arms-day-a'
     });
   });
 
@@ -209,10 +209,10 @@ describe('createRouter', () => {
     const router = createRouter({ env });
     router.start();
 
-    router.navigate({ name: 'workout-overview', workoutId: 'kb-complex' });
+    router.navigate({ name: 'workout-overview', workoutId: 'arms-day-a' });
 
-    expect(env.writes).toEqual(['#/workouts/kb-complex']);
-    expect(get(router.current())).toEqual({ name: 'workout-overview', workoutId: 'kb-complex' });
+    expect(env.writes).toEqual(['#/workouts/arms-day-a']);
+    expect(get(router.current())).toEqual({ name: 'workout-overview', workoutId: 'arms-day-a' });
   });
 
   // A browser fires `hashchange` after a programmatic write, so the listener

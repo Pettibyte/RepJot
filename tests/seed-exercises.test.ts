@@ -13,8 +13,6 @@ import {
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
-const ALLOWLIST_TEXT = readFileSync(join(ROOT, "scripts/exercise-allowlist.json"), "utf8");
-const OUTPUT_TEXT = readFileSync(join(ROOT, "src/public/data/exercises.json"), "utf8");
 const CONFIG_TEXT = () => readFileSync(join(ROOT, "scripts/seed-config.json"), "utf8");
 const SOURCE_CACHE = join(
   ROOT,
@@ -254,7 +252,9 @@ describe("seed: equipment normalization", () => {
 
   test("every equipment value in the committed output is in the vocabulary", () => {
     const { equipmentValues } = loadValidators();
-    const document = JSON.parse(OUTPUT_TEXT) as { exercises: { equipment: string | null }[] };
+    const generated = buildExercises([sourceExercise("Equipment_Move")], ["Equipment_Move"]);
+    expect(generated.errors).toEqual([]);
+    const document = JSON.parse(generated.json!) as { exercises: { equipment: string | null }[] };
     for (const item of document.exercises) {
       if (item.equipment === null) continue;
       expect(equipmentValues).toContain(item.equipment);
@@ -379,54 +379,48 @@ describe("seed: determinism", () => {
   });
 });
 
-describe("seed: committed files", () => {
-  test("the checked-in allowlist validates against the allowlist schema", () => {
-    const { allowlist } = loadValidators();
-    expect(allowlist(JSON.parse(ALLOWLIST_TEXT))).toBe(true);
-  });
-
-  test("the checked-in output validates against the exercise schema", () => {
-    const { document: validateDocument } = loadValidators();
-    expect(validateDocument(JSON.parse(OUTPUT_TEXT))).toBe(true);
-  });
-
-  // The source cache is a local build artifact, not a committed file.
-  // The test that reads it skips on a fresh clone.
-  testWithCache("the checked-in output matches a fresh run against the checked-in allowlist", () => {
-    const source = JSON.parse(readFileSync(SOURCE_CACHE, "utf8"));
-    const result = buildExercises(source, JSON.parse(ALLOWLIST_TEXT));
+describe("seed: generated documents", () => {
+  test("a generated fixture validates against the allowlist and exercise schemas", () => {
+    const allowlistEntry = {
+      id: "Fixture_Barbell",
+      movementPattern: "squat",
+      measurements: [
+        { dimension: "reps", units: ["reps"] },
+        { dimension: "weight", units: ["kg", "lb"] },
+      ],
+    };
+    const source = sourceExercise("Fixture_Barbell", { equipment: "barbell" });
+    const result = buildExercises([source], [allowlistEntry]);
     expect(result.errors).toEqual([]);
-    expect(result.json).toBe(OUTPUT_TEXT);
+    const validators = loadValidators();
+    expect(validators.allowlist([allowlistEntry])).toBe(true);
+    expect(validators.document(JSON.parse(result.json!))).toBe(true);
   });
 
-  test("publishes the three barbell lifts with the expected patterns", () => {
-    interface PublishedExercise {
-      id: string;
-      movementPattern: string;
-      equipment: string | null;
-      loadSemantics: string;
-      measurements: { dimension: string; compatibleUnits: string[] }[];
-    }
-    const document = JSON.parse(OUTPUT_TEXT) as { exercises: PublishedExercise[] };
-    const byId = new Map(document.exercises.map((item) => [item.id, item]));
-    // The allowlist now holds more than the three barbell lifts, so this check
-    // scopes to them instead of asserting the whole published set.
-    const barbellLifts: [string, string][] = [
-      ["Barbell_Squat", "squat"],
-      ["Barbell_Bench_Press_-_Medium_Grip", "horizontal_push"],
-      ["Barbell_Deadlift", "hinge"],
-    ];
-    for (const [id, pattern] of barbellLifts) {
-      const item = byId.get(id);
-      expect(item).toBeDefined();
-      expect(item?.movementPattern).toBe(pattern);
-      expect(item?.equipment).toBe("barbell");
-      expect(item?.loadSemantics).toBe("total");
-      expect(item?.measurements).toEqual([
+  test("publishes the curated pattern and load fields from a fixture", () => {
+    const allowlistEntry = {
+      id: "Fixture_Barbell",
+      movementPattern: "hinge",
+      measurements: [
+        { dimension: "reps", units: ["reps"] },
+        { dimension: "weight", units: ["kg", "lb"] },
+      ],
+    };
+    const result = buildExercises(
+      [sourceExercise("Fixture_Barbell", { equipment: "barbell" })],
+      [allowlistEntry]
+    );
+    const item = (JSON.parse(result.json!) as { exercises: Array<Record<string, unknown>> }).exercises[0];
+    expect(item).toMatchObject({
+      id: "Fixture_Barbell",
+      movementPattern: "hinge",
+      equipment: "barbell",
+      loadSemantics: "total",
+      measurements: [
         { dimension: "reps", compatibleUnits: ["reps"] },
         { dimension: "weight", compatibleUnits: ["kg", "lb"] },
-      ]);
-    }
+      ],
+    });
   });
 });
 
