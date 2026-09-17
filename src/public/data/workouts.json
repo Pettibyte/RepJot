@@ -17,8 +17,10 @@
             "id": "mobility",
             "type": "container",
             "name": "Mobility",
-            "strategy": "sequence",
-            "strategyConfig": {},
+            "strategy": "rounds",
+            "strategyConfig": {
+              "rounds": 3
+            },
             "children": [
               {
                 "id": "dead-hang",
