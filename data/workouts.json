@@ -17,8 +17,10 @@
             "id": "mobility",
             "type": "container",
             "name": "Mobility",
-            "strategy": "sequence",
-            "strategyConfig": {},
+            "strategy": "rounds",
+            "strategyConfig": {
+              "rounds": 3
+            },
             "children": [
               {
                 "id": "dead-hang",
@@ -107,16 +109,16 @@
             "strategyConfig": {},
             "children": [
               {
-                "id": "preacher-curl-sets",
+                "id": "superset-arms",
                 "type": "container",
-                "name": "One Arm Dumbbell Preacher Curl",
+                "name": "Superset A: Biceps and Triceps",
                 "strategy": "rounds",
                 "strategyConfig": {
                   "rounds": 3
                 },
                 "children": [
                   {
-                    "id": "preacher-curl",
+                    "id": "superset-a-preacher-curl",
                     "type": "exercise",
                     "exerciseId": "One_Arm_Dumbbell_Preacher_Curl",
                     "stimulus": "hypertrophy",
@@ -125,20 +127,9 @@
                     },
                     "notes": "8 per side.",
                     "setType": "working"
-                  }
-                ]
-              },
-              {
-                "id": "triceps-extension-sets",
-                "type": "container",
-                "name": "Dumbbell One-Arm Triceps Extension",
-                "strategy": "rounds",
-                "strategyConfig": {
-                  "rounds": 3
-                },
-                "children": [
+                  },
                   {
-                    "id": "triceps-extension",
+                    "id": "superset-a-triceps-extension",
                     "type": "exercise",
                     "exerciseId": "Dumbbell_One-Arm_Triceps_Extension",
                     "stimulus": "hypertrophy",
@@ -151,16 +142,16 @@
                 ]
               },
               {
-                "id": "rear-delt-raise-sets",
+                "id": "superset-back",
                 "type": "container",
-                "name": "Lying Rear Delt Raise",
+                "name": "Superset B: Rear Delt and Row",
                 "strategy": "rounds",
                 "strategyConfig": {
                   "rounds": 3
                 },
                 "children": [
                   {
-                    "id": "rear-delt-raise",
+                    "id": "superset-b-rear-delt-raise",
                     "type": "exercise",
                     "exerciseId": "Lying_Rear_Delt_Raise",
                     "stimulus": "hypertrophy",
@@ -168,20 +159,9 @@
                       "reps": 8
                     },
                     "setType": "working"
-                  }
-                ]
-              },
-              {
-                "id": "bent-over-row-sets",
-                "type": "container",
-                "name": "Bent Over Two-Dumbbell Row",
-                "strategy": "rounds",
-                "strategyConfig": {
-                  "rounds": 3
-                },
-                "children": [
+                  },
                   {
-                    "id": "bent-over-row",
+                    "id": "superset-b-bent-over-row",
                     "type": "exercise",
                     "exerciseId": "Bent_Over_Two-Dumbbell_Row",
                     "stimulus": "hypertrophy",
