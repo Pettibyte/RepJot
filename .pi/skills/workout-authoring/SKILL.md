@@ -55,7 +55,7 @@ Use `--json` when you need the fields in a machine-readable form.
 
 ### Step 2b — A missing movement is an add, not a dead end
 
-The curated set is a curated slice of an 876-exercise source. Search the source:
+The curated set is a small slice of the pinned source. Search the source:
 
 ```bash
 bun .pi/skills/workout-authoring/scripts/lookup-source.ts "dumbbell preacher curl"
@@ -64,8 +64,9 @@ bun .pi/skills/workout-authoring/scripts/lookup-source.ts "rear delt" --equipmen
 
 The table shows each candidate's source ID and whether it is already curated.
 
-- **Found.** Propose the allowlist entry, get the user's approval in Step 3, then
-  add it. See [references/curated-set-expansion.md](references/curated-set-expansion.md).
+- **Found.** Decide the four curated fields, ask which movement if more than one
+  fits, then add it in Step 3b. See
+  [references/curated-set-expansion.md](references/curated-set-expansion.md).
 - **Not found.** `lookup-source.ts` exits 1. The movement is not in
   free-exercise-db. Ask the user for a different movement. Never invent an ID
   and never hand-write an exercise object.
@@ -78,7 +79,7 @@ bun .pi/skills/workout-authoring/scripts/add-exercise.ts One_Arm_Dumbbell_Preach
   --measurements reps,weight
 ```
 
-Apply only after the user approves, in Step 3b.
+Step 3b adds it. The dry run above is how you check the shape before you write.
 
 The four fields you must choose for a new exercise are `movementPattern`,
 `laterality`, `loadSemantics`, and `measurements`. They decide what the app can
@@ -98,9 +99,10 @@ Cover the classes from
 
 1. **Exercise identity.** Options carry the candidate names plus equipment, so
    the user can tell them apart.
-2. **New exercise approval.** For each movement that needs an add, show the
-   source name and the four curated fields you chose. Ask whether to add it.
-   Never apply an allowlist change the user has not approved.
+2. **New exercise choice.** When a movement is not curated, ask *which*
+   movement to use, not whether writing is allowed. Show the source name and
+   the four curated fields you chose in the detail. The add itself runs in
+   Step 3b without a further prompt.
 3. **Nesting.** Show the two readings as indented text inside the question
    detail. Ask which one the user means.
 4. **Missing numbers.** Reps, load, rounds, time, rest.
@@ -113,9 +115,13 @@ text.
 
 Do not write the final JSON until the answers arrive.
 
-### Step 3b — Apply the approved adds
+### Step 3b — Apply the adds
 
-Only after the user approves, and one exercise at a time:
+Apply each add as soon as the movement is settled. Do not wait for a separate
+approval. The user picks the movement in Step 3; the write that follows is not a
+decision they already made.
+
+One exercise at a time:
 
 ```bash
 bun .pi/skills/workout-authoring/scripts/add-exercise.ts <SourceId> \
@@ -132,7 +138,14 @@ bun run check:schemas && bun run check:static
 
 Two files change: `scripts/exercise-allowlist.json` and
 `src/public/data/exercises.json`. They belong in the same commit. Never revert
-one without the other, or `seed:check` fails the build.
+one without the other, or `seed:check` fails the build. Roll both back with:
+
+```bash
+git checkout scripts/exercise-allowlist.json src/public/data/exercises.json
+```
+
+If the seed rejects an entry, fix the entry. Do not work around the seed by
+editing `src/public/data/exercises.json` by hand.
 
 ## Step 4 — Draft the JSON
 
@@ -173,27 +186,39 @@ Treat warnings as real. Each one carries a hint. Fix them, or tell the user why
 the warning does not apply. Use `--strict` when you want warnings to fail the
 run.
 
-## Step 6 — Report, then install on request
+## Step 6 — Install, then report
 
-Show the user:
+Install on a clean validation. Do not ask first. The user has git history and
+rolls back on their own, so a confirmation gate here only slows them down.
 
-1. The outline the validator printed.
-2. The final JSON.
-3. Each assumption you made, including every answer from Step 3.
-
-Do not write into `src/public/data/workouts.json` until the user says to.
-
-When you install:
-
-1. Merge the workout into the `workouts` array. Keep the envelope
-   (`format`, `schemaVersion`) intact. Add one workout, not a second document.
+1. Merge the workout into the `workouts` array in
+   `src/public/data/workouts.json`. Keep the envelope (`format`,
+   `schemaVersion`) intact. Add one workout, not a second document.
 2. Run the repo gates:
 
 ```bash
 bun run check:schemas && bun run check:static
 ```
 
-3. Report the diff.
+3. Report, in this order:
+   - The outline the validator printed.
+   - The final JSON.
+   - Each assumption you made, including every answer from Step 3.
+   - The files you changed, from `git diff --stat`.
+   - The rollback command:
+
+```bash
+git checkout src/public/data/workouts.json
+```
+
+Do not commit. Staging and commit messages are the user's call.
+
+If a gate fails after the merge, revert your merge and say so. Never leave
+`src/public/data/workouts.json` in a state that fails `check:static`.
+
+A workout-ID collision with the shipped bundle is a warning, not a blocker.
+Install anyway and name the collision in the report, so the user can rename
+before it shadows an existing workout.
 
 ## Scripts
 

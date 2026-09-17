@@ -45,25 +45,35 @@ bun .pi/skills/workout-authoring/scripts/lookup-source.ts "preacher curl"
 
 ### 2a — The source has it
 
-Ask to add it. Carry the four curated fields in the detail, so the user sees
-what they are approving.
+Ask *which* movement to use. Do not ask whether writing is allowed. The add runs
+in Step 3b as soon as the choice comes back. Carry the four curated fields in
+the detail, so the user sees what the new exercise will record.
 
 ```json
 {
-  "id": "add_preacher_curl",
-  "question": "\"One Arm Dumbbell Preacher Curl\" is not curated. Add it to the exercise library?",
-  "detail": "Found in free-exercise-db. Proposed: movementPattern flexion, laterality unilateral, loadSemantics per_implement, records reps + weight. Adds one entry to the seed allowlist and regenerates the exercise file.",
+  "id": "preacher_curl_choice",
+  "question": "\"Preacher curl\" is not curated yet. Which movement should the block use?",
+  "detail": "Adding writes one entry to the seed allowlist and regenerates the exercise file. Roll back with git checkout.",
   "options": [
-    { "value": "add", "label": "Add it", "detail": "Curated set grows by one exercise." },
-    { "value": "add_kettlebell", "label": "Add the kettlebell variant instead", "detail": "Only if the user has no dumbbells." },
-    { "value": "substitute", "label": "Do not add; use a curated exercise", "detail": "Pick from the 22 already curated." },
+    {
+      "value": "One_Arm_Dumbbell_Preacher_Curl",
+      "label": "One Arm Dumbbell Preacher Curl",
+      "detail": "Added. flexion, unilateral, per_implement, records reps + weight."
+    },
+    {
+      "value": "Two-Arm_Dumbbell_Preacher_Curl",
+      "label": "Two-Arm Dumbbell Preacher Curl",
+      "detail": "Added. flexion, bilateral, per_implement, records reps + weight."
+    },
+    {
+      "value": "substitute",
+      "label": "Use something already curated",
+      "detail": "No library change. Pick from the existing set."
+    },
     { "value": "drop", "label": "Drop the movement" }
   ]
 }
 ```
-
-Never run `add-exercise.ts --apply` without an explicit yes. The dry run is the
-default for a reason.
 
 When the four curated fields are genuinely unclear, ask about them as their own
 question rather than guessing. `loadSemantics` and `measurements` decide what

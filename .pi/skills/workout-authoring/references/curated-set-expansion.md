@@ -7,7 +7,7 @@ it through the allowlist.
 ## The pipeline
 
 ```
-free-exercise-db (876 exercises, pinned commit)
+free-exercise-db (hundreds of exercises, one pinned commit)
         │  scripts/seed-config.json pins repo + commit + path
         ▼
 scripts/exercise-allowlist.json     ← the only author-written input
@@ -130,7 +130,7 @@ bun .pi/skills/workout-authoring/scripts/add-exercise.ts One_Arm_Dumbbell_Preach
   --measurements reps,weight
 ```
 
-Apply only after the user approves:
+Add it:
 
 ```bash
 bun .pi/skills/workout-authoring/scripts/add-exercise.ts One_Arm_Dumbbell_Preacher_Curl \
@@ -141,7 +141,10 @@ bun .pi/skills/workout-authoring/scripts/add-exercise.ts One_Arm_Dumbbell_Preach
 `--apply` appends to `scripts/exercise-allowlist.json` and runs the seed. The
 seed validates everything before it writes, and refuses on any problem.
 
-Add one exercise at a time. Do not batch a dozen additions in one unreviewed run.
+No confirmation prompt stands between you and the write. The seed gate and git are
+the safety net. Run the checks below after every add, and report what changed.
+
+Add one exercise at a time, so a seed failure names one entry instead of twelve.
 
 ## Verify after every add
 

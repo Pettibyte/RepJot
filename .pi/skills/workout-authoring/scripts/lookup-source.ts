@@ -3,8 +3,9 @@
  * Search the pinned free-exercise-db source for an exercise.
  *
  * Use this when `lookup-exercise.ts` reports NO MATCH against the curated set.
- * The curated set is 22 exercises. The source holds 876. This script finds the
- * source ID you would add to `scripts/exercise-allowlist.json`.
+ * The curated set is a small slice of the pinned source, which holds hundreds of
+ * exercises. This script finds the source ID you would add to
+ * `scripts/exercise-allowlist.json`.
  *
  * The source is read from the local cache first, so the script works offline.
  * The cache lives at `scripts/.cache/free-exercise-db/`. It fills on the first
