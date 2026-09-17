@@ -24,6 +24,7 @@
   import DataError from '../components/DataError.svelte';
   import SummaryTree from '../components/SummaryTree.svelte';
   import { services } from '../../services/registry';
+  import { getRouter } from '../../routing/router-registry';
   import { formatRoute } from '../../routing/routes';
   import { buildSummaryModel, type SummaryModel } from '../viewmodels/summaryModel';
   import { resolveLocalTimeZone } from '../viewmodels/chooserModel';
@@ -39,6 +40,38 @@
 
   /** The local time zone, read once per render pass. */
   const localTimeZone = resolveLocalTimeZone();
+  /** True after the user asks to delete, before the second confirmation. */
+  let deleteOpen = $state(false);
+  /** True while the session removal is being saved locally. */
+  let deleteBusy = $state(false);
+  /** Safe error text from a failed removal. */
+  let deleteError = $state('');
+
+  function openDelete(): void {
+    deleteError = '';
+    deleteOpen = true;
+  }
+
+  function cancelDelete(): void {
+    if (deleteBusy) return;
+    deleteError = '';
+    deleteOpen = false;
+  }
+
+  async function confirmDelete(): Promise<void> {
+    const sessionService = $services.sessionService;
+    if (sessionService === null || deleteBusy) return;
+    deleteBusy = true;
+    deleteError = '';
+    try {
+      await sessionService.remove(sessionId);
+      getRouter()?.navigate({ name: 'history' });
+    } catch (error) {
+      deleteError = error instanceof Error ? error.message : 'REP JOT could not delete this session.';
+    } finally {
+      deleteBusy = false;
+    }
+  }
 
   async function loadSummary(): Promise<void> {
     const { sessionService, staticData } = $services;
@@ -135,12 +168,31 @@
       />
     {/if}
 
+    {#if deleteOpen}
+      <section class="danger-confirm summary-screen__delete-confirm" aria-label="Delete session">
+        <h2 class="danger-confirm__title">Delete this workout?</h2>
+        <p class="danger-confirm__warning">
+          This removes the recorded session from REP JOT on this device and in Google Drive.
+        </p>
+        {#if deleteError !== ''}
+          <p class="danger-confirm__error" role="alert">{deleteError}</p>
+        {/if}
+        <div class="danger-confirm__actions">
+          <Button variant="secondary" disabled={deleteBusy} onclick={cancelDelete}>Cancel</Button>
+          <Button variant="danger" disabled={deleteBusy} onclick={() => void confirmDelete()}>
+            {deleteBusy ? 'Deleting…' : 'Delete session'}
+          </Button>
+        </div>
+      </section>
+    {/if}
+
     <div class="summary-screen__actions">
       <Button
         variant="primary"
         href={formatRoute({ name: 'session-active', sessionId })}
       >Edit</Button>
-      <Button variant="secondary" href={formatRoute({ name: 'history' })}>Back to history</Button>
+      <Button variant="danger" onclick={openDelete}>Delete</Button>
+      <Button variant="secondary" href={formatRoute({ name: 'history' })}>Back to History</Button>
     </div>
   {/if}
 </div>
