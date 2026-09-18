@@ -88,6 +88,10 @@ describe('WorkoutSummaryScreen session deletion', () => {
     await settle(20);
 
     expect(navigated).toEqual({ name: 'history' });
-    await expect(service.load(id)).rejects.toThrow('not in its shard');
+    await expect(service.load(id)).rejects.toThrow('No shard is known for that session.');
+
+    // The next History render reads this live index. It must not see the
+    // deleted session from the stale shard snapshot.
+    expect(harness.lookup.listAllSessions({ offset: 0, limit: 10 }).items).toEqual([]);
   });
 });
