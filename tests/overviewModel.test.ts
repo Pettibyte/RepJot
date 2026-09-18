@@ -110,6 +110,105 @@ describe('buildOverviewModel: semantic presentation', () => {
     expect(cindy?.kind === 'group' ? cindy.sectionTitle : undefined).toBe('Conditioning');
   });
 
+  test('a repeated circuit becomes one table grouped by round', () => {
+    const circuitWorkout = {
+      id: 'circuit-w',
+      name: 'Circuit Day',
+      root: {
+        id: 'croot',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'csup',
+            type: 'container',
+            name: 'Superset A',
+            strategy: 'rounds',
+            strategyConfig: { rounds: 2 },
+            children: [
+              {
+                id: 'ccurl',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'hypertrophy',
+                setType: 'working',
+                prescription: { reps: 8 }
+              },
+              {
+                id: 'cext',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'hypertrophy',
+                setType: 'working',
+                prescription: { reps: 10 }
+              }
+            ]
+          }
+        ]
+      }
+    } as never;
+
+    const circuitModel = buildOverviewModel(circuitWorkout, {
+      exerciseById: exerciseIndex(exercises())
+    });
+    expect(circuitModel).not.toBeNull();
+    if (circuitModel === null) return;
+
+    const tables = circuitModel.blocks.filter((block) => block.kind === 'set-table');
+    expect(tables).toHaveLength(1);
+    if (tables[0]?.kind !== 'set-table') return;
+    expect(tables[0].table.multiExercise).toBe(true);
+    // The container names the table, because one heading cannot name both.
+    expect(tables[0].table.title).toBe('Superset A');
+    expect(tables[0].table.rounds.map((round) => round.label)).toEqual(['Round 1', 'Round 2']);
+    expect(tables[0].table.rounds.map((round) => round.rows.length)).toEqual([2, 2]);
+    // No loose exercise rows are left behind.
+    expect(circuitModel.blocks.filter((block) => block.kind === 'exercise')).toHaveLength(0);
+  });
+
+  test('a scored rounds container does not collapse into a table', () => {
+    const scoredWorkout = {
+      id: 'scored-w',
+      name: 'Scored Day',
+      root: {
+        id: 'sroot',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'sblk',
+            type: 'container',
+            name: 'Row Block',
+            strategy: 'rounds',
+            strategyConfig: { rounds: 3 },
+            resultCapture: { mode: 'scored', scoreType: 'distance', childDetail: 'optional' },
+            children: [
+              {
+                id: 'srow',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'conditioning',
+                setType: 'working',
+                prescription: { reps: 8 }
+              }
+            ]
+          }
+        ]
+      }
+    } as never;
+
+    const scoredModel = buildOverviewModel(scoredWorkout, {
+      exerciseById: exerciseIndex(exercises())
+    });
+    expect(scoredModel).not.toBeNull();
+    if (scoredModel === null) return;
+    // The container keeps its own heading, so its score reads in place.
+    expect(scoredModel.blocks.filter((block) => block.kind === 'set-table')).toHaveLength(0);
+    expect(scoredModel.blocks.some((block) => block.kind === 'group')).toBe(true);
+  });
+
   test('the unnamed sequence root does not add a decorative nesting level', () => {
     if (model === null) throw new Error('expected a model');
     expect(model.blocks.some(

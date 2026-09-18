@@ -45,6 +45,7 @@
     busy = false,
     compact = false,
     setLabel = '',
+    showExerciseName = false,
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -80,6 +81,14 @@
     compact?: boolean;
     /** Visible identity such as `Set 2` or `Set 2 · Attempt 2`. */
     setLabel?: string;
+    /**
+     * Print the exercise name beside the set label in compact mode.
+     *
+     * A single-exercise set table leaves this false, because its heading
+     * already names the exercise. A circuit table sets it true, because
+     * one heading cannot name several exercises.
+     */
+    showExerciseName?: boolean;
     /**
      * Runs on every keystroke in a value field.
      *
@@ -216,6 +225,10 @@
   {#if compact}
     <div class="exercise-row__set-head">
       <span class="exercise-row__set-label">{setLabel}</span>
+      {#if showExerciseName}
+        <span class="exercise-row__set-name">{row.exerciseName}</span>
+        <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
+      {/if}
       {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
     </div>
   {:else}

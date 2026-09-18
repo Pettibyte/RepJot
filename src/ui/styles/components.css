@@ -739,6 +739,14 @@
   margin-right: var(--space-3);
 }
 
+/* The exercise name inside a circuit row. It holds a readable column so the
+   prescription still lines down the page. */
+.overview-set__name {
+  flex: 0 1 auto;
+  margin-right: var(--space-3);
+  min-width: 140px;
+}
+
 .overview-set__prescription {
   font-family: var(--font-data);
   font-size: var(--text-label);
@@ -897,6 +905,24 @@
   border-top: 1px solid var(--color-outline-variant);
 }
 
+/* Round divider inside a circuit table. It separates one pass of the block
+   from the next without opening a new document section. */
+.set-table__round {
+  border-bottom: 1px solid var(--color-outline-variant);
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  margin-top: var(--space-3);
+  padding-bottom: var(--space-1);
+  text-transform: uppercase;
+}
+
+.set-table__round:first-child {
+  margin-top: 0;
+}
+
 /* Exercise row -------------------------------------------------------- */
 
 .exercise-row {
@@ -946,6 +972,16 @@
   font-size: var(--text-label);
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-label);
+}
+
+/* The exercise name inside a circuit row. The set label leads, so the name
+   reads second and stays lighter than the heading above the table. */
+.exercise-row__set-name {
+  color: var(--color-on-surface);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  margin-left: var(--space-2);
+  margin-right: var(--space-2);
 }
 
 .exercise-row__name {

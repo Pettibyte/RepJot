@@ -196,12 +196,32 @@ export interface SummaryGroup {
   sortIteration: number;
 }
 
-/** Repeated recorded sets shown under one exercise heading. */
+/** One round inside a recorded set table. */
+export interface SummarySetRound {
+  key: string;
+  /** The round divider, for example `Round 2`. Empty when nothing needs telling apart. */
+  label: string;
+  rows: Array<SummaryExerciseRow & { setNumber: number }>;
+}
+
+/**
+ * Repeated recorded sets shown under one heading.
+ *
+ * A single-exercise block reads as that exercise's set list. A circuit
+ * block reads as one table whose rows are grouped by round, so the round
+ * order the workout programmed stays visible and every row names its own
+ * exercise.
+ */
 export interface SummarySetTable {
   key: string;
   title: string;
   sectionTitle: string;
   label: string;
+  /** True when each round holds more than one exercise. */
+  multiExercise: boolean;
+  /** The table body. The rounds are the source of truth for the rows. */
+  rounds: SummarySetRound[];
+  /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: Array<SummaryExerciseRow & { setNumber: number }>;
 }
 
@@ -611,8 +631,7 @@ function buildContainerRow(
 
 function repeatedSetScope(group: SummaryGroup): string | null {
   if (group.containers.length > 0 || group.rows.length === 0) return null;
-  const exerciseIds = new Set(group.rows.map((row) => row.exerciseId));
-  if (exerciseIds.size !== 1 || group.rows.some((row) => row.unresolved)) return null;
+  if (group.rows.some((row) => row.unresolved)) return null;
 
   let scope: string | null = null;
   for (const row of group.rows) {
@@ -658,23 +677,52 @@ function buildDisplayBlocks(
     if (scope !== null && occurrences !== undefined) {
       if (emitted.has(scope)) continue;
       emitted.add(scope);
-      const rows = occurrences.flatMap((occurrence) => occurrence.rows.map((row) => {
-        const parent = row.path[row.path.length - 2];
-        return { ...row, setNumber: parent?.iteration ?? 1 };
+      // One round per recorded occurrence of the container. A round that
+      // holds several exercises is a circuit, so its rows keep the round
+      // divider and each row names its own exercise.
+      const rounds: SummarySetRound[] = occurrences.map((occurrence, index) => ({
+        key: `${scope}#round-${index + 1}`,
+        label: `Round ${index + 1}`,
+        rows: occurrence.rows.map((row) => {
+          const parent = row.path[row.path.length - 2];
+          return { ...row, setNumber: parent?.iteration ?? 1 };
+        })
       }));
-      const first = rows[0];
-      if (first !== undefined) {
-        blocks.push({
-          kind: 'set-table',
-          table: {
-            key: scope,
-            title: first.label,
-            sectionTitle: workoutSectionLabel(first.setType, first.stimulus),
-            label: first.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
-            rows
-          }
-        });
+      const tableRows = rounds.flatMap((round) => round.rows);
+      if (tableRows.length === 0) continue;
+
+      const shapes = new Set(
+        rounds.map((round) =>
+          round.rows
+            .map((row) => row.path[row.path.length - 1]?.nodeId ?? '')
+            .join(',')
+        )
+      );
+      if (shapes.size !== 1) continue;
+
+      const first = tableRows[0];
+      const multiExercise = (rounds[0]?.rows.length ?? 0) > 1;
+      // A divider only earns its place inside a circuit that has rounds to
+      // tell apart. A single-exercise table already orders its rows with
+      // `Set N`, and one round has nothing to separate.
+      if (!multiExercise || rounds.length === 1) {
+        rounds.forEach((round) => (round.label = ''));
       }
+
+      blocks.push({
+        kind: 'set-table',
+        table: {
+          key: scope,
+          title: multiExercise
+            ? occurrences[0]?.title.replace(/ · Round \d+$/, '') ?? first.label
+            : first.label,
+          sectionTitle: workoutSectionLabel(first.setType, first.stimulus),
+          label: first.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
+          multiExercise,
+          rounds,
+          rows: tableRows
+        }
+      });
       continue;
     }
 

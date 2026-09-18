@@ -699,6 +699,12 @@ describe('set-table presentation', () => {
     expect(tables[0]?.kind === 'set-table'
       ? tables[0].table.rows.map((row) => row.setNumber)
       : []).toEqual([1, 2, 3]);
+    // A single-exercise table draws no round divider: `Set N` already
+    // orders it, so a divider would only add noise.
+    expect(tables[0]?.kind === 'set-table'
+      ? tables[0].table.rounds.map((round) => round.label)
+      : []).toEqual(['', '', '']);
+    expect(tables[0]?.kind === 'set-table' ? tables[0].table.multiExercise : true).toBe(false);
   });
 
   test('attempts keep their set number and only the latest can add another', () => {
@@ -741,6 +747,178 @@ describe('set-table presentation', () => {
     const attempts = model.rows.filter((row) => row.setNumber === 1);
     expect(attempts.map((row) => row.attempt)).toEqual([1, 2]);
     expect(attempts.map((row) => row.latestAttempt)).toEqual([false, true]);
+  });
+});
+
+describe('circuit set-table presentation', () => {
+  /** A rounds container that repeats two exercises. */
+  function circuit(rounds = 3, scored = false): Workout {
+    const block: Record<string, unknown> = {
+      id: 'superset',
+      type: 'container',
+      name: 'Superset A',
+      strategy: 'rounds',
+      strategyConfig: { rounds },
+      children: [
+        {
+          id: 'curl',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        },
+        {
+          id: 'ext',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        }
+      ]
+    };
+    if (scored) {
+      block.resultCapture = { mode: 'scored', scoreType: 'rounds_and_reps', childDetail: 'optional' };
+    }
+    return {
+      id: WORKOUT_ID,
+      name: 'Circuit',
+      root: {
+        id: 'root',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [block]
+      }
+    } as unknown as Workout;
+  }
+
+  function tablesFor(workout: Workout) {
+    const h = harness(exercises(), [workout]);
+    const model = buildActiveWorkoutModel({
+      workout,
+      session: emptySession(),
+      staticData: h.staticData,
+      preferences: h.preferences.service,
+      lookup: h.lookup
+    });
+    return { model, tables: model.blocks.filter((b) => b.kind === 'set-table') };
+  }
+
+  test('a repeated circuit collapses into one table grouped by round', () => {
+    const { model, tables } = tablesFor(circuit());
+    expect(tables).toHaveLength(1);
+    if (tables[0]?.kind !== 'set-table') return;
+    const table = tables[0].table;
+    expect(table.multiExercise).toBe(true);
+    // The container names the table, because one heading cannot name both.
+    expect(table.title).toBe('Superset A');
+    expect(table.rounds.map((round) => round.label)).toEqual(['Round 1', 'Round 2', 'Round 3']);
+    expect(table.rounds.map((round) => round.rows.length)).toEqual([2, 2, 2]);
+    // Every row keeps its own round number, and no row is lost. Rows read
+    // in round order, so the set number repeats across the round.
+    expect(table.rows).toHaveLength(6);
+    expect(table.rows.map((row) => row.setNumber)).toEqual([1, 1, 2, 2, 3, 3]);
+    expect(model.blocks.filter((b) => b.kind === 'row')).toHaveLength(0);
+  });
+
+  test('a circuit table carries no single Last Time badge', () => {
+    const { tables } = tablesFor(circuit());
+    if (tables[0]?.kind !== 'set-table') return;
+    // The badge rides each row instead, so one exercise does not read as
+    // the whole circuit's history.
+    expect(tables[0].table.lastTime).toBeUndefined();
+  });
+
+  test('a single round draws no round divider', () => {
+    const { tables } = tablesFor(circuit(1));
+    if (tables[0]?.kind !== 'set-table') return;
+    expect(tables[0].table.rounds).toHaveLength(1);
+    expect(tables[0].table.rounds[0]?.label).toBe('');
+  });
+
+  test('a scored container never collapses into a table', () => {
+    const { model, tables } = tablesFor(circuit(3, true));
+    expect(tables).toHaveLength(0);
+    // The container keeps its heading, so its score editor still draws.
+    expect(model.blocks.some((b) => b.kind === 'group' && b.group.scored)).toBe(true);
+  });
+
+  test('a rounds container holding a nested container does not collapse', () => {
+    const workout = {
+      id: WORKOUT_ID,
+      name: 'Nested',
+      root: {
+        id: 'root',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'outer',
+            type: 'container',
+            name: 'Outer',
+            strategy: 'rounds',
+            strategyConfig: { rounds: 2 },
+            children: [
+              {
+                id: 'direct',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'strength',
+                setType: 'working',
+                prescription: { reps: 5 }
+              },
+              {
+                id: 'inner',
+                type: 'container',
+                name: 'Inner',
+                strategy: 'sequence',
+                strategyConfig: {},
+                children: [
+                  {
+                    id: 'deep',
+                    type: 'exercise',
+                    exerciseId: 'back-squat',
+                    stimulus: 'strength',
+                    setType: 'working',
+                    prescription: { reps: 5 }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    } as unknown as Workout;
+
+    const { tables } = tablesFor(workout);
+    // The outer block must not swallow the round the inner container owns.
+    expect(tables).toHaveLength(0);
+  });
+
+  test('a circuit keeps one table per container scope', () => {
+    const single = circuit(2);
+    const two = {
+      ...single,
+      root: {
+        ...single.root,
+        children: [
+          single.root.children[0],
+          { ...(single.root.children[0] as object), id: 'superset-2', name: 'Superset B' }
+        ]
+      }
+    } as unknown as Workout;
+    const { tables } = tablesFor(two);
+    expect(tables).toHaveLength(2);
+    if (tables[0]?.kind !== 'set-table' || tables[1]?.kind !== 'set-table') return;
+    expect(tables[0].table.key).not.toBe(tables[1].table.key);
+    const keys = [
+      ...tables[0].table.rows,
+      ...tables[1].table.rows
+    ].map((row) => row.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

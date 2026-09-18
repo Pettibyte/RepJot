@@ -64,7 +64,7 @@
   </div>
 {/snippet}
 
-{#snippet exerciseResult(row: SummaryExerciseRow, setLabel: string = '')}
+{#snippet exerciseResult(row: SummaryExerciseRow, setLabel: string = '', showName = false)}
   <div
     class="summary-row {depthClass(rowDepth(row))}"
     class:summary-row--compact={setLabel !== ''}
@@ -74,10 +74,13 @@
     <div class="summary-row__head">
       {#if setLabel !== ''}
         <span class="exercise-row__set-label">{setLabel}</span>
-      {:else if row.href !== undefined}
-        <a class="summary-row__name" href={row.href}>{row.label}</a>
-      {:else}
-        <span class="summary-row__name">{row.label}</span>
+      {/if}
+      {#if showName || setLabel === ''}
+        {#if row.href !== undefined}
+          <a class="summary-row__name" href={row.href}>{row.label}</a>
+        {:else}
+          <span class="summary-row__name">{row.label}</span>
+        {/if}
       {/if}
       {#if row.attempt > 1}<span class="summary-row__attempt">Attempt {row.attempt}</span>{/if}
       <span class="summary-row__status">{row.statusLabel}</span>
@@ -106,8 +109,13 @@
         </div>
         <p class="set-table__label">{block.table.label}</p>
         <div class="set-table__rows summary-set__rows">
-          {#each block.table.rows as row (`${row.key}-${row.attempt}`)}
-            {@render exerciseResult(row, `Set ${row.setNumber}`)}
+          {#each block.table.rounds as round (round.key)}
+            {#if round.label !== ''}
+              <p class="set-table__round">{round.label}</p>
+            {/if}
+            {#each round.rows as row (`${row.key}-${row.attempt}`)}
+              {@render exerciseResult(row, `Set ${row.setNumber}`, block.table.multiExercise)}
+            {/each}
           {/each}
         </div>
       </section>

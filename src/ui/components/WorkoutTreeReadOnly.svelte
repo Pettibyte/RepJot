@@ -69,13 +69,21 @@
           </div>
           <p class="set-table__label">{block.table.label}</p>
           <div class="overview-set__rows">
-            {#each block.table.rows as row (row.setNumber)}
-              <div class="overview-set__row">
-                <span class="exercise-row__set-label">Set {row.setNumber}</span>
-                {#if row.prescriptionText !== ''}
-                  <span class="overview-set__prescription">{row.prescriptionText}</span>
-                {/if}
-              </div>
+            {#each block.table.rounds as round (round.key)}
+              {#if round.label !== ''}
+                <p class="set-table__round">{round.label}</p>
+              {/if}
+              {#each round.rows as row, index (`${round.key}-${index}`)}
+                <div class="overview-set__row">
+                  <span class="exercise-row__set-label">Set {row.setNumber}</span>
+                  {#if block.table.multiExercise}
+                    <span class="overview-set__name">{row.label}</span>
+                  {/if}
+                  {#if row.prescriptionText !== ''}
+                    <span class="overview-set__prescription">{row.prescriptionText}</span>
+                  {/if}
+                </div>
+              {/each}
             {/each}
           </div>
         </section>

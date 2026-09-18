@@ -49,13 +49,33 @@ export interface OverviewNodeModel {
   unresolved?: boolean;
 }
 
-/** One compact read-only set list. */
+/** One round inside a compact read-only set list. */
+export interface OverviewSetRound {
+  key: string;
+  /** The round divider, for example `Round 2`. Empty when nothing needs telling apart. */
+  label: string;
+  rows: Array<OverviewNodeModel & { setNumber: number }>;
+}
+
+/**
+ * One compact read-only set list.
+ *
+ * A single-exercise block reads as that exercise's set list. A circuit
+ * block reads as one table whose rows are grouped by round, so the round
+ * order the workout programmed stays visible and every row names its own
+ * exercise.
+ */
 export interface OverviewSetTable {
   key: string;
   title: string;
   sectionTitle: string;
   label: string;
   depth: number;
+  /** True when each round holds more than one exercise. */
+  multiExercise: boolean;
+  /** The table body. The rounds are the source of truth for the rows. */
+  rounds: OverviewSetRound[];
+  /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: Array<OverviewNodeModel & { setNumber: number }>;
 }
 
@@ -310,12 +330,17 @@ export function buildOverviewModel(
 
     const parentSegment = resolved.path[resolved.path.length - 2];
     const parent = parentSegment === undefined ? undefined : nodeById.get(parentSegment.nodeId);
-    const singleExerciseRound =
+    // A repeated block collapses when the parent repeats its children and
+    // every direct child is an exercise. A parent that also holds a nested
+    // container would split that round across two renderers, and a scored
+    // parent owns a score that belongs on its own heading.
+    const repeatedRound =
       parent?.type === 'container' &&
       parent.strategy === 'rounds' &&
-      parent.children.length === 1 &&
-      parent.children[0]?.type === 'exercise';
-    if (!singleExerciseRound) return { model, path: resolved.path, source: node };
+      parent.resultCapture === undefined &&
+      parent.children.length > 0 &&
+      parent.children.every((child) => child.type === 'exercise');
+    if (!repeatedRound) return { model, path: resolved.path, source: node };
 
     const parentPath = resolved.path.slice(0, -1);
     return {
@@ -347,19 +372,48 @@ export function buildOverviewModel(
           emittedTables.add(scope);
           const first = rows[0];
           const exercise = first?.source.type === 'exercise' ? first.source : undefined;
+          // The set number is the round number, so one round per distinct
+          // set number keeps the programmed order.
+          const byRound = new Map<number, RawOverviewNode[]>();
+          for (const row of rows) {
+            const set = row.setNumber ?? 1;
+            const bucket = byRound.get(set);
+            if (bucket === undefined) byRound.set(set, [row]);
+            else bucket.push(row);
+          }
+          const rounds: OverviewSetRound[] = [...byRound.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([set, roundRows], index) => ({
+              key: `${scope}#round-${index + 1}`,
+              label: `Round ${set}`,
+              rows: roundRows.map((row) => ({
+                ...row.model,
+                setNumber: row.setNumber ?? set
+              }))
+            }));
+          const tableRowsFlat = rounds.flatMap((round) => round.rows);
+          const multiExercise = (rounds[0]?.rows.length ?? 0) > 1;
+          // A divider only earns its place inside a circuit that has rounds
+          // to tell apart. A single-exercise table already orders its rows
+          // with `Set N`, and one round has nothing to separate.
+          if (!multiExercise || rounds.length === 1) {
+            rounds.forEach((round) => (round.label = ''));
+          }
+          const containerName =
+            entry.source.name ?? CONTAINER_FALLBACK_NAMES[entry.source.strategy] ?? 'Section';
+
           if (first !== undefined && exercise !== undefined) {
             blocks.push({
               kind: 'set-table',
               table: {
                 key: scope,
-                title: first.model.label,
+                title: multiExercise ? containerName : first.model.label,
                 sectionTitle: workoutSectionLabel(exercise.setType, exercise.stimulus),
                 label: exercise.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
                 depth: entry.model.depth,
-                rows: rows.map((row, index) => ({
-                  ...row.model,
-                  setNumber: row.setNumber ?? index + 1
-                }))
+                multiExercise,
+                rounds,
+                rows: tableRowsFlat
               }
             });
           }

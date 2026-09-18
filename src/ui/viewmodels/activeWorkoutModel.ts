@@ -241,15 +241,44 @@ export interface ActiveExerciseRow {
   latestAttempt?: boolean;
 }
 
-/** One exercise heading with all rows from a repeated, single-exercise block. */
+/** One round inside a set table. A round holds one row per exercise. */
+export interface ActiveSetRound {
+  key: string;
+  /**
+   * The round divider, for example `Round 2`.
+   *
+   * Empty when the table needs no divider: a single-exercise table already
+   * numbers its rows `Set N`, and a circuit with one round has nothing to
+   * tell apart.
+   */
+  label: string;
+  rows: ActiveExerciseRow[];
+}
+
+/**
+ * One repeated block shown as a set table.
+ *
+ * A block that repeats one exercise reads as that exercise's set list, so
+ * the table carries the exercise name and one Last Time badge. A block that
+ * repeats several exercises reads as a circuit, so the table carries the
+ * container name, each round gets a divider, and every row names its own
+ * exercise. `rows` is the same rows in draw order, derived from `rounds`,
+ * so a caller that does not care about rounds reads one flat list.
+ */
 export interface ActiveSetTable {
   key: string;
   title: string;
   sectionTitle: string;
   label: string;
   level: number;
+  /** True when each round holds more than one exercise. */
+  multiExercise: boolean;
+  /** The table body. The rounds are the source of truth for the rows. */
+  rounds: ActiveSetRound[];
+  /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: ActiveExerciseRow[];
-  lastTime: LastTimeModel;
+  /** The Last Time for the one exercise. Absent on a circuit table. */
+  lastTime?: LastTimeModel;
 }
 
 /** One child of a group: a nested container or an exercise row. */
@@ -294,6 +323,8 @@ export type GroupChild =
   totalIntervals: number;
   /** Keys of the exercise rows that sit directly under this group. */
   rowKeys: string[];
+  /** True when a container sits among the container's own direct children. */
+  hasNestedContainers: boolean;
   /** Stable scope after this container's own repetition is removed. */
   scopeKey: string;
   /** Repeated scored containers share a result; only one draws its editor. */
@@ -574,9 +605,24 @@ function totalIntervalsFor(container: ContainerNode): number {
 }
 
 /**
- * Collapse a repeated container that directly owns one exercise into one
- * reusable set table. Mixed circuits keep their programmed row order and use
- * the ordinary row renderer.
+ * Collapse a repeated `rounds` container into one set table.
+ *
+ * A container that repeats one exercise becomes that exercise's set list.
+ * A container that repeats several exercises — a superset or a circuit —
+ * becomes one table whose rows are grouped by round, so the programmed
+ * round order stays readable and the container keeps one heading instead
+ * of one heading per round.
+ *
+ * Three checks decide whether a container collapses:
+ *
+ * 1. Every round must list the same exercise nodes in the same order. A
+ *    container whose rounds differ is not one repeated block, so it keeps
+ *    the ordinary row renderer.
+ * 2. Every direct child must be an exercise. A container that also holds a
+ *    nested container would split that round across two renderers.
+ * 3. The container must not be scored. A scored container owns a score
+ *    editor and an expand control, and those belong on the container
+ *    heading, not inside a set table. REQUIREMENTS 10.10, 10.13.
  */
 function buildDisplayBlocks(
   source: Array<{ kind: 'group'; group: GroupModel } | { kind: 'row'; row: ActiveExerciseRow }>,
@@ -594,25 +640,46 @@ function buildDisplayBlocks(
   const tables = new Map<string, ActiveSetTable>();
   const hiddenRows = new Set<string>();
   for (const [scopeKey, occurrences] of byScope) {
-    const tableRows = occurrences.flatMap((group) =>
-      group.rowKeys.map((key) => rowsByKey.get(key)).filter((row): row is ActiveExerciseRow => row !== undefined)
-    );
+    if (occurrences.some((group) => group.scored)) continue;
+    if (occurrences.some((group) => group.hasNestedContainers)) continue;
+
+    const rounds: ActiveSetRound[] = occurrences.map((group, index) => ({
+      key: `${scopeKey}#round-${index + 1}`,
+      label: `Round ${index + 1}`,
+      rows: group.rowKeys
+        .map((key) => rowsByKey.get(key))
+        .filter((row): row is ActiveExerciseRow => row !== undefined)
+    }));
+    const tableRows = rounds.flatMap((round) => round.rows);
     if (tableRows.length === 0) continue;
-    const nodeKeys = new Set(tableRows.map((row) => row.nodeKey));
-    const exerciseIds = new Set(tableRows.map((row) => row.exerciseId));
-    if (nodeKeys.size !== 1 || exerciseIds.size !== 1) continue;
+
+    const shapes = new Set(
+      rounds.map((round) => round.rows.map((row) => row.nodeKey).join(','))
+    );
+    if (shapes.size !== 1) continue;
 
     const first = tableRows[0];
-    const label = first.setType === 'warmup' ? 'Warmup sets' : 'Working sets';
-    const sectionTitle = workoutSectionLabel(first.setType, first.stimulus);
+    const exercisesPerRound = rounds[0]?.rows.length ?? 0;
+    const multiExercise = exercisesPerRound > 1;
+    // A divider only earns its place inside a circuit that has rounds to
+    // tell apart. A single-exercise table already orders its rows with
+    // `Set N`, and one round has nothing to separate.
+    if (!multiExercise || rounds.length === 1) {
+      rounds.forEach((round) => (round.label = ''));
+    }
+
     tables.set(scopeKey, {
       key: `sets-${scopeKey}`,
-      title: first.exerciseName,
-      sectionTitle,
-      label,
+      title: multiExercise ? occurrences[0]?.title ?? first.exerciseName : first.exerciseName,
+      sectionTitle: workoutSectionLabel(first.setType, first.stimulus),
+      label: first.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
       level: Math.max(1, occurrences[0]?.level ?? first.level),
+      multiExercise,
+      rounds,
       rows: tableRows,
-      lastTime: first.lastTime
+      // A circuit names several exercises, so one exercise's Last Time
+      // would read as the whole table's. The badge rides each row instead.
+      ...(multiExercise ? {} : { lastTime: first.lastTime })
     });
     for (const row of tableRows) hiddenRows.add(row.key);
   }
@@ -695,6 +762,9 @@ export function buildActiveWorkoutModel(
         isEmom: container.strategy === 'emom',
         totalIntervals: totalIntervalsFor(container),
         rowKeys: [],
+        hasNestedContainers: container.children.some(
+          (child) => child.type === 'container'
+        ),
         scopeKey,
         showControls: !controlScopes.has(scopeKey)
       };

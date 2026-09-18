@@ -644,6 +644,170 @@ describe('buildSummaryModel: raw JSON and error props', () => {
   });
 });
 
+describe('buildSummaryModel: circuit set tables', () => {
+  /** Record one set under one path. */
+  const record = (
+    session: Session,
+    path: Array<{ nodeId: string; iteration?: number }>,
+    exerciseId: string,
+    reps: number
+  ): void => {
+    const encoded = path
+      .map((segment) =>
+        segment.iteration === undefined
+          ? segment.nodeId
+          : `${segment.nodeId}:${String(segment.iteration)}`
+      )
+      .join('/');
+    session.exerciseResults[`${encoded}|both|1`] = {
+      workoutId: WORKOUT_ID,
+      executionPath: path,
+      exerciseId,
+      side: 'both',
+      attempt: 1,
+      status: 'completed',
+      values: { reps: { value: reps, unit: 'reps' } }
+    };
+  };
+
+  test('recorded circuit rounds collapse into one table grouped by round', () => {
+    const data = staticData();
+    const circuitWorkout = workout();
+    circuitWorkout.root.children.push({
+      id: 'circuit-block',
+      type: 'container',
+      name: 'Superset C',
+      strategy: 'rounds',
+      strategyConfig: { rounds: 2 },
+      children: [
+        {
+          id: 'circuit-curl',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        },
+        {
+          id: 'circuit-row',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 10 }
+        }
+      ]
+    });
+    data.workouts.push(circuitWorkout);
+
+    const session = validSession();
+    for (const iteration of [1, 2]) {
+      record(
+        session,
+        [
+          { nodeId: 'root' },
+          { nodeId: 'circuit-block', iteration },
+          { nodeId: 'circuit-curl' }
+        ],
+        'back-squat',
+        8
+      );
+      record(
+        session,
+        [
+          { nodeId: 'root' },
+          { nodeId: 'circuit-block', iteration },
+          { nodeId: 'circuit-row' }
+        ],
+        'back-squat',
+        10
+      );
+    }
+
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(data),
+      localTimeZone: 'UTC',
+      nowUtc: NOW
+    });
+
+    const tables = model.blocks.filter((block) => block.kind === 'set-table');
+    const circuit = tables.find(
+      (block) => block.kind === 'set-table' && block.table.title === 'Superset C'
+    );
+    expect(circuit?.kind).toBe('set-table');
+    if (circuit?.kind !== 'set-table') return;
+    expect(circuit.table.multiExercise).toBe(true);
+    expect(circuit.table.rounds.map((round) => round.label)).toEqual(['Round 1', 'Round 2']);
+    expect(circuit.table.rounds.map((round) => round.rows.length)).toEqual([2, 2]);
+    expect(circuit.table.rows).toHaveLength(4);
+  });
+
+  test('a circuit whose rounds differ in shape keeps the ordinary group renderer', () => {
+    const data = staticData();
+    const odd = workout();
+    odd.root.children.push({
+      id: 'odd-block',
+      type: 'container',
+      name: 'Odd Block',
+      strategy: 'rounds',
+      strategyConfig: { rounds: 2 },
+      children: [
+        {
+          id: 'odd-a',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        },
+        {
+          id: 'odd-b',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        }
+      ]
+    });
+    data.workouts.push(odd);
+
+    // Round 1 recorded both exercises; round 2 recorded only one.
+    const session = validSession();
+    record(
+      session,
+      [{ nodeId: 'root' }, { nodeId: 'odd-block', iteration: 1 }, { nodeId: 'odd-a' }],
+      'back-squat',
+      8
+    );
+    record(
+      session,
+      [{ nodeId: 'root' }, { nodeId: 'odd-block', iteration: 1 }, { nodeId: 'odd-b' }],
+      'back-squat',
+      8
+    );
+    record(
+      session,
+      [{ nodeId: 'root' }, { nodeId: 'odd-block', iteration: 2 }, { nodeId: 'odd-a' }],
+      'back-squat',
+      8
+    );
+
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(data),
+      localTimeZone: 'UTC',
+      nowUtc: NOW
+    });
+
+    const oddTable = model.blocks.find(
+      (block) => block.kind === 'set-table' && block.table.key.includes('odd-block')
+    );
+    expect(oddTable).toBeUndefined();
+  });
+});
+
 describe('buildSummaryModel: nested repeated containers', () => {
   test('a child under one outer round lands in that round group only', () => {
     const data = staticData();
