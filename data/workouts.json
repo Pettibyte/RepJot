@@ -19,7 +19,7 @@
             "name": "Mobility",
             "strategy": "rounds",
             "strategyConfig": {
-              "rounds": 3
+              "rounds": 2
             },
             "children": [
               {
