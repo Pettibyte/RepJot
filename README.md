@@ -19,8 +19,9 @@ Run `bun run check` for strict TypeScript and Svelte checks. Run `bun run test` 
 `src/public/data/exercises.json` is generated. Do not edit it by hand.
 Edit `scripts/exercise-allowlist.json` and run `bun run seed`.
 The seed copies the fields listed in `specs/exercise-seeding.md` from
-`yuhonas/free-exercise-db` and adds the curated fields the source lacks.
-The pinned source commit lives in `scripts/seed-config.json`.
+`Pettibyte/free-exercise-db` and adds the curated fields the source lacks.
+The pinned source repo and commit live in `scripts/seed-config.json`. See
+[Add a new exercise](#add-a-new-exercise) for the full procedure.
 
 - `bun run seed` writes the output file from the pinned commit.
 - `bun run seed:check` fails when the file on disk is out of date.
@@ -65,6 +66,71 @@ nothing else.
 bundle works at the Pages root, under a project path, and under `bun run dev`. It
 returns the two arrays plus `exerciseById` and `workoutById` maps. A failure throws
 an `AppError`, so a caller never holds a half-valid bundle.
+
+## Add a new exercise
+
+Use the `workout-authoring` skill. It looks up each named movement, asks you when a
+name is ambiguous, picks the curated fields with you, writes the allowlist entry,
+and reseeds.
+
+```
+/skill:workout-authoring add a wall sit and a weighted pull-up
+```
+
+The skill drives this chain. Never hand-edit `src/public/data/exercises.json`; the
+seed is the only writer.
+
+```
+Pettibyte/free-exercise-db        your fork, one pinned commit
+        │
+        ├── scripts/exercise-allowlist.json   the curated slice, plus the four
+        │                                   fields the source does not carry
+        │  bun run seed
+        ▼
+src/public/data/exercises.json    generated
+```
+
+### When your fork does not have the movement
+
+The skill stops and tells you the movement is missing. Add it to the fork first:
+
+1. Add the exercise to `Pettibyte/free-exercise-db` and push to `main`. Use the skill `add-exercise`, which will resolve ambiguity and lint for JSON schema conformance.
+2. Move the pin to your new commit:
+
+   ```sh
+   bun run seed:bump
+   ```
+
+   `seed:bump` resolves the head of `source.ref` (`main`), writes the new SHA into
+   `scripts/seed-config.json`, and regenerates `src/public/data/exercises.json`.
+   It does not touch the allowlist. To pin a SHA you already know instead, edit
+   `source.commit` and run `bun run seed`.
+3. Run the skill again. It now finds the movement and curates it.
+
+Commit `scripts/exercise-allowlist.json` and `src/public/data/exercises.json`
+together. Roll both back together, or `seed:check` fails the build:
+
+```sh
+git checkout scripts/exercise-allowlist.json src/public/data/exercises.json
+```
+
+## Add a new workout
+
+```
+/skill:workout-authoring 4 rounds: 5 back squats at 225, 10 push-ups, 30 second hold
+```
+
+The skill resolves every movement, asks about ambiguity, nesting, missing numbers,
+and units in one batch, validates the draft against the schema and the app checks,
+then merges it into the `workouts` array in `src/public/data/workouts.json`. It
+does not commit; staging is your call.
+
+`workouts.json` is hand-authored and has no upstream, so `seed:check` cannot tell
+whether it is stale. `bun run check:static` is the gate that matters: it reports a
+schema fault, a duplicate node ID inside one workout, or a node that references an
+exercise the bundle does not hold.
+
+Roll back with `git checkout src/public/data/workouts.json`.
 
 ## Build and bundle
 
