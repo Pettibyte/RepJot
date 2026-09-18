@@ -168,6 +168,16 @@ export interface ActiveExerciseRow {
    * container never shares a key with its twin.
    */
   key: string;
+  /**
+   * The row key without its side and attempt: `<workoutId>|<encodedPath>`.
+   *
+   * The side is part of the row key, so picking a different side moves the
+   * row to a new key. The screen holds per-row drafts — the typed value,
+   * the edited-field marks, the errors, the open state — and they have to
+   * follow the row to its new key or they orphan. This is the prefix that
+   * lets the screen rebuild that destination key.
+   */
+  keyBase: string;
   /** `<workoutId>|<nodeId>`. Matches the missing-work report. */
   nodeKey: string;
   /**
@@ -415,6 +425,16 @@ export type GroupChild =
   totalIntervals: number;
   /** Keys of the exercise rows that sit directly under this group. */
   rowKeys: string[];
+  /**
+   * The ids of this container's programmed exercise children, in order.
+   *
+   * The set-table gate reads this instead of `rowKeys`. `rowKeys` grows as
+   * the user records a second side or adds an attempt, so a gate keyed on
+   * it would drop a superset out of the grid halfway through the session.
+   * The programmed child list never changes while the workout runs, so the
+   * grid cannot vanish under the user.
+   */
+  programmedExerciseNodeIds: string[];
   /** True when a container sits among the container's own direct children. */
   hasNestedContainers: boolean;
   /** Stable scope after this container's own repetition is removed. */
@@ -707,14 +727,17 @@ function totalIntervalsFor(container: ContainerNode): number {
  *
  * Three checks decide whether a container collapses:
  *
- * 1. Every round must list the same exercise nodes in the same order. A
- *    container whose rounds differ is not one repeated block, so it keeps
- *    the ordinary row renderer.
- * 2. Every direct child must be an exercise. A container that also holds a
+ * 1. Every direct child must be an exercise. A container that also holds a
  *    nested container would split that round across two renderers.
- * 3. The container must not be scored. A scored container owns a score
+ * 2. The container must not be scored. A scored container owns a score
  *    editor and an expand control, and those belong on the container
  *    heading, not inside a set table. REQUIREMENTS 10.10, 10.13.
+ * 3. The container must carry rows at all.
+ *
+ * Nothing here reads the recorded row count. A round that gained a second
+ * side or an extra attempt still repeats the same programmed exercises, so
+ * the grid survives recording. The extra rows stack inside the cell, which
+ * is why a cell holds an array of rows rather than one row.
  */
 function buildDisplayBlocks(
   source: Array<{ kind: 'group'; group: GroupModel } | { kind: 'row'; row: ActiveExerciseRow }>,
@@ -745,13 +768,17 @@ function buildDisplayBlocks(
     const tableRows = rounds.flatMap((round) => round.rows);
     if (tableRows.length === 0) continue;
 
-    const shapes = new Set(
-      rounds.map((round) => round.rows.map((row) => row.nodeKey).join(','))
-    );
-    if (shapes.size !== 1) continue;
-
+    // No shape check goes here. Every group under one `scopeKey` is the
+    // same container node across its own iterations, so the programmed
+    // children are identical by construction and a comparison would never
+    // fire. What must never gate the grid is the *recorded* shape: that
+    // changes while the user records, and a grid that vanishes mid-set is
+    // worse than any layout the gate could have prevented.
     const first = tableRows[0];
-    const exercisesPerRound = rounds[0]?.rows.length ?? 0;
+    // The programmed count decides, not the recorded one. A round that holds
+    // two extra rows because the user recorded both sides still repeats the
+    // same two exercises.
+    const exercisesPerRound = occurrences[0]?.programmedExerciseNodeIds.length ?? 0;
     const multiExercise = exercisesPerRound > 1;
     // A divider only earns its place inside a circuit that has rounds to
     // tell apart. A single-exercise table already orders its rows with
@@ -856,6 +883,9 @@ export function buildActiveWorkoutModel(
         isEmom: container.strategy === 'emom',
         totalIntervals: totalIntervalsFor(container),
         rowKeys: [],
+        programmedExerciseNodeIds: container.children
+          .filter((child) => child.type === 'exercise')
+          .map((child) => child.id),
         hasNestedContainers: container.children.some(
           (child) => child.type === 'container'
         ),
@@ -909,6 +939,7 @@ export function buildActiveWorkoutModel(
         result !== null && staticData.exerciseById.get(result.exerciseId) === undefined;
       const row: ActiveExerciseRow = {
         key: `${workout.id}|${encodePath(node.path)}|${side}|${attempt}`,
+        keyBase: `${workout.id}|${encodePath(node.path)}`,
         nodeKey: `${workout.id}|${exerciseNode.id}`,
         resultKey: recordable ? exerciseResultKey(node.path, side, attempt) : null,
         path: node.path,
@@ -1020,6 +1051,64 @@ export function alternatingLine(
 }
 
 /**
+ * The line that says what the number in the reps field means.
+ *
+ * The same typed `8` means three different things depending on the side,
+ * and nobody should have to hold that in their head while counting. This
+ * states it beside the field. REQUIREMENT 11.5.
+ *
+ * `alternating` is left to `alternatingLine`, which already spells out the
+ * per-side split. Two lines saying almost the same thing would read worse
+ * than one, so this returns empty for that side.
+ */
+export function repsMeaning(
+  row: Pick<ActiveExerciseRow, 'side' | 'startingSide'>,
+  fields: FieldModel[],
+  overrides: Record<string, string> | undefined
+): string {
+  const reps = fields.find((field) => field.dimension === 'reps');
+  if (reps === undefined) return '';
+  // An alternating set already has the split the user needs, and it reads
+  // better beside the field it explains than buried in the options panel.
+  if (row.side === 'alternating') {
+    return alternatingLine(row, fields, overrides);
+  }
+  const quantity = parseFieldValue(reps, fieldDisplay(reps, overrides));
+  if (quantity === null) return '';
+  const shown = formatStep(quantity.value, REPS_STEP);
+  if (row.side === 'both') return `Both sides together · ${shown} for the set`;
+  const side = row.side === 'left' ? 'Left' : 'Right';
+  return `${side} side only · ${shown} per side`;
+}
+
+/**
+ * The reps total across every row one matrix cell holds.
+ *
+ * A cell that holds one row needs no total: the field already shows it. A
+ * cell that holds several — five left and four right, say — gains a real
+ * total the individual fields cannot show. Returns empty when no row in
+ * the cell carries a readable reps value.
+ */
+export function cellRepsTotal(
+  rows: ActiveExerciseRow[],
+  overridesFor: (rowKey: string) => Record<string, string>
+): string {
+  if (rows.length < 2) return '';
+  let total = 0;
+  let counted = 0;
+  for (const row of rows) {
+    const reps = row.fields.find((field) => field.dimension === 'reps');
+    if (reps === undefined) continue;
+    const quantity = parseFieldValue(reps, fieldDisplay(reps, overridesFor(row.key)));
+    if (quantity === null) continue;
+    total += quantity.value;
+    counted += 1;
+  }
+  if (counted === 0) return '';
+  return `${formatStep(total, REPS_STEP)} total`;
+}
+
+/**
  * The sides one row may record.
  *
  * A unilateral exercise offers every side. A bilateral exercise records
@@ -1056,9 +1145,39 @@ export function fieldDisplay(
  * A value is stored in the unit the field shows, so the number the user read
  * is the number recorded. REQUIREMENTS 11.2, 11.8, 12.7.
  */
+/**
+ * Read a clock string as a whole number of seconds.
+ *
+ * Accepts `m:ss` and `h:mm:ss`, so `2:15` reads as two minutes and fifteen
+ * seconds instead of the two point two five a typed decimal would give.
+ * A plain number is not a clock string and returns `undefined`, so the
+ * caller falls back to the decimal read the field already does and both
+ * forms stay valid.
+ *
+ * Only the parts after the first are bounded to 0-59. `2:75` is not a
+ * clock, and reading it as 195 seconds would silently invent time.
+ */
+export function parseClockSeconds(text: string): number | undefined {
+  const parts = text.trim().split(':');
+  if (parts.length < 2 || parts.length > 3) return undefined;
+  if (!parts.every((part) => /^\d+$/.test(part))) return undefined;
+  const nums = parts.map(Number);
+  if (nums.slice(1).some((part) => part > 59)) return undefined;
+  if (parts.length === 2) return nums[0] * 60 + nums[1];
+  return nums[0] * 3600 + nums[1] * 60 + nums[2];
+}
+
+/** True when this field can take a `mm:ss` entry. Duration only. */
+function isClockField(field: FieldModel): boolean {
+  return field.dimension === 'duration';
+}
+
+/** The field's error text, with the clock form accepted for duration. */
 export function fieldInputError(field: FieldModel, display: string): string | undefined {
   const trimmed = display.trim();
   if (trimmed === '') return undefined;
+  // `2:15` is valid on a duration field even though Number() rejects it.
+  if (isClockField(field) && parseClockSeconds(trimmed) !== undefined) return undefined;
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed < 0) {
     return field.dimension === 'reps'
@@ -1074,6 +1193,18 @@ export function fieldInputError(field: FieldModel, display: string): string | un
 export function parseFieldValue(field: FieldModel, display: string): Quantity | null {
   const trimmed = display.trim();
   if (trimmed === '' || fieldInputError(field, display) !== undefined) return null;
+  // A clock entry is read in seconds, then converted into the unit the field
+  // shows, so the number the user read is still the number recorded.
+  if (isClockField(field)) {
+    const seconds = parseClockSeconds(trimmed);
+    if (seconds !== undefined) {
+      try {
+        return convert({ value: seconds, unit: 'second' }, field.unit);
+      } catch {
+        return null;
+      }
+    }
+  }
   return { value: Number(trimmed), unit: field.unit };
 }
 

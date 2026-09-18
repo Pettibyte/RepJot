@@ -18,6 +18,18 @@ body {
   padding: 0;
 }
 
+/*
+ * The app is a light theme, so say so. Without this declaration a browser
+ * in dark mode draws native chrome — form popups, scrollbars, date and time
+ * pickers — with a dark theme over the light page. The e-ink target renders
+ * a `<select>` popup as a blank white rectangle; declaring the scheme keeps
+ * native chrome from being themed against us. Any control left as a native
+ * select stays readable.
+ */
+:root {
+  color-scheme: light;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }

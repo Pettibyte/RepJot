@@ -20,13 +20,14 @@
 -->
 <script lang="ts">
   import DataError from './DataError.svelte';
+  import ChipGroup from './ChipGroup.svelte';
   import EffortControl from './EffortControl.svelte';
   import LastTimeBadge from './LastTimeBadge.svelte';
   import SideControl from './SideControl.svelte';
   import ValueInput from './ValueInput.svelte';
   import Button from './Button.svelte';
   import type { ActiveExerciseRow } from '../viewmodels/activeWorkoutModel';
-  import { fieldDisplay } from '../viewmodels/activeWorkoutModel';
+  import { fieldDisplay, repsMeaning } from '../viewmodels/activeWorkoutModel';
   import { canAddAttempt, choiceForEffort } from '../screens/activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
   import { REASON_OPTIONS, STATUS_OPTIONS } from './exercise-row-options';
@@ -48,6 +49,8 @@
     showExerciseName = false,
     cell = false,
     cellLabel = '',
+    panelOpen = false,
+    onpaneltoggle = undefined,
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -106,6 +109,18 @@
      */
     cellLabel?: string;
     /**
+     * Whether the **Set options** panel is open.
+     *
+     * The panel is driven from outside rather than left to the browser.
+     * A side change moves the row to a new key, which destroys and
+     * recreates this component, and a `<details>` left to itself closes on
+     * the way. Owning the state up top lets the panel stay open across the
+     * rebuild.
+     */
+    panelOpen?: boolean;
+    /** Reports the panel opening or closing. */
+    onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    /**
      * Runs on every keystroke in a value field.
      *
      * This is the link that carries a typed value out of the row and into
@@ -147,6 +162,16 @@
   /** The effort the row shows now, draft first. */
   const currentEffort = $derived(effortChoice ?? choiceForEffort(row.effort));
 
+  /**
+   * What the number in the reps field means, stated plainly.
+   *
+   * A typed `8` is eight for the set on a `both` row and eight per side on
+   * a `left` row. Saying it here is what keeps the counting honest.
+   */
+  const meaning = $derived(
+    repsMeaning({ side: currentSide, startingSide }, row.fields, overrides)
+  );
+
   const errorProps = $derived({
     title: `This exercise is not in the current build: ${row.exerciseId}`,
     family: 'static-exercise',
@@ -182,42 +207,24 @@
     {/if}
   {/if}
 
-  <div class="exercise-row__status">
-    <label class="exercise-row__label" for={domId('status')}>Status</label>
-    <select
-      class="exercise-row__select"
-      id={domId('status')}
-      {disabled}
-      value={currentStatus}
-      onchange={(event: Event) => {
-        const target = event.target as HTMLSelectElement;
-        onstatuschange?.(target.value as ResultStatus);
-      }}
-    >
-      {#each STATUS_OPTIONS as option (option.value)}
-        <option value={option.value}>{option.label}</option>
-      {/each}
-    </select>
-  </div>
+  <ChipGroup
+    label="Status"
+    options={STATUS_OPTIONS}
+    value={currentStatus}
+    {disabled}
+    idPrefix={domId('status')}
+    onchange={(value: string) => onstatuschange?.(value as ResultStatus)}
+  />
 
   {#if showReason}
-    <div class="exercise-row__status">
-      <label class="exercise-row__label" for={domId('reason')}>Reason</label>
-      <select
-        class="exercise-row__select"
-        id={domId('reason')}
-        {disabled}
-        value={row.reasonCode ?? 'not_completed'}
-        onchange={(event: Event) => {
-          const target = event.target as HTMLSelectElement;
-          onreasonchange?.(target.value as ReasonCode);
-        }}
-      >
-        {#each REASON_OPTIONS as option (option.value)}
-          <option value={option.value}>{option.label}</option>
-        {/each}
-      </select>
-    </div>
+    <ChipGroup
+      label="Reason"
+      options={REASON_OPTIONS}
+      value={row.reasonCode ?? 'not_completed'}
+      {disabled}
+      idPrefix={domId('reason')}
+      onchange={(value: string) => onreasonchange?.(value as ReasonCode)}
+    />
   {/if}
 
   {#if canAddAttempt(row)}
@@ -247,6 +254,10 @@
     {#if cellLabel !== ''}
       <span class="exercise-row__cell-label">{cellLabel}</span>
     {/if}
+    <!-- A cell still has to say it needs attention. The linear head does this
+         with a left border; a cell has no left border of its own, so the
+         label carries the message and the cell background carries the color. -->
+    {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
   {:else if compact}
     <div class="exercise-row__set-head">
       <span class="exercise-row__set-label">{setLabel}</span>
@@ -301,10 +312,21 @@
         {/each}
       </div>
 
+      <!-- The counting meaning rides right under the field it explains. -->
+      {#if meaning !== ''}
+        <p class="exercise-row__meaning">{meaning}</p>
+      {/if}
     {/if}
 
     {#if compact}
-      <details class="exercise-row__options">
+      <details
+        class="exercise-row__options"
+        open={panelOpen}
+        ontoggle={(event: Event) => {
+          const target = event.target as HTMLDetailsElement;
+          onpaneltoggle?.(row.key, target.open);
+        }}
+      >
         <summary class="exercise-row__options-summary">Set options · {currentStatus}</summary>
         <div class="exercise-row__options-body">{@render resultControls()}</div>
       </details>

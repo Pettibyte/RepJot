@@ -98,6 +98,19 @@ function everyControlDisabled(markup: string): boolean {
   return tags.every((tag) => tag.includes('disabled'));
 }
 
+/**
+ * True when every chip button in the markup is disabled.
+ *
+ * The short-choice controls are chips, not selects, so the input-and-select
+ * sweep above cannot see them. A chip left live while the row is locked is a
+ * real bug, so this checks them on their own terms.
+ */
+function everyChipDisabled(markup: string): boolean {
+  const chips = markup.match(/<button\b[^>]*class="pill chip[^"]*"[^>]*>/g) ?? [];
+  if (chips.length === 0) return false;
+  return chips.every((tag) => tag.includes('disabled'));
+}
+
 describe('the tree locks when there is no session service', () => {
   test('a disabled tree renders no live input', () => {
     const markup = renderHtml(WorkoutTreeEditable, {
@@ -117,10 +130,22 @@ describe('the tree locks when there is no session service', () => {
     expect(everyControlDisabled(markup)).toBe(false);
   });
 
-  test('a disabled row locks its status and reason selects', () => {
-    const markup = renderHtml(ExerciseRow, { row: row(), disabled: true });
-    expect(markup).toContain('<select');
-    expect(everyControlDisabled(markup)).toBe(true);
+  test('a disabled row locks its status and reason chips', () => {
+    // A non-completed status is what makes the reason group appear.
+    const markup = renderHtml(ExerciseRow, {
+      row: row({ status: 'incomplete' }),
+      status: 'incomplete',
+      disabled: true
+    });
+    // No select survives on the workout screens: the e-ink target renders
+    // the popup blank.
+    expect(markup).not.toContain('<select');
+    expect(everyChipDisabled(markup)).toBe(true);
+    // Both groups print their label and their full vocabulary.
+    expect(markup).toContain('>Status<');
+    expect(markup).toContain('>Reason<');
+    expect(markup).toContain('>Completed</button>');
+    expect(markup).toContain('>Equipment unavailable</button>');
   });
 
   test('a disabled row locks its attempt button', () => {
@@ -156,28 +181,39 @@ describe('the container controls lock with no session service', () => {
 });
 
 describe('the side and effort controls honor disabled', () => {
-  test('a unilateral side control locks its selects', () => {
+  test('a unilateral side control locks its chips', () => {
     const markup = renderHtml(SideControl, {
       row: row({ unilateral: true, side: 'left' }),
       side: 'alternating',
       disabled: true
     });
-    expect(markup).toContain('<select');
-    expect(everyControlDisabled(markup)).toBe(true);
+    // The side control is chips, not a native select. A select opens its
+    // list in a browser-drawn popup the e-ink target renders blank.
+    expect(markup).not.toContain('<select');
+    const chips = markup.match(/<button\b[^>]*>/g) ?? [];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((tag) => tag.includes('disabled'))).toBe(true);
+    // The chosen chip is marked, so the counting method reads without
+    // opening anything.
+    expect(markup).toContain('aria-pressed="true"');
   });
 
   test('a bilateral row shows no side control at all', () => {
     const markup = renderHtml(SideControl, { row: row({ unilateral: false }), side: 'both' });
     expect(markup).not.toContain('<select');
+    expect(markup).not.toContain('class="pill chip');
   });
 
-  test('the effort control locks its select', () => {
+  test('the effort control locks its chips', () => {
     const markup = renderHtml(EffortControl, {
       target: { type: 'rir', target: 2 },
       disabled: true
     });
-    expect(markup).toContain('<select');
-    expect(everyControlDisabled(markup)).toBe(true);
+    expect(markup).not.toContain('<select');
+    expect(everyChipDisabled(markup)).toBe(true);
+    // An RIR row lists Not recorded plus RIR 0 through 10, so twelve.
+    const chips = markup.match(/<button\b[^>]*class="pill chip[^"]*"[^>]*>/g) ?? [];
+    expect(chips.length).toBe(12);
   });
 
   test('a row with no programmed effort shows no effort control', () => {

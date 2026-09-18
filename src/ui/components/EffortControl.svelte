@@ -12,10 +12,14 @@
   failure, an `RIR` set asks for a reserve count, and an `RPE` set asks
   for a perceived-exertion count.
 
-  The control is a native `<select>`, not a custom widget. The targeted
-  browser handles a native select well, and the choice list is short.
+  The chips come from `ChipGroup`, which replaces the native `<select>`.
+  See that component for why: the targeted e-ink browser renders a select
+  popup as a blank white rectangle. An RIR or RPE row carries eleven chips,
+  which is the longest list here. The labels are short and numeric, so the
+  row wraps to two or three lines on the wide target and stays readable.
 -->
 <script lang="ts">
+  import ChipGroup from './ChipGroup.svelte';
   import type { EffortTarget } from '../../domain/types';
   import { effortChoices } from '../screens/activeWorkoutActions';
 
@@ -40,7 +44,7 @@
 
   const choices = $derived(effortChoices(target));
 
-  /** The label names the kind of effort, so the select reads as a question. */
+  /** The label names the kind of effort, so the group reads as a question. */
   const label = $derived(
     target === undefined
       ? 'Effort'
@@ -51,22 +55,28 @@
           : `Effort: perceived exertion (programmed RPE ${target.target})`
   );
 
-  const selected = $derived(value);
+  /**
+   * The old `onchange` handed the caller an `Event` and read
+   * `event.target.value`. A chip has no event worth passing, so this
+   * synthesises the shape the caller already expects and keeps the seam
+   * unchanged.
+   */
+  function emit(chosen: string): void {
+    if (onchange === undefined) return;
+    const fake = { target: { value: chosen } } as unknown as Event;
+    onchange(fake);
+  }
 </script>
 
 {#if show}
   <div class="effort-control">
-    <label class="effort-control__label" for={id}>{label}</label>
-    <select
-      class="effort-control__select"
-      id={id}
+    <ChipGroup
+      {label}
+      options={choices}
+      value={value}
       {disabled}
-      value={selected}
-      {onchange}
-    >
-      {#each choices as choice (choice.value)}
-        <option value={choice.value}>{choice.label}</option>
-      {/each}
-    </select>
+      idPrefix={id ?? 'effort'}
+      onchange={emit}
+    />
   </div>
 {/if}

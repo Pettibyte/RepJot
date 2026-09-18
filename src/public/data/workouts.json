@@ -19,7 +19,7 @@
             "name": "Mobility",
             "strategy": "rounds",
             "strategyConfig": {
-              "rounds": 3
+              "rounds": 2
             },
             "children": [
               {
@@ -67,7 +67,7 @@
                 "exerciseId": "Kettlebell_Halo",
                 "stimulus": "mobility",
                 "prescription": {
-                  "reps": 10
+                  "reps": 20
                 },
                 "notes": "10 each direction.",
                 "setType": "warmup"

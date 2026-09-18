@@ -33,6 +33,8 @@
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
+    openRowPanels = {},
+    onpaneltoggle = undefined,
     groupcontrols = undefined,
     onfieldchange = undefined,
     onfieldblur = undefined,
@@ -64,6 +66,10 @@
     startingSideDrafts?: Record<string, StartingSide>;
     /** Draft effort choice, keyed by row key. */
     effortDrafts?: Record<string, string>;
+    /** Which rows have their **Set options** panel open, keyed by row key. */
+    openRowPanels?: Record<string, boolean>;
+    /** Reports a panel opening or closing, so the state survives a rebuild. */
+    onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
     /** Scored-container controls, kept beside their group heading. */
     groupcontrols?: Snippet<[GroupModel]>;
     onfieldchange?: ((rowKey: string, dimension: string, value: string) => void) | undefined;
@@ -123,6 +129,8 @@
           {sideDrafts}
           {startingSideDrafts}
           {effortDrafts}
+          {openRowPanels}
+          {onpaneltoggle}
           {onfieldchange}
           {onfieldblur}
           {onstatuschange}
@@ -145,6 +153,8 @@
           side={sideDrafts[block.row.key]}
           startingSide={startingSideDrafts[block.row.key] ?? 'left'}
           effortChoice={effortDrafts[block.row.key]}
+          panelOpen={openRowPanels[block.row.key] === true}
+          onpaneltoggle={onpaneltoggle}
           {idPrefix}
           {disabled}
           {busy}

@@ -2,6 +2,7 @@
   {
     "id": "Kettlebell_Halo",
     "movementPattern": "rotation",
+    "laterality": "unilateral",
     "loadSemantics": "per_implement",
     "measurements": [
       {
@@ -174,9 +175,10 @@
     "loadSemantics": "total",
     "measurements": [
       {
-        "dimension": "reps",
+        "dimension": "duration",
         "units": [
-          "reps"
+          "second",
+          "minute"
         ]
       }
     ]

@@ -9,14 +9,18 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   buildActiveWorkoutModel,
+  cellRepsTotal,
   convertFieldDisplay,
   draftRowValues,
   fieldDisplay,
   fieldInputError,
   parseFieldValue,
+  repsMeaning,
   tapUnitPill
 } from '../src/ui/viewmodels/activeWorkoutModel';
 import type { ActiveExerciseRow } from '../src/ui/viewmodels/activeWorkoutModel';
+import type { Side } from '../src/domain/enums';
+import { encodePath } from '../src/domain/execution-path';
 import type { Exercise, ResultsShard, Session, Workout } from '../src/domain/types';
 import { createLookupService, type LookupService } from '../src/indexes/lookup-service';
 import { createPreferenceService } from '../src/preferences/preference-service';
@@ -549,6 +553,57 @@ describe('field parsing', () => {
     expect(fieldInputError(field, '')).toBeUndefined();
   });
 
+  describe('a duration field accepts a clock entry', () => {
+    const minutes = {
+      ...field,
+      dimension: 'duration' as const,
+      unit: 'minute',
+      compatibleUnits: ['second', 'minute']
+    };
+    const seconds = { ...minutes, unit: 'second' };
+
+    test('mm:ss reads as minutes and seconds, not as a decimal', () => {
+      // 2:15 is two minutes fifteen seconds, which is 2.25 minutes.
+      expect(parseFieldValue(minutes, '2:15')).toEqual({ value: 2.25, unit: 'minute' });
+      expect(fieldInputError(minutes, '2:15')).toBeUndefined();
+    });
+
+    test('mm:ss converts into the unit the field shows', () => {
+      // The same entry on a seconds field reads as 135 seconds.
+      expect(parseFieldValue(seconds, '2:15')).toEqual({ value: 135, unit: 'second' });
+    });
+
+    test('a plain decimal still works beside the clock form', () => {
+      expect(parseFieldValue(minutes, '2.25')).toEqual({ value: 2.25, unit: 'minute' });
+      expect(parseFieldValue(seconds, '90')).toEqual({ value: 90, unit: 'second' });
+    });
+
+    test('h:mm:ss reads as hours, minutes, and seconds', () => {
+      expect(parseFieldValue(seconds, '1:02:03')).toEqual({ value: 3723, unit: 'second' });
+    });
+
+    test('a clock part over 59 is rejected, not silently carried', () => {
+      expect(fieldInputError(minutes, '2:75')).toBeDefined();
+      expect(parseFieldValue(minutes, '2:75')).toBeNull();
+    });
+
+    test('a clock form is not accepted on a non-duration field', () => {
+      const reps = { ...field, dimension: 'reps' as const, unit: 'reps', step: 1 };
+      expect(fieldInputError(reps, '2:15')).toBeDefined();
+      expect(parseFieldValue(reps, '2:15')).toBeNull();
+    });
+
+    test('a bare colon or an empty clock is rejected', () => {
+      expect(parseFieldValue(minutes, ':')).toBeNull();
+      expect(parseFieldValue(minutes, ':30')).toBeNull();
+      expect(parseFieldValue(minutes, '2:')).toBeNull();
+    });
+
+    test('zero on the clock is a real value', () => {
+      expect(parseFieldValue(minutes, '0:00')).toEqual({ value: 0, unit: 'minute' });
+    });
+  });
+
   test('draftRowValues skips blanks and keeps the field unit', () => {
     const fields = [
       field,
@@ -972,6 +1027,166 @@ describe('circuit set-table presentation', () => {
     const plain = matrix.rows.find((line) => line !== overridden);
     for (const cell of plain!.cells) expect(cell.prescriptionText).toBeUndefined();
   });
+
+  // The gate that decides whether a container collapses reads the
+  // programmed child list, never the recorded rows. These hold that.
+  // A superset that drops out of the grid halfway through a session is a
+  // serious UX failure: the layout the user was working in vanishes under
+  // them because of their own recording.
+  describe('the grid survives mid-session recording', () => {
+    /** Record one result under round `iteration` of the circuit. */
+    function recorded(
+      workout: Workout,
+      entries: Array<{ node: string; iteration: number; side: Side; attempt: number; reps: number }>
+    ): Session {
+      const session = emptySession();
+      for (const entry of entries) {
+        const path = [
+          { nodeId: 'root' },
+          { nodeId: 'superset', iteration: entry.iteration },
+          { nodeId: entry.node }
+        ];
+        const key = `${encodePath(path)}|${entry.side}|${entry.attempt}`;
+        session.exerciseResults[key] = {
+          workoutId: WORKOUT_ID,
+          executionPath: path,
+          exerciseId: 'back-squat',
+          side: entry.side,
+          attempt: entry.attempt,
+          status: 'completed',
+          values: { reps: { value: entry.reps, unit: 'reps' } }
+        };
+      }
+      return session;
+    }
+
+    function tableFor(session: Session) {
+      const h = harness(exercises(), [circuit(3)]);
+      const model = buildActiveWorkoutModel({
+        workout: circuit(3),
+        session,
+        staticData: h.staticData,
+        preferences: h.preferences.service,
+        lookup: h.lookup
+      });
+      return model.blocks.find((block) => block.kind === 'set-table');
+    }
+
+    const both = (node: string, iteration: number, reps = 8) => ({
+      node,
+      iteration,
+      side: 'both' as const,
+      attempt: 1,
+      reps
+    });
+
+    test('a second side on one round keeps the grid', () => {
+      const table = tableFor(
+        recorded(circuit(3), [
+          { node: 'curl', iteration: 1, side: 'left', attempt: 1, reps: 8 },
+          { node: 'curl', iteration: 1, side: 'right', attempt: 1, reps: 8 },
+          both('ext', 1),
+          both('curl', 2),
+          both('ext', 2),
+          both('curl', 3),
+          both('ext', 3)
+        ])
+      );
+      expect(table?.kind).toBe('set-table');
+      if (table?.kind !== 'set-table') return;
+      // The extra side stacks inside the cell instead of breaking the grid.
+      expect(table.table.matrix!.rows[0].cells[0].rows.length).toBe(2);
+      expect(table.table.matrix!.rows[0].cells[1].rows.length).toBe(1);
+    });
+
+    test('an extra attempt on one round keeps the grid', () => {
+      const table = tableFor(
+        recorded(circuit(3), [
+          both('curl', 1),
+          { node: 'curl', iteration: 1, side: 'both', attempt: 2, reps: 5 },
+          both('ext', 1),
+          both('curl', 2),
+          both('ext', 2),
+          both('curl', 3),
+          both('ext', 3)
+        ])
+      );
+      expect(table?.kind).toBe('set-table');
+    });
+
+    test('the real case: sets 1 and 2 both, set 3 five left and four right', () => {
+      const table = tableFor(
+        recorded(circuit(3), [
+          both('curl', 1, 10),
+          both('ext', 1, 10),
+          both('curl', 2, 10),
+          both('ext', 2, 10),
+          { node: 'curl', iteration: 3, side: 'left', attempt: 1, reps: 5 },
+          { node: 'curl', iteration: 3, side: 'right', attempt: 1, reps: 4 },
+          both('ext', 3, 10)
+        ])
+      );
+      expect(table?.kind).toBe('set-table');
+      if (table?.kind !== 'set-table') return;
+      const curl = table.table.matrix!.rows[0];
+      // Set 3 holds two rows, and they sum to nine.
+      expect(curl.cells[2].rows.length).toBe(2);
+      expect(cellRepsTotal(curl.cells[2].rows, () => ({}))).toBe('9 total');
+      // Sets 1 and 2 hold one row each, so no total line is needed.
+      expect(cellRepsTotal(curl.cells[0].rows, () => ({}))).toBe('');
+    });
+
+    test('two sibling containers with different children each collapse alone', () => {
+      // There is no such thing as one container whose own rounds program
+      // different children: every group under one scope is the same node
+      // across its iterations. Two containers with different children are
+      // two scopes, and each collapses on its own terms.
+      const base = circuit(2);
+      const block = base.root.children[0] as Record<string, unknown>;
+      const w = {
+        ...base,
+        root: {
+          ...base.root,
+          children: [
+            block,
+            {
+              ...block,
+              id: 'superset-single',
+              name: 'Single Block',
+              children: [children0()]
+            }
+          ]
+        }
+      } as unknown as Workout;
+      function children0() {
+        return {
+          id: 'only',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 5 }
+        };
+      }
+      const h = harness(exercises(), [w]);
+      const model = buildActiveWorkoutModel({
+        workout: w,
+        session: emptySession(),
+        staticData: h.staticData,
+        preferences: h.preferences.service,
+        lookup: h.lookup
+      });
+      const tables = model.blocks.filter((block2) => block2.kind === 'set-table');
+      expect(tables).toHaveLength(2);
+      const multi = tables.filter((t) => t.kind === 'set-table' && t.table.multiExercise);
+      const single = tables.filter((t) => t.kind === 'set-table' && !t.table.multiExercise);
+      expect(multi).toHaveLength(1);
+      expect(single).toHaveLength(1);
+      // The single-exercise block stays a vertical list, not a grid.
+      if (single[0]?.kind !== 'set-table') return;
+      expect(single[0].table.matrix).toBeUndefined();
+    });
+  });
 });
 
 describe('model stability', () => {
@@ -1006,5 +1221,67 @@ describe('model stability', () => {
     });
     const keys = model.rows.map((row) => row.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('repsMeaning: the field says what the number means', () => {
+  const repsField = {
+    dimension: 'reps' as const,
+    label: 'Reps',
+    value: '8',
+    unit: 'reps',
+    compatibleUnits: ['reps'],
+    inputmode: 'numeric' as const,
+    stored: false,
+    step: 1
+  };
+  const fields = [repsField];
+
+  test('both sides reads as one count for the set', () => {
+    expect(repsMeaning({ side: 'both' }, fields, { reps: '8' })).toBe(
+      'Both sides together · 8 for the set'
+    );
+  });
+
+  test('a single side reads as per side', () => {
+    expect(repsMeaning({ side: 'left' }, fields, { reps: '8' })).toBe(
+      'Left side only · 8 per side'
+    );
+    expect(repsMeaning({ side: 'right' }, fields, { reps: '10' })).toBe(
+      'Right side only · 10 per side'
+    );
+  });
+
+  test('alternating returns the per-side split', () => {
+    // The split moved here from the options panel, so it shows beside the
+    // field whether the panel is open or not.
+    expect(
+      repsMeaning({ side: 'alternating', startingSide: 'left' }, fields, { reps: '20' })
+    ).toBe('20 total / 10 each');
+  });
+
+  test('alternating with no starting side says nothing', () => {
+    // The split needs to know which side went first. Without it the line
+    // would invent a split.
+    expect(repsMeaning({ side: 'alternating' }, fields, { reps: '20' })).toBe('');
+  });
+
+  test('a blank field says nothing', () => {
+    expect(repsMeaning({ side: 'both' }, fields, { reps: '' })).toBe('');
+  });
+
+  test('a field with no reps dimension says nothing', () => {
+    const weightOnly = [{ ...repsField, dimension: 'weight' as const, unit: 'lb' }];
+    expect(repsMeaning({ side: 'both' }, weightOnly, { weight: '90' })).toBe('');
+  });
+
+  test('it follows the draft, not the stored value', () => {
+    // The stored field shows 8; the user has typed 12 since.
+    expect(repsMeaning({ side: 'left' }, fields, { reps: '12' })).toBe(
+      'Left side only · 12 per side'
+    );
+    expect(repsMeaning({ side: 'left' }, fields, undefined)).toBe(
+      'Left side only · 8 per side'
+    );
   });
 });

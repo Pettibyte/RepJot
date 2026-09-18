@@ -1012,6 +1012,31 @@
   padding-top: var(--space-1);
 }
 
+/* A cell has no left border, so the missing state cannot ride one. The
+   cell background carries the color and the label carries the words. The
+   outline separates one bad row from its good neighbours inside a cell
+   that holds several. */
+.exercise-row--cell.exercise-row--missing {
+  outline: var(--border-weight) solid var(--color-error);
+}
+
+/* The matrix line and cell that hold a row needing attention. The line
+   tint answers "which exercise is wrong" and the cell tint answers "which
+   set is wrong", so the user does not have to open every cell to find it. */
+.set-matrix__line--error > .set-matrix__name {
+  background-color: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+
+.set-matrix__line--error > .set-matrix__name .set-matrix__exercise,
+.set-matrix__line--error > .set-matrix__name .set-matrix__rx {
+  color: var(--color-on-error-container);
+}
+
+.set-matrix__cell--error {
+  background-color: var(--color-error-container);
+}
+
 .exercise-row--cell + .exercise-row--cell {
   border-top: 1px solid var(--color-outline-variant);
   margin-top: var(--space-1);
@@ -1210,19 +1235,39 @@
 
 /* Side control ------------------------------------------------------- */
 
-.side-control {
+/* What the number in the reps field means. Sits under the field it
+   explains, so the counting rule is never a guess. */
+.exercise-row__meaning {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  margin-top: var(--space-1);
+}
+
+/* The reps total across the rows one matrix cell holds. */
+.set-matrix__cell-total {
+  color: var(--color-on-surface);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  margin-top: var(--space-1);
+}
+
+/* Chip group ---------------------------------------------------------
+ *
+ * One labelled row of chips, shared by the side, status, reason, and effort
+ * controls. It replaces the native `<select>`, whose popup the targeted
+ * e-ink browser renders as a blank white rectangle. See ChipGroup.svelte.
+ *
+ * The chips wrap. No `gap`: the style guard bans it, so the spacing is a
+ * right and bottom margin on every chip. The bottom margin keeps a wrapped
+ * second row off the one above it.
+ */
+.chip-group {
   margin-top: var(--space-2);
 }
 
-.side-control__group {
-  display: inline-block;
-}
-
-.side-control__group + .side-control__group {
-  margin-left: var(--space-2);
-}
-
-.side-control__label {
+.chip-group__label {
   color: var(--color-on-surface-variant);
   display: block;
   font-family: var(--font-data);
@@ -1232,15 +1277,33 @@
   margin-bottom: var(--space-1);
 }
 
-.side-control__select {
-  min-width: 120px;
+.chip-group__chips {
+  display: flex;
+  flex-wrap: wrap;
 }
 
-.side-control__split {
-  color: var(--color-on-surface-variant);
-  font-family: var(--font-data);
-  font-size: var(--text-label);
-  margin-top: var(--space-1);
+.chip {
+  background-color: var(--color-surface-raised);
+  color: var(--color-on-bg);
+  cursor: pointer;
+  margin-bottom: var(--space-1);
+  margin-right: var(--space-1);
+  min-height: var(--tap-target-min);
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+}
+
+/* The chosen chip fills, so the state reads without opening anything. */
+.chip--on {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: var(--weight-bold);
+}
+
+.side-control {
+  margin-top: var(--space-2);
 }
 
 /* Effort control ----------------------------------------------------- */
@@ -1338,8 +1401,10 @@
 
 .last-time--link,
 .last-time--plain {
-  border: var(--border-weight) solid var(--color-primary);
-  padding: var(--space-1) var(--space-2);
+  border-top: var(--border-weight) solid var(--color-primary);
+  padding-top: var(--space-2);
+  margin-top: var(--space-1);
+  font-style: italic;
 }
 
 .last-time--link {

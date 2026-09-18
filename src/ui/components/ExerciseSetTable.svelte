@@ -16,6 +16,7 @@
   import ExerciseRow from './ExerciseRow.svelte';
   import LastTimeBadge from './LastTimeBadge.svelte';
   import type { ActiveExerciseRow, ActiveSetTable } from '../viewmodels/activeWorkoutModel';
+  import { cellRepsTotal } from '../viewmodels/activeWorkoutModel';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
 
   let {
@@ -30,6 +31,8 @@
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
+    openRowPanels = {},
+    onpaneltoggle = undefined,
     onfieldchange,
     onfieldblur,
     onstatuschange,
@@ -51,6 +54,10 @@
     sideDrafts?: Record<string, Side>;
     startingSideDrafts?: Record<string, StartingSide>;
     effortDrafts?: Record<string, string>;
+    /** Which rows have their **Set options** panel open, keyed by row key. */
+    openRowPanels?: Record<string, boolean>;
+    /** Reports a panel opening or closing, so the state survives a rebuild. */
+    onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
     onfieldchange?: (rowKey: string, dimension: string, value: string) => void;
     onfieldblur?: (rowKey: string, dimension: string) => void;
     onstatuschange?: (rowKey: string, status: ResultStatus) => void;
@@ -81,12 +88,43 @@
     if (row.side !== 'both') parts.push(row.side === 'left' ? 'Left' : row.side === 'right' ? 'Right' : 'Alternating');
     return parts.join(' · ');
   }
+
+  /**
+   * True when one row needs attention.
+   *
+   * Two things raise it: Finish found no completed result for the row, and
+   * a field holds text that will not parse. The linear view shows both on
+   * the row head; the matrix has no row head per set, so the table marks
+   * the whole exercise line and the offending cell.
+   */
+  function rowNeedsAttention(row: ActiveExerciseRow): boolean {
+    return (
+      missingRowKeys.includes(row.key) ||
+      Object.keys(rowFieldErrors[row.key] ?? {}).length > 0
+    );
+  }
+
+  /** True when one matrix line holds a row that needs attention. */
+  function lineNeedsAttention(line: { cells: Array<{ rows: ActiveExerciseRow[] }> }): boolean {
+    return line.cells.some((cell) => cell.rows.some((row) => rowNeedsAttention(row)));
+  }
+
+  /** True when one cell holds a row that needs attention. */
+  function cellNeedsAttention(cell: { rows: ActiveExerciseRow[] }): boolean {
+    return cell.rows.some((row) => rowNeedsAttention(row));
+  }
+
+  /** The section heading carries the message once for the whole table. */
+  const tableNeedsAttention = $derived(table.rows.some((row) => rowNeedsAttention(row)));
 </script>
 
 <section class="set-table" aria-labelledby={`${idPrefix}-${table.key}-title`}>
   <p class="set-table__section">{table.sectionTitle}</p>
   <div class="set-table__head">
     <h3 class="set-table__title" id={`${idPrefix}-${table.key}-title`}>{table.title}</h3>
+    {#if tableNeedsAttention}
+      <span class="exercise-row__missing-label">Needs attention</span>
+    {/if}
     {#if table.lastTime !== undefined}
       <LastTimeBadge lastTime={table.lastTime} exerciseName={table.title} />
     {/if}
@@ -122,16 +160,25 @@
         </thead>
         <tbody>
           {#each matrix.rows as line (line.key)}
-            <tr class="set-matrix__line">
+            <tr
+              class="set-matrix__line"
+              class:set-matrix__line--error={lineNeedsAttention(line)}
+            >
               <th class="set-matrix__name" scope="row">
                 <span class="set-matrix__exercise">{line.exerciseName}</span>
                 {#if line.prescriptionText !== ''}
                   <span class="set-matrix__rx">{line.prescriptionText}</span>
                 {/if}
+                {#if lineNeedsAttention(line)}
+                  <span class="exercise-row__missing-label">Needs attention</span>
+                {/if}
                 <LastTimeBadge lastTime={line.lastTime} exerciseName={line.exerciseName} />
               </th>
               {#each line.cells as cell, columnIndex (cell.key)}
-                <td class="set-matrix__cell">
+                <td
+                  class="set-matrix__cell"
+                  class:set-matrix__cell--error={cellNeedsAttention(cell)}
+                >
                   {#if cell.prescriptionText !== undefined}
                     <span class="set-matrix__cell-rx">{cell.prescriptionText}</span>
                   {/if}
@@ -150,6 +197,8 @@
                       side={sideDrafts[row.key]}
                       startingSide={startingSideDrafts[row.key] ?? 'left'}
                       effortChoice={effortDrafts[row.key]}
+                      panelOpen={openRowPanels[row.key] === true}
+                      onpaneltoggle={onpaneltoggle}
                       {idPrefix}
                       {disabled}
                       {busy}
@@ -166,6 +215,16 @@
                   {/each}
                   {#if cell.rows.length === 0}
                     <span class="set-matrix__empty">\u2014</span>
+                  {/if}
+                  <!--
+                    A cell that holds several rows gains a total the single
+                    fields cannot show: five left and four right reads as
+                    nine for the set.
+                  -->
+                  {#if cellRepsTotal(cell.rows, (rowKey) => rowOverrides[rowKey] ?? {}) !== ''}
+                    <p class="set-matrix__cell-total">
+                      {cellRepsTotal(cell.rows, (rowKey) => rowOverrides[rowKey] ?? {})}
+                    </p>
                   {/if}
                 </td>
               {/each}
@@ -193,6 +252,8 @@
             side={sideDrafts[row.key]}
             startingSide={startingSideDrafts[row.key] ?? 'left'}
             effortChoice={effortDrafts[row.key]}
+            panelOpen={openRowPanels[row.key] === true}
+            onpaneltoggle={onpaneltoggle}
             {idPrefix}
             {disabled}
             {busy}

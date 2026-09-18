@@ -65,7 +65,7 @@
     wholeCountError
   } from './activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
-  import { containerResultKey, type PathSegment } from '../../domain/execution-path';
+  import { containerResultKey, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
   import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
   import { convert, formatEditable } from '../../units/conversion';
 
@@ -102,6 +102,8 @@
   let amrapPartialDrafts = $state<Record<string, string>>({});
   /** Draft completed-interval text keyed by EMOM group key. */
   let emomDrafts = $state<Record<string, string>>({});
+  /** Which rows have their **Set options** panel open. */
+  let openRowPanels = $state<Record<string, boolean>>({});
 
   /** Inferred draft sets keyed by group key, loaded on demand. */
   let inferredDrafts = $state<Record<string, DraftChild[]>>({});
@@ -190,6 +192,87 @@
   }
 
   /**
+   * Move one per-row draft entry onto a new key, dropping the old one.
+   *
+   * Silent when the source holds nothing, so a migration never writes an
+   * `undefined` entry that later reads as a real draft.
+   */
+  function moveEntry(map: Record<string, unknown>, from: string, to: string): void {
+    if (from === to) return;
+    if (!Object.prototype.hasOwnProperty.call(map, from)) return;
+    map[to] = map[from];
+    delete map[from];
+  }
+
+  /**
+   * Carry every per-row draft to the row's new key.
+   *
+   * The side is part of the row key, so picking a different side gives the
+   * row a new key. Drafts left under the old key orphan: the value the user
+   * just typed stops reaching the row on screen, the edited-field marks
+   * vanish so the next save drops the value, and the open panel collapses.
+   * That is the whole "I clicked and nothing happened" report.
+   */
+  function migrateRowDrafts(fromKey: string, toKey: string): void {
+    if (fromKey === toKey) return;
+    moveEntry(overrides, fromKey, toKey);
+    moveEntry(editedFields, fromKey, toKey);
+    moveEntry(fieldErrors, fromKey, toKey);
+    moveEntry(statusDrafts, fromKey, toKey);
+    moveEntry(sideDrafts, fromKey, toKey);
+    moveEntry(startingSideDrafts, fromKey, toKey);
+    moveEntry(effortDrafts, fromKey, toKey);
+    moveEntry(openRowPanels, fromKey, toKey);
+  }
+
+  /** The row key this row takes when it records `side`. */
+  function rowKeyWithSide(row: ActiveExerciseRow, side: Side): string {
+    return `${row.keyBase}|${side}|${row.attempt}`;
+  }
+
+  /**
+   * Persist one row, moving the stored result when the row's identity moved.
+   *
+   * The side is part of the result key. A plain save writes under the
+   * draft's side and leaves the old-side result sitting there, so one
+   * round reads as two recorded sets. Every path that can carry a side
+   * different from the stored one has to move, not only the side control:
+   * pick a side while the fields are blank, the move is skipped, the side
+   * draft stays behind, and the next field blur then writes a second key.
+   *
+   * The queued save is flushed before the move so a queued write cannot
+   * land after it and resurrect the key just cleared.
+   */
+  async function persistRow(row: ActiveExerciseRow): Promise<void> {
+    const service = sessionService;
+    if (service === null || session === null || row.resultKey === null) return;
+    const sessionId = session.id;
+    const draft = draftForRow(row);
+    const draftSide = draft.side ?? row.side;
+    const targetKey = exerciseResultKey(row.path, draftSide, row.attempt);
+    const identityMoved = row.hasSavedResult && row.resultKey !== targetKey;
+
+    try {
+      if (isBlankExerciseDraft(draft)) {
+        service.queueClearExerciseResult(sessionId, row.resultKey, row.path);
+        await service.queueFlush();
+      } else if (identityMoved) {
+        await service.queueFlush();
+        await service.moveExerciseResult(sessionId, row.resultKey, draft);
+      } else {
+        service.queueSaveExerciseResult(sessionId, draft);
+        await service.queueFlush();
+      }
+      // Move the drafts before the model rebuilds, so the row that arrives
+      // under the new key already carries what the user typed.
+      migrateRowDrafts(row.key, rowKeyWithSide(row, draftSide));
+      session = await service.load(sessionId);
+    } catch (error: unknown) {
+      errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
+    }
+  }
+
+  /**
    * Queue one row's save and flush it.
    *
    * The flush makes the value durable before the user can leave the screen.
@@ -197,29 +280,7 @@
    * waits for or directly starts a network cycle.
    */
   function queueAndFlush(row: ActiveExerciseRow): void {
-    const service = sessionService;
-    if (service === null || session === null || row.resultKey === null) return;
-    const draft = draftForRow(row);
-    if (isBlankExerciseDraft(draft)) {
-      service.queueClearExerciseResult(session.id, row.resultKey, row.path);
-      const targetId = session.id;
-      void service.queueFlush().then(async () => {
-        session = await service.load(targetId);
-      }).catch((error: unknown) => {
-        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-      });
-      return;
-    }
-    service.queueSaveExerciseResult(session.id, draft);
-    const targetId = session.id;
-    void service
-      .queueFlush()
-      .then(async () => {
-        session = await service.load(targetId);
-      })
-      .catch((error: unknown) => {
-        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-      });
+    void persistRow(row);
   }
 
   function validateRow(row: ActiveExerciseRow): boolean {
@@ -298,33 +359,47 @@
    * edited to `right` would leave the `left` result behind and read as two
    * recorded sets. REQUIREMENTS 11.5, 22.4.7.
    */
-  async function onSideChange(rowKey: string, nextSide: Side): Promise<void> {
+  /**
+   * Serialize side changes so two picks cannot interleave.
+   *
+   * A side change awaits a flush and a reload. A second pick started inside
+   * that window reads the row as it was before the first change, so it
+   * computes a stale previous key. The first change moves `both` to
+   * `alternating`; the second then moves a key that is already gone and
+   * writes `both` back beside the `alternating` result. Two sets appear
+   * from one exercise, and the panel the user was looking at is gone.
+   *
+   * Chaining makes each pick read the state the previous one left.
+   */
+  let sideChangeChain: Promise<void> = Promise.resolve();
+
+  async function runSideChange(rowKey: string, nextSide: Side): Promise<void> {
     const service = sessionService;
     const row = rowsByKey.get(rowKey);
     if (service === null || session === null || row === undefined) return;
     if (row.resultKey === null) return;
 
-    const previousKey = row.resultKey;
-    const previousSide = row.side;
     sideDrafts[rowKey] = nextSide;
     if (nextSide !== 'alternating') delete startingSideDrafts[rowKey];
 
-    const draft = draftForRow(row);
-    try {
-      await service.queueFlush();
-      if (isBlankExerciseDraft(draft)) {
-        session = await service.load(session.id);
-        return;
-      }
-      if (row.hasSavedResult && previousSide !== nextSide) {
-        await service.moveExerciseResult(session.id, previousKey, draft);
-      } else {
-        await service.saveExerciseResult(session.id, draft);
-      }
-      session = await service.load(session.id);
-    } catch (error: unknown) {
-      errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-    }
+    // The row moves to a new key. Open the panel there first, so the panel
+    // the user was working in stays open across the rebuild instead of
+    // collapsing on the row it no longer has.
+    const nextKey = rowKeyWithSide(row, nextSide);
+    if (openRowPanels[rowKey] === true) openRowPanels[nextKey] = true;
+
+    // `persistRow` moves the stored result when the draft side differs
+    // from the stored one, and carries the drafts to the new key.
+    await persistRow(row);
+  }
+
+  async function onSideChange(rowKey: string, nextSide: Side): Promise<void> {
+    sideChangeChain = sideChangeChain
+      .then(() => runSideChange(rowKey, nextSide))
+      .catch((error: unknown) => {
+        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
+      });
+    await sideChangeChain;
   }
 
   /** Change the side an alternating set starts on. */
@@ -867,6 +942,10 @@
       {sideDrafts}
       {startingSideDrafts}
       {effortDrafts}
+      {openRowPanels}
+      onpaneltoggle={(rowKey: string, open: boolean) => {
+        openRowPanels[rowKey] = open;
+      }}
       groupcontrols={groupControls}
       {busy}
       disabled={sessionService === null}
