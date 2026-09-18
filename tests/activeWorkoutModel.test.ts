@@ -920,6 +920,58 @@ describe('circuit set-table presentation', () => {
     ].map((row) => row.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
+
+  test('a circuit table carries one line per exercise and one cell per set', () => {
+    const { tables } = tablesFor(circuit(3));
+    expect(tables).toHaveLength(1);
+    if (tables[0]?.kind !== 'set-table') return;
+
+    const matrix = tables[0].table.matrix;
+    expect(matrix).toBeDefined();
+    expect(matrix!.columns.map((column) => column.label)).toEqual(['Set 1', 'Set 2', 'Set 3']);
+    // Two nodes name the same exercise here, so the matrix must keep them
+    // apart. Keying a line by the exercise name would merge them into one.
+    expect(matrix!.rows.length).toBe(2);
+    for (const line of matrix!.rows) {
+      expect(line.cells.length).toBe(3);
+      for (const cell of line.cells) expect(cell.rows.length).toBe(1);
+    }
+    // The flat row list still holds every row, so a caller that ignores the
+    // matrix reads the same set it always did.
+    expect(tables[0].table.rows.length).toBe(6);
+  });
+
+  test('a single-exercise table has no matrix', () => {
+    const single = circuit(3);
+    const block = single.root.children[0] as Record<string, unknown>;
+    block.children = (block.children as Array<Record<string, unknown>>).slice(0, 1);
+    const { tables } = tablesFor(single);
+    expect(tables).toHaveLength(1);
+    if (tables[0]?.kind !== 'set-table') return;
+    expect(tables[0].table.multiExercise).toBe(false);
+    expect(tables[0].table.matrix).toBeUndefined();
+  });
+
+  test('a round that overrides the target marks its own cell only', () => {
+    const w = circuit(3);
+    const block = w.root.children[0] as Record<string, unknown>;
+    const children = block.children as Array<Record<string, unknown>>;
+    // The first exercise asks for 6 reps in round 2 only.
+    children[0].prescription = { reps: 8, iterations: [{ iteration: 2, reps: 6 }] };
+    const { tables } = tablesFor(w);
+    if (tables[0]?.kind !== 'set-table') return;
+
+    const matrix = tables[0].table.matrix!;
+    const overridden = matrix.rows.find((line) =>
+      line.cells.some((cell) => cell.prescriptionText !== undefined)
+    );
+    expect(overridden).toBeDefined();
+    const marks = overridden!.cells.map((cell) => cell.prescriptionText !== undefined);
+    expect(marks).toEqual([false, true, false]);
+    // The other exercise never overrides.
+    const plain = matrix.rows.find((line) => line !== overridden);
+    for (const cell of plain!.cells) expect(cell.prescriptionText).toBeUndefined();
+  });
 });
 
 describe('model stability', () => {

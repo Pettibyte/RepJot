@@ -806,6 +806,85 @@ describe('buildSummaryModel: circuit set tables', () => {
     );
     expect(oddTable).toBeUndefined();
   });
+
+  test('a recorded circuit table carries the exercise-by-set matrix', () => {
+    const data = staticData();
+    const circuitWorkout = workout();
+    circuitWorkout.root.children.push({
+      id: 'circuit-block',
+      type: 'container',
+      name: 'Superset C',
+      strategy: 'rounds',
+      strategyConfig: { rounds: 2 },
+      children: [
+        {
+          id: 'circuit-curl',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 8 }
+        },
+        {
+          id: 'circuit-row',
+          type: 'exercise',
+          exerciseId: 'back-squat',
+          stimulus: 'hypertrophy',
+          setType: 'working',
+          prescription: { reps: 10 }
+        }
+      ]
+    });
+    data.workouts.push(circuitWorkout);
+
+    const session = validSession();
+    for (const iteration of [1, 2]) {
+      record(
+        session,
+        [
+          { nodeId: 'root' },
+          { nodeId: 'circuit-block', iteration },
+          { nodeId: 'circuit-curl' }
+        ],
+        'back-squat',
+        8
+      );
+      record(
+        session,
+        [
+          { nodeId: 'root' },
+          { nodeId: 'circuit-block', iteration },
+          { nodeId: 'circuit-row' }
+        ],
+        'back-squat',
+        10
+      );
+    }
+
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(data),
+      localTimeZone: 'UTC',
+      nowUtc: NOW
+    });
+
+    const circuit = model.blocks.find(
+      (block) => block.kind === 'set-table' && block.table.title === 'Superset C'
+    );
+    expect(circuit?.kind).toBe('set-table');
+    if (circuit?.kind !== 'set-table') return;
+
+    const matrix = circuit.table.matrix;
+    expect(matrix).toBeDefined();
+    expect(matrix!.columns.map((column) => column.label)).toEqual(['Set 1', 'Set 2']);
+    // One line per programmed exercise node, not one per result key. Both
+    // nodes name the same exercise, so a name key would merge them.
+    expect(matrix!.rows.length).toBe(2);
+    for (const line of matrix!.rows) {
+      expect(line.cells.length).toBe(2);
+      for (const cell of line.cells) expect(cell.rows.length).toBe(1);
+    }
+  });
 });
 
 describe('buildSummaryModel: nested repeated containers', () => {

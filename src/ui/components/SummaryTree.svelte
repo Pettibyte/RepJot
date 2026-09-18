@@ -36,6 +36,16 @@
     return Math.max(1, row.path.length);
   }
 
+  /** The marker a cell shows when it holds more than one recorded row. */
+  function attemptText(row: SummaryExerciseRow): string {
+    const parts: string[] = [];
+    if (row.attempt > 1) parts.push(`Attempt ${row.attempt}`);
+    if (row.side !== undefined && row.side !== 'both') {
+      parts.push(row.side.charAt(0).toUpperCase() + row.side.slice(1));
+    }
+    return parts.join(' · ');
+  }
+
   const displayBlocks = $derived(
     blocks.length > 0
       ? blocks
@@ -64,10 +74,11 @@
   </div>
 {/snippet}
 
-{#snippet exerciseResult(row: SummaryExerciseRow, setLabel: string = '', showName = false)}
+{#snippet exerciseResult(row: SummaryExerciseRow, setLabel: string = '', showName = false, cell = false)}
   <div
     class="summary-row {depthClass(rowDepth(row))}"
     class:summary-row--compact={setLabel !== ''}
+    class:summary-row--cell={cell}
     class:summary-row--unresolved={row.unresolved}
   >
     {#if row.unresolved}<DataError props={summaryRowErrorProps(row)} />{/if}
@@ -75,7 +86,8 @@
       {#if setLabel !== ''}
         <span class="exercise-row__set-label">{setLabel}</span>
       {/if}
-      {#if showName || setLabel === ''}
+      <!-- A cell never names its own exercise: the matrix row header does. -->
+      {#if showName || (setLabel === '' && !cell)}
         {#if row.href !== undefined}
           <a class="summary-row__name" href={row.href}>{row.label}</a>
         {:else}
@@ -109,14 +121,49 @@
         </div>
         <p class="set-table__label">{block.table.label}</p>
         <div class="set-table__rows summary-set__rows">
-          {#each block.table.rounds as round (round.key)}
-            {#if round.label !== ''}
-              <p class="set-table__round">{round.label}</p>
-            {/if}
-            {#each round.rows as row (`${row.key}-${row.attempt}`)}
-              {@render exerciseResult(row, `Set ${row.setNumber}`, block.table.multiExercise)}
+          {#if block.table.matrix !== undefined}
+            {@const matrix = block.table.matrix}
+            <div class="set-matrix__scroll" role="region" aria-label="{block.table.title} sets">
+              <table class="set-matrix">
+                <thead class="set-matrix__head">
+                  <tr>
+                    <th class="set-matrix__corner" scope="col">Exercise</th>
+                    {#each matrix.columns as column (column.key)}
+                      <th class="set-matrix__col" scope="col">{column.label}</th>
+                    {/each}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each matrix.rows as line (line.key)}
+                    <tr class="set-matrix__line">
+                      <th class="set-matrix__name" scope="row">
+                        <span class="set-matrix__exercise">{line.label}</span>
+                      </th>
+                      {#each line.cells as cell (cell.key)}
+                        <td class="set-matrix__cell">
+                          {#if cell.rows.length === 0}
+                            <span class="set-matrix__empty">&mdash;</span>
+                          {/if}
+                          {#each cell.rows as row (row.key)}
+                            {@render exerciseResult(row, cell.rows.length > 1 ? attemptText(row) : '', false, true)}
+                          {/each}
+                        </td>
+                      {/each}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {:else}
+            {#each block.table.rounds as round (round.key)}
+              {#if round.label !== ''}
+                <p class="set-table__round">{round.label}</p>
+              {/if}
+              {#each round.rows as row (`${row.key}-${row.attempt}`)}
+                {@render exerciseResult(row, `Set ${row.setNumber}`, block.table.multiExercise)}
+              {/each}
             {/each}
-          {/each}
+          {/if}
         </div>
       </section>
     {:else}

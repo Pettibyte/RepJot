@@ -49,21 +49,54 @@ export interface OverviewNodeModel {
   unresolved?: boolean;
 }
 
+/**
+ * One read-only set row.
+ *
+ * `nodeId` is the programmed node's id. The matrix needs it: two nodes can
+ * name the same exercise, and a line keyed by the name would merge them.
+ */
+export type OverviewSetRow = OverviewNodeModel & {
+  setNumber: number;
+  nodeId: string;
+};
+
 /** One round inside a compact read-only set list. */
 export interface OverviewSetRound {
   key: string;
   /** The round divider, for example `Round 2`. Empty when nothing needs telling apart. */
   label: string;
-  rows: Array<OverviewNodeModel & { setNumber: number }>;
+  rows: OverviewSetRow[];
+}
+
+/** One set column in a read-only circuit matrix. */
+export interface OverviewSetColumn {
+  key: string;
+  label: string;
+  setNumber: number;
+}
+
+/** One exercise line across the read-only set columns. */
+export interface OverviewSetMatrixRow {
+  key: string;
+  label: string;
+  /** The prescription this exercise asks for, read from its first cell. */
+  prescriptionText: string;
+  /** Cells aligned to `OverviewSetMatrix.columns` by index. */
+  cells: Array<{ key: string; prescriptionText: string }>;
+}
+
+/** The exercise-by-set grid a read-only circuit renders as. */
+export interface OverviewSetMatrix {
+  columns: OverviewSetColumn[];
+  rows: OverviewSetMatrixRow[];
 }
 
 /**
  * One compact read-only set list.
  *
  * A single-exercise block reads as that exercise's set list. A circuit
- * block reads as one table whose rows are grouped by round, so the round
- * order the workout programmed stays visible and every row names its own
- * exercise.
+ * block reads as a matrix: one exercise per row, one set per column, so
+ * the exercise name and its prescription are stated once per row.
  */
 export interface OverviewSetTable {
   key: string;
@@ -76,7 +109,49 @@ export interface OverviewSetTable {
   /** The table body. The rounds are the source of truth for the rows. */
   rounds: OverviewSetRound[];
   /** Every row in draw order. Derived from `rounds`; never set apart from it. */
-  rows: Array<OverviewNodeModel & { setNumber: number }>;
+  rows: OverviewSetRow[];
+  /** The exercise-by-set grid. Present only when `multiExercise` is true. */
+  matrix?: OverviewSetMatrix;
+}
+
+/**
+ * Turn round-grouped read-only rows into the exercise-by-set grid.
+ *
+ * Exercise order comes from the first round, so the matrix keeps the order
+ * the workout programmed.
+ */
+function buildOverviewMatrix(rounds: OverviewSetRound[]): OverviewSetMatrix {
+  const columns: OverviewSetColumn[] = rounds.map((round, index) => ({
+    key: round.key,
+    label: `Set ${round.rows[0]?.setNumber ?? index + 1}`,
+    setNumber: round.rows[0]?.setNumber ?? index + 1
+  }));
+
+  const order: string[] = [];
+  for (const row of rounds[0]?.rows ?? []) {
+    if (!order.includes(row.nodeId)) order.push(row.nodeId);
+  }
+
+  const rows: OverviewSetMatrixRow[] = order.map((nodeId) => {
+    const firstRound = rounds
+      .flatMap((round) => round.rows)
+      .find((row) => row.nodeId === nodeId);
+    const base = firstRound?.prescriptionText ?? '';
+    return {
+      key: nodeId,
+      label: firstRound?.label ?? '',
+      prescriptionText: base,
+      cells: rounds.map((round) => {
+        const row = round.rows.find((candidate) => candidate.nodeId === nodeId);
+        return {
+          key: `${nodeId}@${round.key}`,
+          prescriptionText: row?.prescriptionText ?? ''
+        };
+      })
+    };
+  });
+
+  return { columns, rows };
 }
 
 /** One visual block in the semantic overview document. */
@@ -388,7 +463,8 @@ export function buildOverviewModel(
               label: `Round ${set}`,
               rows: roundRows.map((row) => ({
                 ...row.model,
-                setNumber: row.setNumber ?? set
+                setNumber: row.setNumber ?? set,
+                nodeId: row.source.id
               }))
             }));
           const tableRowsFlat = rounds.flatMap((round) => round.rows);
@@ -413,7 +489,8 @@ export function buildOverviewModel(
                 depth: entry.model.depth,
                 multiExercise,
                 rounds,
-                rows: tableRowsFlat
+                rows: tableRowsFlat,
+                ...(multiExercise ? { matrix: buildOverviewMatrix(rounds) } : {})
               }
             });
           }

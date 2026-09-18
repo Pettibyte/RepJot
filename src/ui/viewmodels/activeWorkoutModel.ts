@@ -255,15 +255,61 @@ export interface ActiveSetRound {
   rows: ActiveExerciseRow[];
 }
 
+/** One set column in a circuit matrix. The rounds run left to right. */
+export interface ActiveSetColumn {
+  key: string;
+  /** The column heading, `Set 1`. */
+  label: string;
+  setNumber: number;
+}
+
+/** One matrix cell: the rows one exercise recorded in one round. */
+export interface ActiveSetCell {
+  key: string;
+  /**
+   * Every row that lands in this cell.
+   *
+   * One row is the common case. More than one appears when the set holds
+   * several attempts, or a unilateral exercise recorded left and right.
+   */
+  rows: ActiveExerciseRow[];
+  /**
+   * The prescription for this round, shown only when it differs from the
+   * exercise heading. An `iterations` override makes one exercise ask for
+   * a different target in a later round. REQUIREMENTS 10.2, 10.3.
+   */
+  prescriptionText?: string;
+}
+
+/** One exercise line across the set columns. */
+export interface ActiveSetMatrixRow {
+  /** The exercise node key. Unique inside one table. */
+  key: string;
+  exerciseName: string;
+  /** The prescription this exercise asks for, read from its first cell. */
+  prescriptionText: string;
+  lastTime: LastTimeModel;
+  /** Cells aligned to `ActiveSetMatrix.columns` by index. */
+  cells: ActiveSetCell[];
+}
+
+/** The exercise-by-set grid a circuit renders as. */
+export interface ActiveSetMatrix {
+  columns: ActiveSetColumn[];
+  rows: ActiveSetMatrixRow[];
+}
+
 /**
  * One repeated block shown as a set table.
  *
  * A block that repeats one exercise reads as that exercise's set list, so
  * the table carries the exercise name and one Last Time badge. A block that
- * repeats several exercises reads as a circuit, so the table carries the
- * container name, each round gets a divider, and every row names its own
- * exercise. `rows` is the same rows in draw order, derived from `rounds`,
- * so a caller that does not care about rounds reads one flat list.
+ * repeats several exercises reads as a circuit, and renders as a matrix:
+ * one exercise per row, one set per column. The matrix is the compact form,
+ * because the exercise name and the prescription are stated once per row
+ * instead of once per set. `rows` is the same rows in draw order, derived
+ * from `rounds`, so a caller that does not care about rounds reads one
+ * flat list.
  */
 export interface ActiveSetTable {
   key: string;
@@ -277,8 +323,54 @@ export interface ActiveSetTable {
   rounds: ActiveSetRound[];
   /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: ActiveExerciseRow[];
+  /** The exercise-by-set grid. Present only when `multiExercise` is true. */
+  matrix?: ActiveSetMatrix;
   /** The Last Time for the one exercise. Absent on a circuit table. */
   lastTime?: LastTimeModel;
+}
+
+/**
+ * Turn round-grouped rows into the exercise-by-set grid.
+ *
+ * Exercise order comes from the first round, so the matrix keeps the order
+ * the workout programmed. A cell holds every row that exercise recorded in
+ * that round, which is more than one row when attempts or sides exist.
+ */
+function buildMatrix(rounds: ActiveSetRound[]): ActiveSetMatrix {
+  const columns: ActiveSetColumn[] = rounds.map((round, index) => ({
+    key: round.key,
+    label: `Set ${round.rows[0]?.setNumber ?? index + 1}`,
+    setNumber: round.rows[0]?.setNumber ?? index + 1
+  }));
+
+  const order: string[] = [];
+  for (const row of rounds[0]?.rows ?? []) {
+    if (!order.includes(row.nodeKey)) order.push(row.nodeKey);
+  }
+
+  const rows: ActiveSetMatrixRow[] = order.map((nodeKey) => {
+    const cells: ActiveSetCell[] = rounds.map((round, index) => ({
+      key: `${nodeKey}@${round.key}`,
+      rows: round.rows.filter((row) => row.nodeKey === nodeKey)
+    }));
+    const first = cells.find((cell) => cell.rows.length > 0)?.rows[0];
+    const base = first?.prescriptionText ?? '';
+    // State the prescription once on the row. A round that asks for
+    // something different says so on its own cell.
+    for (const cell of cells) {
+      const text = cell.rows[0]?.prescriptionText ?? '';
+      if (text !== '' && text !== base) cell.prescriptionText = text;
+    }
+    return {
+      key: nodeKey,
+      exerciseName: first?.exerciseName ?? '',
+      prescriptionText: base,
+      lastTime: first?.lastTime ?? { kind: 'none', text: '' },
+      cells
+    };
+  });
+
+  return { columns, rows };
 }
 
 /** One child of a group: a nested container or an exercise row. */
@@ -677,6 +769,8 @@ function buildDisplayBlocks(
       multiExercise,
       rounds,
       rows: tableRows,
+      // A circuit renders as the exercise-by-set grid.
+      ...(multiExercise ? { matrix: buildMatrix(rounds) } : {}),
       // A circuit names several exercises, so one exercise's Last Time
       // would read as the whole table's. The badge rides each row instead.
       ...(multiExercise ? {} : { lastTime: first.lastTime })

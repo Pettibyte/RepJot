@@ -905,6 +905,129 @@
   border-top: 1px solid var(--color-outline-variant);
 }
 
+/* Circuit matrix ------------------------------------------------------
+ *
+ * One exercise per row, one set per column. The exercise column wraps so a
+ * long name costs height instead of pushing the grid sideways, and the
+ * wrapper scrolls sideways when the set columns cannot all fit. Sticky
+ * positioning is banned under src/ui by the style guard and ARCHITECTURE
+ * C-04, so the exercise column travels with the grid.
+ */
+.set-matrix__scroll {
+  margin-top: var(--space-3);
+  overflow-x: auto;
+}
+
+/* The scroll region is focusable, so a keyboard user can reach it. */
+.set-matrix__scroll:focus-visible {
+  outline: var(--border-weight) solid var(--color-primary);
+  outline-offset: var(--space-1);
+}
+
+.set-matrix {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.set-matrix__head {
+  border-bottom: var(--border-weight) solid var(--color-primary);
+}
+
+.set-matrix__corner,
+.set-matrix__col {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  padding-bottom: var(--space-2);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.set-matrix__corner {
+  min-width: 132px;
+  padding-right: var(--space-3);
+}
+
+.set-matrix__col {
+  min-width: 148px;
+  padding-left: var(--space-2);
+}
+
+/* The exercise column. It wraps, so a long name never forces the grid out. */
+.set-matrix__name {
+  border-bottom: 1px solid var(--color-outline-variant);
+  font-weight: var(--weight-regular);
+  padding-bottom: var(--space-3);
+  padding-right: var(--space-3);
+  padding-top: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  width: 1%;
+}
+
+.set-matrix__exercise {
+  color: var(--color-on-surface);
+  display: block;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-1);
+}
+
+.set-matrix__rx {
+  color: var(--color-on-surface-variant);
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  margin-bottom: var(--space-1);
+}
+
+.set-matrix__cell {
+  border-bottom: 1px solid var(--color-outline-variant);
+  padding: var(--space-2);
+  vertical-align: top;
+}
+
+/* A round that asks for a different target than the row states. */
+.set-matrix__cell-rx {
+  color: var(--color-primary);
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  margin-bottom: var(--space-1);
+}
+
+.set-matrix__empty {
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-data);
+}
+
+/* A row drawn inside a matrix cell. It carries no head, because the row
+   header and the column header already state what it is. */
+.exercise-row--cell {
+  border-left: 0;
+  padding-bottom: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.exercise-row--cell + .exercise-row--cell {
+  border-top: 1px solid var(--color-outline-variant);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.exercise-row__cell-label {
+  color: var(--color-on-surface-variant);
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  margin-bottom: var(--space-1);
+  text-transform: uppercase;
+}
+
 /* Round divider inside a circuit table. It separates one pass of the block
    from the next without opening a new document section. */
 .set-table__round {

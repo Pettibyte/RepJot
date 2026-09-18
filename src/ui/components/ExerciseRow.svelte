@@ -46,6 +46,8 @@
     compact = false,
     setLabel = '',
     showExerciseName = false,
+    cell = false,
+    cellLabel = '',
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -89,6 +91,20 @@
      * one heading cannot name several exercises.
      */
     showExerciseName?: boolean;
+    /**
+     * Draw this row as one cell of the circuit matrix.
+     *
+     * The matrix states the exercise name in the row header and the set
+     * number in the column header, so a cell carries neither. It keeps the
+     * inputs, the status control, and the attempt marker, because those
+     * belong to the row and nowhere else.
+     */
+    cell?: boolean;
+    /**
+     * The attempt or side marker a cell shows when it holds one of several
+     * rows for the same exercise and set.
+     */
+    cellLabel?: string;
     /**
      * Runs on every keystroke in a value field.
      *
@@ -216,13 +232,22 @@
 <div
   class="exercise-row"
   class:exercise-row--compact={compact}
+  class:exercise-row--cell={cell}
   class:exercise-row--unresolved={row.unresolved}
   class:exercise-row--missing={missing}
   id={domId('row')}
   role="group"
-  aria-label={row.exerciseName}
+  aria-label={cell
+    ? cellLabel === ''
+      ? row.exerciseName
+      : `${row.exerciseName}, ${cellLabel}`
+    : row.exerciseName}
 >
-  {#if compact}
+  {#if cell}
+    {#if cellLabel !== ''}
+      <span class="exercise-row__cell-label">{cellLabel}</span>
+    {/if}
+  {:else if compact}
     <div class="exercise-row__set-head">
       <span class="exercise-row__set-label">{setLabel}</span>
       {#if showExerciseName}
@@ -243,7 +268,9 @@
     </div>
   {/if}
 
-  {#if row.prescriptionText !== ''}
+  <!-- A cell skips the prescription: the matrix row header states it, and a
+       round that asks for something different says so on the cell. -->
+  {#if row.prescriptionText !== '' && !cell}
     <p class="exercise-row__prescription">{row.prescriptionText}</p>
   {/if}
 

@@ -178,8 +178,10 @@
             "id": "conditioning",
             "type": "container",
             "name": "500 m Row for Time",
-            "strategy": "sequence",
-            "strategyConfig": {},
+            "strategy": "rounds",
+            "strategyConfig": {
+              "rounds": 1
+            },
             "resultCapture": {
               "mode": "scored",
               "scoreType": "intervals",

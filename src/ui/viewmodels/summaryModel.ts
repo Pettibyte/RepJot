@@ -204,13 +204,35 @@ export interface SummarySetRound {
   rows: Array<SummaryExerciseRow & { setNumber: number }>;
 }
 
+/** One set column in a recorded circuit matrix. */
+export interface SummarySetColumn {
+  key: string;
+  label: string;
+  setNumber: number;
+}
+
+/** One exercise line across the recorded set columns. */
+export interface SummarySetMatrixRow {
+  /** The programmed exercise node identity, not a result key. */
+  key: string;
+  label: string;
+  href?: string;
+  /** Cells aligned to `SummarySetMatrix.columns` by index. */
+  cells: Array<{ key: string; rows: Array<SummaryExerciseRow & { setNumber: number }> }>;
+}
+
+/** The exercise-by-set grid a recorded circuit renders as. */
+export interface SummarySetMatrix {
+  columns: SummarySetColumn[];
+  rows: SummarySetMatrixRow[];
+}
+
 /**
  * Repeated recorded sets shown under one heading.
  *
  * A single-exercise block reads as that exercise's set list. A circuit
- * block reads as one table whose rows are grouped by round, so the round
- * order the workout programmed stays visible and every row names its own
- * exercise.
+ * block reads as a matrix: one exercise per row, one set per column, so
+ * the exercise name is stated once per row.
  */
 export interface SummarySetTable {
   key: string;
@@ -223,6 +245,54 @@ export interface SummarySetTable {
   rounds: SummarySetRound[];
   /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: Array<SummaryExerciseRow & { setNumber: number }>;
+  /** The exercise-by-set grid. Present only when `multiExercise` is true. */
+  matrix?: SummarySetMatrix;
+}
+
+/**
+ * Turn round-grouped recorded rows into the exercise-by-set grid.
+ *
+ * Exercise order comes from the first round. A line is one programmed
+ * exercise node, keyed by that node's id: the result key carries the side
+ * and the attempt too, so keying a line by it would split one exercise
+ * across several lines. A cell then holds every row that exercise recorded
+ * in that round, which is more than one row when attempts or sides exist.
+ */
+function buildSummaryMatrix(rounds: SummarySetRound[]): SummarySetMatrix {
+  const columns: SummarySetColumn[] = rounds.map((round, index) => ({
+    key: round.key,
+    label: `Set ${round.rows[0]?.setNumber ?? index + 1}`,
+    setNumber: round.rows[0]?.setNumber ?? index + 1
+  }));
+
+  /** The programmed exercise node id for one recorded row. */
+  const lineKey = (row: SummaryExerciseRow): string => {
+    const leaf = row.path[row.path.length - 1];
+    return leaf === undefined ? row.exerciseId : leaf.nodeId;
+  };
+
+  const order: string[] = [];
+  const meta = new Map<string, { label: string; href?: string }>();
+  for (const row of rounds[0]?.rows ?? []) {
+    const key = lineKey(row);
+    if (!order.includes(key)) order.push(key);
+    if (!meta.has(key)) meta.set(key, { label: row.label, href: row.href });
+  }
+
+  const rows: SummarySetMatrixRow[] = order.map((key) => {
+    const info = meta.get(key) ?? { label: key };
+    return {
+      key,
+      label: info.label,
+      href: info.href,
+      cells: rounds.map((round) => ({
+        key: `${key}@${round.key}`,
+        rows: round.rows.filter((row) => lineKey(row) === key)
+      }))
+    };
+  });
+
+  return { columns, rows };
 }
 
 export type SummaryDisplayBlock =
@@ -720,7 +790,8 @@ function buildDisplayBlocks(
           label: first.setType === 'warmup' ? 'Warmup sets' : 'Working sets',
           multiExercise,
           rounds,
-          rows: tableRows
+          rows: tableRows,
+          ...(multiExercise ? { matrix: buildSummaryMatrix(rounds) } : {})
         }
       });
       continue;

@@ -318,3 +318,111 @@ describe('formatPrescription', () => {
     expect(formatPrescription({ loadStrategy: { type: 'top_set_then_back_off' } })).toBe('');
   });
 });
+
+describe('overview circuit matrix', () => {
+  const circuitWorkout = {
+    id: 'ov-circuit',
+    name: 'Circuit Day',
+    root: {
+      id: 'ov-root',
+      type: 'container',
+      strategy: 'sequence',
+      strategyConfig: {},
+      children: [
+        {
+          id: 'ov-sup',
+          type: 'container',
+          name: 'Superset A',
+          strategy: 'rounds',
+          strategyConfig: { rounds: 3 },
+          children: [
+            {
+              id: 'ov-squat',
+              type: 'exercise',
+              exerciseId: 'back-squat',
+              stimulus: 'hypertrophy',
+              setType: 'working',
+              prescription: { reps: 10 }
+            },
+            {
+              id: 'ov-bench',
+              type: 'exercise',
+              exerciseId: 'back-squat',
+              stimulus: 'hypertrophy',
+              setType: 'working',
+              prescription: { reps: 8 }
+            }
+          ]
+        }
+      ]
+    }
+  } as never;
+
+  test('a circuit table carries one line per exercise and one cell per set', () => {
+    const model = buildOverviewModel(circuitWorkout, {
+      exerciseById: exerciseIndex(exercises())
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const table = model.blocks.find(
+      (block) => block.kind === 'set-table' && block.table.title === 'Superset A'
+    );
+    expect(table?.kind).toBe('set-table');
+    if (table?.kind !== 'set-table') return;
+
+    const matrix = table.table.matrix;
+    expect(matrix).toBeDefined();
+    expect(matrix!.columns.map((column) => column.label)).toEqual(['Set 1', 'Set 2', 'Set 3']);
+    // One line per exercise, in the programmed order.
+    expect(matrix!.rows.length).toBe(2);
+    for (const line of matrix!.rows) {
+      expect(line.cells.length).toBe(3);
+      for (const cell of line.cells) expect(cell.prescriptionText).not.toBe('');
+    }
+  });
+
+  test('a single-exercise table has no matrix', () => {
+    const singleWorkout = {
+      id: 'ov-single',
+      name: 'Single Day',
+      root: {
+        id: 'ov-sroot',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'ov-sonly',
+            type: 'container',
+            name: 'Squat',
+            strategy: 'rounds',
+            strategyConfig: { rounds: 3 },
+            children: [
+              {
+                id: 'ov-se1',
+                type: 'exercise',
+                exerciseId: 'back-squat',
+                stimulus: 'hypertrophy',
+                setType: 'working',
+                prescription: { reps: 10 }
+              }
+            ]
+          }
+        ]
+      }
+    } as never;
+
+    const model = buildOverviewModel(singleWorkout, {
+      exerciseById: exerciseIndex(exercises())
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const table = model.blocks.find((block) => block.kind === 'set-table');
+    expect(table?.kind).toBe('set-table');
+    if (table?.kind !== 'set-table') return;
+    expect(table.table.multiExercise).toBe(false);
+    expect(table.table.matrix).toBeUndefined();
+  });
+});

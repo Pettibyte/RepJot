@@ -73,6 +73,14 @@
     const set = row.setNumber ?? index + 1;
     return row.attempt > 1 ? `Set ${set} · Attempt ${row.attempt}` : `Set ${set}`;
   }
+
+  /** The marker a cell shows when it holds more than one row. */
+  function attemptLabel(row: ActiveExerciseRow): string {
+    const parts: string[] = [];
+    if (row.attempt > 1) parts.push(`Attempt ${row.attempt}`);
+    if (row.side !== 'both') parts.push(row.side === 'left' ? 'Left' : row.side === 'right' ? 'Right' : 'Alternating');
+    return parts.join(' · ');
+  }
 </script>
 
 <section class="set-table" aria-labelledby={`${idPrefix}-${table.key}-title`}>
@@ -85,38 +93,121 @@
   </div>
   <p class="set-table__label">{table.label}</p>
 
-  <div class="set-table__rows">
-    {#each table.rounds as round (round.key)}
-      {#if round.label !== ''}
-        <p class="set-table__round">{round.label}</p>
-      {/if}
-      {#each round.rows as row, index (row.key)}
-        <ExerciseRow
-          {row}
-          compact
-          setLabel={rowLabel(row, index)}
-          showExerciseName={table.multiExercise}
-          overrides={rowOverrides[row.key] ?? {}}
-          fieldErrors={rowFieldErrors[row.key] ?? {}}
-          missing={missingRowKeys.includes(row.key)}
-          status={statusDrafts[row.key]}
-          side={sideDrafts[row.key]}
-          startingSide={startingSideDrafts[row.key] ?? 'left'}
-          effortChoice={effortDrafts[row.key]}
-          {idPrefix}
-          {disabled}
-          {busy}
-          onfieldchange={(dimension, value) => onfieldchange?.(row.key, dimension, value)}
-          onfieldblur={(dimension) => onfieldblur?.(row.key, dimension)}
-          onstatuschange={(status) => onstatuschange?.(row.key, status)}
-          onreasonchange={(reason) => onreasonchange?.(row.key, reason)}
-          onunitchange={(dimension) => onunitchange?.(row.key, dimension)}
-          onsidechange={(nextSide) => onsidechange?.(row.key, nextSide)}
-          onstartingchange={(next) => onstartingchange?.(row.key, next)}
-          oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
-          onaddattempt={() => onaddattempt?.(row.key)}
-        />
+  {#if table.matrix !== undefined}
+    {@const matrix = table.matrix}
+    <!--
+      The circuit matrix. One exercise per row, one set per column. The
+      exercise name and its prescription are stated once per row instead of
+      once per set, which is what makes the circuit compact.
+
+      The wrapper scrolls sideways when the set columns cannot all fit. The
+      exercise column wraps instead of forcing width, so a long name costs
+      height rather than pushing the grid out. Sticky positioning is banned
+      under src/ui by the style guard and ARCHITECTURE C-04, so the exercise
+      column scrolls with the grid.
+
+      The wrapper carries no tab stop. Every cell holds a focusable input, so
+      a keyboard user reaches all of the content by tabbing, and the wrapper
+      scrolls with that focus.
+    -->
+    <div class="set-matrix__scroll" role="region" aria-label="{table.title} sets">
+      <table class="set-matrix">
+        <thead class="set-matrix__head">
+          <tr>
+            <th class="set-matrix__corner" scope="col">Exercise</th>
+            {#each matrix.columns as column (column.key)}
+              <th class="set-matrix__col" scope="col">{column.label}</th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each matrix.rows as line (line.key)}
+            <tr class="set-matrix__line">
+              <th class="set-matrix__name" scope="row">
+                <span class="set-matrix__exercise">{line.exerciseName}</span>
+                {#if line.prescriptionText !== ''}
+                  <span class="set-matrix__rx">{line.prescriptionText}</span>
+                {/if}
+                <LastTimeBadge lastTime={line.lastTime} exerciseName={line.exerciseName} />
+              </th>
+              {#each line.cells as cell, columnIndex (cell.key)}
+                <td class="set-matrix__cell">
+                  {#if cell.prescriptionText !== undefined}
+                    <span class="set-matrix__cell-rx">{cell.prescriptionText}</span>
+                  {/if}
+                  {#each cell.rows as row, rowIndex (row.key)}
+                    <ExerciseRow
+                      {row}
+                      compact
+                      cell
+                      cellLabel={cell.rows.length > 1
+                        ? attemptLabel(row)
+                        : ''}
+                      overrides={rowOverrides[row.key] ?? {}}
+                      fieldErrors={rowFieldErrors[row.key] ?? {}}
+                      missing={missingRowKeys.includes(row.key)}
+                      status={statusDrafts[row.key]}
+                      side={sideDrafts[row.key]}
+                      startingSide={startingSideDrafts[row.key] ?? 'left'}
+                      effortChoice={effortDrafts[row.key]}
+                      {idPrefix}
+                      {disabled}
+                      {busy}
+                      onfieldchange={(dimension, value) => onfieldchange?.(row.key, dimension, value)}
+                      onfieldblur={(dimension) => onfieldblur?.(row.key, dimension)}
+                      onstatuschange={(status) => onstatuschange?.(row.key, status)}
+                      onreasonchange={(reason) => onreasonchange?.(row.key, reason)}
+                      onunitchange={(dimension) => onunitchange?.(row.key, dimension)}
+                      onsidechange={(nextSide) => onsidechange?.(row.key, nextSide)}
+                      onstartingchange={(next) => onstartingchange?.(row.key, next)}
+                      oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
+                      onaddattempt={() => onaddattempt?.(row.key)}
+                    />
+                  {/each}
+                  {#if cell.rows.length === 0}
+                    <span class="set-matrix__empty">\u2014</span>
+                  {/if}
+                </td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else}
+    <div class="set-table__rows">
+      {#each table.rounds as round (round.key)}
+        {#if round.label !== ''}
+          <p class="set-table__round">{round.label}</p>
+        {/if}
+        {#each round.rows as row, index (row.key)}
+          <ExerciseRow
+            {row}
+            compact
+            setLabel={rowLabel(row, index)}
+            showExerciseName={table.multiExercise}
+            overrides={rowOverrides[row.key] ?? {}}
+            fieldErrors={rowFieldErrors[row.key] ?? {}}
+            missing={missingRowKeys.includes(row.key)}
+            status={statusDrafts[row.key]}
+            side={sideDrafts[row.key]}
+            startingSide={startingSideDrafts[row.key] ?? 'left'}
+            effortChoice={effortDrafts[row.key]}
+            {idPrefix}
+            {disabled}
+            {busy}
+            onfieldchange={(dimension, value) => onfieldchange?.(row.key, dimension, value)}
+            onfieldblur={(dimension) => onfieldblur?.(row.key, dimension)}
+            onstatuschange={(status) => onstatuschange?.(row.key, status)}
+            onreasonchange={(reason) => onreasonchange?.(row.key, reason)}
+            onunitchange={(dimension) => onunitchange?.(row.key, dimension)}
+            onsidechange={(nextSide) => onsidechange?.(row.key, nextSide)}
+            onstartingchange={(next) => onstartingchange?.(row.key, next)}
+            oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
+            onaddattempt={() => onaddattempt?.(row.key)}
+          />
+        {/each}
       {/each}
-    {/each}
-  </div>
+    </div>
+  {/if}
 </section>

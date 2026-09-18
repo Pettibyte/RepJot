@@ -69,22 +69,59 @@
           </div>
           <p class="set-table__label">{block.table.label}</p>
           <div class="overview-set__rows">
-            {#each block.table.rounds as round (round.key)}
-              {#if round.label !== ''}
-                <p class="set-table__round">{round.label}</p>
-              {/if}
-              {#each round.rows as row, index (`${round.key}-${index}`)}
-                <div class="overview-set__row">
-                  <span class="exercise-row__set-label">Set {row.setNumber}</span>
-                  {#if block.table.multiExercise}
-                    <span class="overview-set__name">{row.label}</span>
-                  {/if}
-                  {#if row.prescriptionText !== ''}
-                    <span class="overview-set__prescription">{row.prescriptionText}</span>
-                  {/if}
-                </div>
+            {#if block.table.matrix !== undefined}
+              {@const matrix = block.table.matrix}
+              <div class="set-matrix__scroll" role="region" aria-label="{block.table.title} sets">
+                <table class="set-matrix">
+                  <thead class="set-matrix__head">
+                    <tr>
+                      <th class="set-matrix__corner" scope="col">Exercise</th>
+                      {#each matrix.columns as column (column.key)}
+                        <th class="set-matrix__col" scope="col">{column.label}</th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each matrix.rows as line (line.key)}
+                      <tr class="set-matrix__line">
+                        <th class="set-matrix__name" scope="row">
+                          <span class="set-matrix__exercise">{line.label}</span>
+                          {#if line.prescriptionText !== ''}
+                            <span class="set-matrix__rx">{line.prescriptionText}</span>
+                          {/if}
+                        </th>
+                        {#each line.cells as cell (cell.key)}
+                          <td class="set-matrix__cell">
+                            {#if cell.prescriptionText !== ''}
+                              <span class="set-matrix__cell-rx">{cell.prescriptionText}</span>
+                            {:else}
+                              <span class="set-matrix__empty">&mdash;</span>
+                            {/if}
+                          </td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {:else}
+              {#each block.table.rounds as round (round.key)}
+                {#if round.label !== ''}
+                  <p class="set-table__round">{round.label}</p>
+                {/if}
+                {#each round.rows as row, index (`${round.key}-${index}`)}
+                  <div class="overview-set__row">
+                    <span class="exercise-row__set-label">Set {row.setNumber}</span>
+                    {#if block.table.multiExercise}
+                      <span class="overview-set__name">{row.label}</span>
+                    {/if}
+                    {#if row.prescriptionText !== ''}
+                      <span class="overview-set__prescription">{row.prescriptionText}</span>
+                    {/if}
+                  </div>
+                {/each}
               {/each}
-            {/each}
+            {/if}
           </div>
         </section>
       </li>
