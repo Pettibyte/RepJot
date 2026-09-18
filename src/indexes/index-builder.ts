@@ -426,7 +426,7 @@ function insertSorted<T>(list: T[], item: T, comparator: (a: T, b: T) => number)
 }
 
 /** Remove every trace of one session. Used before a re-index of the same `id`. */
-function dropSessionFrom(index: MutableIndex, sessionId: string): void {
+export function dropSessionFrom(index: MutableIndex, sessionId: string): void {
   const existing = index.sessionsById.get(sessionId);
   if (existing === undefined) return;
 
@@ -462,7 +462,7 @@ function dropSessionFrom(index: MutableIndex, sessionId: string): void {
  * `extendHistory` pushes an older one out instead of being rejected for a full
  * list. Kindle memory budget, specs "Loading policy".
  */
-function refreshCappedViews(index: MutableIndex): void {
+export function refreshCappedViews(index: MutableIndex): void {
   const limit = index.recentLimit;
   const bySessionStart = occurrenceComparator(index.sessionStarts);
 

@@ -1005,6 +1005,10 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       return shardDoc;
     });
     void handle.synced.catch(() => undefined);
+    // `extendHistory` is additive because it loads older shards. A deletion
+    // must also remove the session from the live read model, or History keeps
+    // rendering the stale summary until the next refresh.
+    lookup.removeSession(sessionId);
     shardBySession.delete(sessionId);
   }
 

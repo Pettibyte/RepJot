@@ -17,7 +17,9 @@ import type { UnresolvedResult } from '../validation/issues';
 import {
   buildIndex,
   DEFAULT_RECENT_LIMIT,
+  dropSessionFrom,
   mergeShards,
+  refreshCappedViews,
   RECENT_SESSION_CAP,
   sortUnresolved,
   type MutableIndex
@@ -91,6 +93,8 @@ export interface LookupService {
   extendHistory(newShards: ResultsShard[]): void;
   /** Merge unresolved entries into the live index. */
   extendUnresolved(entries: readonly UnresolvedResult[]): void;
+  /** Remove one deleted session from every live history view. */
+  removeSession(sessionId: string): void;
   /** The underlying index, for a caller that needs a map directly. */
   readonly index: DataIndex;
 }
@@ -180,6 +184,11 @@ export function createLookupService(input: {
 
     extendUnresolved: (entries: readonly UnresolvedResult[]) => {
       index.unresolvedResults = sortUnresolved([...index.unresolvedResults, ...entries]);
+    },
+
+    removeSession: (sessionId: string) => {
+      dropSessionFrom(index, sessionId);
+      refreshCappedViews(index);
     },
 
     get index() {
