@@ -27,7 +27,7 @@
         "abdominals",
         "triceps"
       ],
-      "laterality": "bilateral",
+      "laterality": "unilateral",
       "measurements": [
         {
           "dimension": "reps",
@@ -374,9 +374,10 @@
       "laterality": "bilateral",
       "measurements": [
         {
-          "dimension": "reps",
+          "dimension": "duration",
           "compatibleUnits": [
-            "reps"
+            "second",
+            "minute"
           ]
         }
       ],
