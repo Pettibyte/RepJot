@@ -107,12 +107,27 @@ const SIDE_ORDER: readonly Side[] = ['left', 'right', 'both', 'alternating'];
 const DEFAULT_SIDE: Side = 'both';
 
 /**
- * The sides a unilateral exercise may record.
+ * Every side a side-selectable row may record.
  *
- * A bilateral exercise records `both` only, so the side control never offers
- * a side the exercise cannot perform. REQUIREMENT 11.5.
+ * Reachable through `sideSelectable`, which decides which exercises get it.
+ * REQUIREMENT 11.5.
  */
-export const UNILATERAL_SIDES: readonly Side[] = ['left', 'right', 'both', 'alternating'];
+export const ALL_SIDES: readonly Side[] = ['left', 'right', 'both', 'alternating'];
+
+/**
+ * Whether one exercise can be recorded side by side.
+ *
+ * This is a capability, not a default. It answers "could this be done one
+ * side at a time?", which is a different question from "how is it normally
+ * performed?". The default side still comes from `laterality`; the side
+ * control's visibility comes from here. REQUIREMENT 9.10, 11.5.
+ */
+export function sideSelectable(
+  exercise: Pick<Exercise, 'laterality' | 'loadSemantics'> | undefined
+): boolean {
+  if (exercise === undefined) return false;
+  return exercise.laterality === 'unilateral' || exercise.loadSemantics === 'per_implement';
+}
 
 /** Label per reason code. Mirrors the `$defs.reasonCode` vocabulary. */
 const REASON_LABELS: Record<string, string> = {
@@ -231,8 +246,22 @@ export interface ActiveExerciseRow {
    * REQUIREMENTS 6.10, 11.17.
    */
   storedValues?: ResultValues;
-  /** True when the exercise measures one side, so the side control shows. */
+  /**
+   * True when the exercise is normally performed one side at a time.
+   *
+   * This drives the **default** side of a new row, not the control's
+   * visibility. See `sideSelectable` for that. REQUIREMENT 9.10.
+   */
   unilateral: boolean;
+  /**
+   * True when the row may record a side other than `both`.
+   *
+   * Wider than `unilateral`: a bilateral exercise loaded per implement also
+   * qualifies, because its two sides can be worked apart. The side control
+   * shows on this, so a bilateral exercise keeps its `both` default while
+   * still letting the user switch. REQUIREMENT 11.5.
+   */
+  sideSelectable: boolean;
   /**
    * The effort the prescription asks for, when it asks for one.
    *
@@ -970,6 +999,7 @@ export function buildActiveWorkoutModel(
         compactPathLabel: node.compactPathLabel,
         hasSavedResult: result !== null,
         unilateral: exercise?.laterality === 'unilateral',
+        sideSelectable: sideSelectable(exercise),
         setNumber: setNumberFor(node.path),
         latestAttempt: true
       };
@@ -1117,12 +1147,12 @@ export function cellRepsTotal(
 /**
  * The sides one row may record.
  *
- * A unilateral exercise offers every side. A bilateral exercise records
- * `both` only, so the control never offers a side the exercise cannot
- * perform. REQUIREMENT 11.5.
+ * A side-selectable row offers every side. Any other row records `both` only,
+ * so the control never offers a side the exercise cannot perform.
+ * REQUIREMENT 11.5.
  */
-export function sidesForRow(row: Pick<ActiveExerciseRow, 'unilateral'>): Side[] {
-  return row.unilateral ? [...UNILATERAL_SIDES] : [DEFAULT_SIDE];
+export function sidesForRow(row: Pick<ActiveExerciseRow, 'sideSelectable'>): Side[] {
+  return row.sideSelectable ? [...ALL_SIDES] : [DEFAULT_SIDE];
 }
 
 /** The label for one unit. Re-exported so a row needs only one import. */

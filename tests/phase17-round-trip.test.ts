@@ -356,12 +356,17 @@ describe('V-2 round trip: a unilateral edit stays on its own side', () => {
     const screen = await makeScreen({ workout: workoutTree, session: openSession() });
 
     const row = screen.rowByNode('press');
-    expect(row.side).toBe('both');
+    // `kb-press` is unilateral, so a new row defaults to `alternating`.
+    // REQUIREMENT 9.10. The point of this test is that the row writes the
+    // key it shows, whatever that side is.
     expect(row.unilateral).toBe(true);
+    expect(row.side).toBe('alternating');
+    const blankKey = row.resultKey;
 
     screen.typeValue(row.key, 'reps', '9');
     await screen.blurValue(row.key);
-    expect(screen.session().exerciseResults['root/press|both|1']?.values?.reps?.value).toBe(9);
+    expect(screen.session().exerciseResults[`${blankKey}`]?.values?.reps?.value).toBe(9);
+    expect(screen.session().exerciseResults['root/press|both|1']).toBeUndefined();
   });
 });
 
@@ -677,14 +682,37 @@ describe('alternating display', () => {
 });
 
 describe('side options', () => {
-  test('a unilateral row offers every side', async () => {
+  test('a side-selectable row offers every side', async () => {
     const { sidesForRow } = await import('../src/ui/viewmodels/activeWorkoutModel');
-    expect(sidesForRow({ unilateral: true })).toEqual(['left', 'right', 'both', 'alternating']);
+    expect(sidesForRow({ sideSelectable: true })).toEqual([
+      'left',
+      'right',
+      'both',
+      'alternating'
+    ]);
   });
 
-  test('a bilateral row records both only', async () => {
+  test('a row that cannot split sides records both only', async () => {
     const { sidesForRow } = await import('../src/ui/viewmodels/activeWorkoutModel');
-    expect(sidesForRow({ unilateral: false })).toEqual(['both']);
+    expect(sidesForRow({ sideSelectable: false })).toEqual(['both']);
+  });
+
+  test('sideSelectable follows laterality or per-implement load', async () => {
+    const { sideSelectable } = await import('../src/ui/viewmodels/activeWorkoutModel');
+    const shape = (
+      laterality: 'bilateral' | 'unilateral',
+      loadSemantics: 'total' | 'per_implement'
+    ) => ({ laterality, loadSemantics });
+
+    // Unilateral qualifies on its own, whatever the load.
+    expect(sideSelectable(shape('unilateral', 'total'))).toBe(true);
+    expect(sideSelectable(shape('unilateral', 'per_implement'))).toBe(true);
+    // Bilateral qualifies when each side carries its own weight.
+    expect(sideSelectable(shape('bilateral', 'per_implement'))).toBe(true);
+    // One shared load has no per-side story.
+    expect(sideSelectable(shape('bilateral', 'total'))).toBe(false);
+    // An exercise the bundle does not hold offers nothing.
+    expect(sideSelectable(undefined)).toBe(false);
   });
 });
 

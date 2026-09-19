@@ -201,7 +201,7 @@
   {
     "id": "Incline_Dumbbell_Curl",
     "movementPattern": "flexion",
-    "laterality": "bilateral",
+    "laterality": "unilateral",
     "loadSemantics": "per_implement",
     "measurements": [
       {

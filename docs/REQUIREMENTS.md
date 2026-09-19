@@ -197,7 +197,8 @@ An exercise has:
 - **9.7** One or more controlled measurement dimensions and compatible units.
 - **9.8** Load semantics that distinguish total load, per-implement load, added load, and assistance.
 - **9.9** Exercises have no lifecycle flag. Presence in the allowlist controls selection. See Section 6.13.
-- **9.10** A new result for a unilateral exercise defaults to `alternating` side. A new result for a bilateral exercise defaults to `both`. The user can change the side before saving. This does not change prescription or stored-result semantics.
+- **9.10** A new result defaults its side from the exercise's `laterality`: `alternating` for a unilateral exercise, `both` for a bilateral exercise. This does not change prescription or stored-result semantics.
+- **9.11** Side choice is a capability, not a consequence of the default. The side control is reachable when the exercise is unilateral **or** when it loads per implement, because either shape lets the sides be worked apart. A bilateral exercise with one shared load -- a barbell, a bodyweight hold, a rowing machine -- records `both` only and shows no side control.
 
 ## 10.0 Workout Features
 
@@ -227,7 +228,7 @@ An exercise has:
 - **11.2** Blank input means no result. Zero repetitions means an actual unsuccessful attempt.
 - **11.3** Exercise results store `workoutId`, direct `exerciseId`, and the workout-node reference.
 - **11.4** Skipped and incomplete results use a controlled reason-code enum. Free text belongs in notes.
-- **11.5** Unilateral results identify `left`, `right`, `both`, or `alternating` sides.
+- **11.5** A side-selectable result identifies `left`, `right`, `both`, or `alternating` sides. See Section 9.11 for which exercises are side-selectable.
 - **11.6** `left` and `right` store repetitions for that side. `both` stores simultaneous repetitions. `alternating` stores total repetitions across sides and identifies the starting side.
 - **11.7** The UI shows alternating results as total and per-side values, such as `10 total / 5 each` or `9 total / 5 left / 4 right`.
 - **11.8** Results store explicit units.

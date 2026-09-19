@@ -61,6 +61,7 @@ function row(overrides: Partial<ActiveExerciseRow> = {}): ActiveExerciseRow {
     compactPathLabel: '',
     hasSavedResult: false,
     unilateral: false,
+    sideSelectable: false,
     ...overrides
   };
 }
@@ -183,7 +184,7 @@ describe('the container controls lock with no session service', () => {
 describe('the side and effort controls honor disabled', () => {
   test('a unilateral side control locks its chips', () => {
     const markup = renderHtml(SideControl, {
-      row: row({ unilateral: true, side: 'left' }),
+      row: row({ unilateral: true, sideSelectable: true, side: 'left' }),
       side: 'alternating',
       disabled: true
     });
@@ -198,10 +199,18 @@ describe('the side and effort controls honor disabled', () => {
     expect(markup).toContain('aria-pressed="true"');
   });
 
-  test('a bilateral row shows no side control at all', () => {
-    const markup = renderHtml(SideControl, { row: row({ unilateral: false }), side: 'both' });
+  test('a row that cannot split sides shows no side control at all', () => {
+    const markup = renderHtml(SideControl, { row: row({ sideSelectable: false }), side: 'both' });
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('class="pill chip');
+  });
+
+  test('a bilateral per-implement row still shows the side control', () => {
+    // A bilateral exercise loaded one weight per side can still be worked
+    // one side at a time, so the choice stays reachable. REQUIREMENT 11.5.
+    const markup = renderHtml(SideControl, { row: row({ sideSelectable: true }), side: 'both' });
+    expect(markup).toContain('Side');
+    expect(markup).toContain('Alternate');
   });
 
   test('the effort control locks its chips', () => {
