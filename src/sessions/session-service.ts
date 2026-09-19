@@ -29,6 +29,7 @@ import { logDiagnostic } from '../diagnostics/diagnostic-log';
 import { AppError } from '../domain/errors';
 import {
   containerResultKey,
+  defaultSideForLaterality,
   encodePath,
   exerciseResultKey,
   sameSegment,
@@ -1111,12 +1112,17 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       const nodeKey = `${workout.id}|${node.node.id}`;
       const bucket = recorded.get(encodePath(node.path));
 
-      const exerciseName =
-        staticData.exerciseById.get(node.node.exerciseId)?.name ?? node.node.exerciseId;
+      const exercise = staticData.exerciseById.get(node.node.exerciseId);
+      const exerciseName = exercise?.name ?? node.node.exerciseId;
+      // The row key must be the key the row model gives this exercise. A
+      // unilateral exercise with no result sits on the `alternating` default,
+      // so a hardcoded `both` names a row that does not exist and the
+      // "needs attention" badge never appears on it. Requirement 9.10.
+      const defaultSide = defaultSideForLaterality(exercise?.laterality);
       if (bucket === undefined || bucket.length === 0) {
         items.push({
           nodeKey,
-          rowKey: `${workout.id}|${encodePath(node.path)}|both|1`,
+          rowKey: `${workout.id}|${encodePath(node.path)}|${defaultSide}|1`,
           exerciseName,
           compactPathLabel: node.compactPathLabel,
           reason: 'no_result'
@@ -1127,7 +1133,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
         if (result.status === 'completed') continue;
         items.push({
           nodeKey,
-          rowKey: `${workout.id}|${encodePath(node.path)}|${result.side ?? 'both'}|${result.attempt ?? 1}`,
+          rowKey: `${workout.id}|${encodePath(node.path)}|${result.side ?? defaultSide}|${result.attempt ?? 1}`,
           exerciseName,
           compactPathLabel: node.compactPathLabel,
           reason: result.status === 'skipped' ? 'skipped' : 'incomplete'

@@ -65,7 +65,7 @@
     wholeCountError
   } from './activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
-  import { containerResultKey, encodePath, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
+  import { containerResultKey, defaultSideForLaterality, encodePath, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
   import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
   import { convert, formatEditable } from '../../units/conversion';
 
@@ -244,6 +244,19 @@
   }
 
   /**
+   * The key a blank row takes once the model recreates it.
+   *
+   * A blank row holds no result, so its side is the exercise default, not the
+   * draft side. Reading the default from laterality keeps this key equal to the
+   * key the row model builds; otherwise the drafts land under a key no row
+   * reads and the typed value disappears.
+   */
+  function blankRowKey(row: ActiveExerciseRow): string {
+    const exercise = $services.staticData?.exerciseById.get(row.exerciseId);
+    return rowKeyWithSide(row, defaultSideForLaterality(exercise?.laterality));
+  }
+
+  /**
    * Persist one row, moving the stored result when the row's identity moved.
    *
    * The side is part of the result key. A plain save writes under the
@@ -289,10 +302,11 @@
         await service.queueFlush();
       }
       // A saved result follows its side-based key. A blank row does not: the
-      // model recreates it on the default `both` key, while its side remains
-      // draft data until the user records a value.
+      // model recreates it on the exercise's default side, while its side
+      // remains draft data until the user records a value. The default comes
+      // from laterality, so a unilateral blank row returns to `alternating`.
       const nextRowKey = isBlankExerciseDraft(draft)
-        ? rowKeyWithSide(row, 'both')
+        ? blankRowKey(row)
         : rowKeyWithSide(row, draftSide);
       migrateRowDrafts(row.key, nextRowKey);
       session = await service.load(sessionId);

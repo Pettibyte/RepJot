@@ -34,6 +34,7 @@ import type {
 } from '../../domain/enums';
 import {
   containerResultKey,
+  defaultSideForLaterality,
   encodePath,
   exerciseResultKey,
   sameSegment,
@@ -959,8 +960,7 @@ export function buildActiveWorkoutModel(
     for (const result of occurrences) {
       // A saved result is authoritative. An empty unilateral row starts as
       // alternating; bilateral and unresolved rows start as both.
-      const side = result?.side ??
-        (exercise?.laterality === 'unilateral' ? 'alternating' : DEFAULT_SIDE);
+      const side = result?.side ?? defaultSideForLaterality(exercise?.laterality);
       const attempt = result?.attempt ?? 1;
       const values = result?.values;
       // A recorded result carries its own `exerciseId`, read from the result

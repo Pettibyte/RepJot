@@ -142,6 +142,10 @@ describe('buildActiveWorkoutModel fields', () => {
     const row = rowByExercise(model, 'Kettlebell Press');
     expect(row.side).toBe('alternating');
     expect(row.startingSide).toBe('left');
+    // The missing-work report must name this same key, or the row never shows
+    // its "needs attention" badge. Requirement 9.10. This fixture node sits
+    // under a no-child-detail complex, so assert the row key, not `resultKey`.
+    expect(row.key).toContain('|alternating|');
 
     const session = emptySession();
     const saved = {

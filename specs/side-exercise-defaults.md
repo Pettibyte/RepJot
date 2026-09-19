@@ -104,3 +104,23 @@ A change to this area must verify that:
 6. a bilateral `per_implement` row shows the side control and keeps its `both`
    default; and
 7. a bilateral `total` row shows no side control.
+
+## One source for the default key
+
+The missing-work report and the row model must name the same key for an
+unrecorded set. The report drives the **Needs attention** badge by matching its
+reported row key against the row keys the model builds. A hardcoded `both` in
+the report names a key no unilateral row owns, so the badge stays hidden and
+Finish Workout offers no prompt for that work.
+
+`defaultSideForLaterality()` in `src/domain/execution-path.ts` owns the default.
+Three callers use it:
+
+| Caller | Use |
+| --- | --- |
+| `buildActiveWorkoutModel` | Side of a row with no saved result. |
+| `reportMissingWork` | Row key of a prescribed set with no result. |
+| `ActiveWorkoutScreen.blankRowKey` | Where a cleared row's drafts land. |
+
+A new caller must read the default from that function rather than write a side
+literal.

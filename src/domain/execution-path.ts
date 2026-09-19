@@ -10,7 +10,7 @@
 import { AppError } from './errors';
 import { assertIdSafe } from './ids';
 import type { ContainerNode, Workout, WorkoutNode } from './types';
-import type { Side } from './enums';
+import type { Laterality, Side } from './enums';
 
 /** One step of an execution path: a node ID and, for a repeated container, its iteration. */
 export interface PathSegment {
@@ -128,6 +128,22 @@ export function sameSegment(
 ): boolean {
   if (one === undefined || other === undefined) return false;
   return one.nodeId === other.nodeId && (one.iteration ?? 1) === (other.iteration ?? 1);
+}
+
+/**
+ * The side a new, unsaved exercise row records. Requirement 9.10.
+ *
+ * A unilateral exercise defaults to `alternating`, so the typed repetition
+ * count is the total across both sides. A bilateral exercise defaults to
+ * `both`. An exercise the bundle does not resolve also defaults to `both`,
+ * because the app must not guess a side it cannot confirm.
+ *
+ * Every caller that names the side of a row with no saved result goes through
+ * this function. The missing-work report and the row model must agree, or a
+ * missing unilateral set reports a key no row owns and its badge never shows.
+ */
+export function defaultSideForLaterality(laterality: Laterality | undefined): Side {
+  return laterality === 'unilateral' ? 'alternating' : DEFAULT_SIDE;
 }
 
 /**
