@@ -41,7 +41,8 @@
     onsidechange,
     onstartingchange,
     oneffortchange,
-    onaddattempt
+    onaddattempt,
+    ondeleteattempt
   }: {
     table: ActiveSetTable;
     idPrefix?: string;
@@ -67,6 +68,7 @@
     onstartingchange?: (rowKey: string, startingSide: StartingSide) => void;
     oneffortchange?: (rowKey: string, choice: string) => void;
     onaddattempt?: (rowKey: string) => void;
+    ondeleteattempt?: (rowKey: string) => void;
   } = $props();
 
   /**
@@ -211,6 +213,7 @@
                       onstartingchange={(next) => onstartingchange?.(row.key, next)}
                       oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
                       onaddattempt={() => onaddattempt?.(row.key)}
+                      ondeleteattempt={() => ondeleteattempt?.(row.key)}
                     />
                   {/each}
                   {#if cell.rows.length === 0}
@@ -266,6 +269,7 @@
             onstartingchange={(next) => onstartingchange?.(row.key, next)}
             oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
             onaddattempt={() => onaddattempt?.(row.key)}
+            ondeleteattempt={() => ondeleteattempt?.(row.key)}
           />
         {/each}
       {/each}

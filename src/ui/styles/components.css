@@ -1233,6 +1233,12 @@
   margin-top: var(--space-2);
 }
 
+/* The attempt buttons sit side by side. Spacing is a margin, not flexbox
+   `gap`, because Kindle Silk 80 reports as Chrome 80 and has no gap. */
+.exercise-row__attempt .btn + .btn {
+  margin-left: var(--space-2);
+}
+
 /* Side control ------------------------------------------------------- */
 
 /* What the number in the reps field means. Sits under the field it

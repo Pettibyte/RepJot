@@ -44,7 +44,8 @@
     onsidechange = undefined,
     onstartingchange = undefined,
     oneffortchange = undefined,
-    onaddattempt = undefined
+    onaddattempt = undefined,
+    ondeleteattempt = undefined
   }: {
     /** Groups and rows in prescriptive draw order. */
     blocks?: DrawBlock[];
@@ -81,6 +82,7 @@
     onstartingchange?: ((rowKey: string, startingSide: StartingSide) => void) | undefined;
     oneffortchange?: ((rowKey: string, choice: string) => void) | undefined;
     onaddattempt?: ((rowKey: string) => void) | undefined;
+    ondeleteattempt?: ((rowKey: string) => void) | undefined;
   } = $props();
 
   /** Deepest distinct indent before the compact path takes over. */
@@ -140,6 +142,7 @@
           {onstartingchange}
           {oneffortchange}
           {onaddattempt}
+          {ondeleteattempt}
         />
       </div>
     {:else}
@@ -167,6 +170,7 @@
           onstartingchange={(next) => onstartingchange?.(block.row.key, next)}
           oneffortchange={(choice) => oneffortchange?.(block.row.key, choice)}
           onaddattempt={() => onaddattempt?.(block.row.key)}
+          ondeleteattempt={() => ondeleteattempt?.(block.row.key)}
         />
       </div>
     {/if}

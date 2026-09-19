@@ -342,3 +342,20 @@ export function choiceForEffort(outcome: EffortOutcome | undefined): string {
 export function canAddAttempt(row: ActiveExerciseRow): boolean {
   return row.recordable && !row.unresolved && row.hasSavedResult && row.resultKey !== null && row.latestAttempt !== false;
 }
+
+/**
+ * Whether the row may delete its own attempt.
+ *
+ * Any recorded attempt can be removed, so this is `canAddAttempt` without
+ * the newest-attempt rule: a middle attempt is exactly the case the user
+ * deletes. The row must still hold a saved result, because there is
+ * nothing to remove otherwise.
+ *
+ * Deleting the only attempt leaves no result, and the model recreates the
+ * blank row. That reads as clearing the set, which is the honest outcome:
+ * the recorded work is gone.
+ * REQUIREMENT 19.9.
+ */
+export function canDeleteAttempt(row: ActiveExerciseRow): boolean {
+  return row.recordable && !row.unresolved && row.hasSavedResult && row.resultKey !== null;
+}

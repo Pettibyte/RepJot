@@ -106,6 +106,14 @@ export interface SessionService {
   saveExerciseResults(sessionId: string, drafts: ExerciseResultDraft[]): Promise<void>;
   /** Open one more attempt on the exercise `fromKey` names. Returns the new key. */
   addAttempt(sessionId: string, fromKey: string): Promise<string>;
+  /**
+   * Delete one attempt and close the gap it leaves.
+   *
+   * Attempts on a path and side stay a contiguous run from 1, so the
+   * attempts above the deleted one move down by one. The whole change is
+   * one shard edit.
+   */
+  deleteAttempt(sessionId: string, key: string): Promise<void>;
   /** Append one completed cycle under an AMRAP container and rescore it. */
   addAmrapRound(sessionId: string, containerPath: PathSegment[]): Promise<void>;
   /** Record or replace one container score. */
@@ -758,6 +766,54 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     return newKey as string;
   }
 
+  async function deleteAttempt(sessionId: string, key: string): Promise<void> {
+    const session = await load(sessionId);
+    const existing = session.exerciseResults[key];
+    if (existing === undefined) {
+      throw new AppError(
+        'invalid_document',
+        { reason: 'unknown_result', sessionId, resultKey: key },
+        'There is no attempt to delete.'
+      );
+    }
+    const workout = workoutFor(session);
+    const encodedPath = encodePath(existing.executionPath);
+    const side = existing.side ?? 'both';
+    const removedAttempt = existing.attempt ?? 1;
+
+    await editNow(sessionId, (next: Session): void => {
+      delete next.exerciseResults[key];
+
+      // Close the gap. Attempts above the deleted one move down by one, in
+      // ascending order, so each destination key was just vacated by the
+      // move before it and no write ever lands on a live key. Renumbering
+      // keeps the run contiguous: a list of 1, 3, 4 would otherwise read
+      // as two attempts that went missing.
+      const above: Array<{ key: string; attempt: number }> = [];
+      for (const [candidateKey, result] of Object.entries(next.exerciseResults)) {
+        if (encodePath(result.executionPath) !== encodedPath) continue;
+        if ((result.side ?? 'both') !== side) continue;
+        const attempt = result.attempt ?? 1;
+        if (attempt <= removedAttempt) continue;
+        above.push({ key: candidateKey, attempt });
+      }
+      above.sort((a, b): number => (a.attempt < b.attempt ? -1 : 1));
+
+      for (const entry of above) {
+        const result = next.exerciseResults[entry.key];
+        if (result === undefined) continue;
+        const moved = clone(result);
+        moved.attempt = entry.attempt - 1;
+        delete next.exerciseResults[entry.key];
+        next.exerciseResults[
+          exerciseResultKey(moved.executionPath, moved.side ?? 'both', moved.attempt)
+        ] = moved;
+      }
+
+      rescoreAncestors(next, workout, existing.executionPath);
+    });
+  }
+
   async function addAmrapRound(
     sessionId: string,
     containerPath: PathSegment[]
@@ -1175,6 +1231,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     moveExerciseResult,
     saveExerciseResults,
     addAttempt,
+    deleteAttempt,
     addAmrapRound,
     setContainerScore,
     expandAggregate,

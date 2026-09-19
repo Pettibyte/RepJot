@@ -28,7 +28,7 @@
   import Button from './Button.svelte';
   import type { ActiveExerciseRow } from '../viewmodels/activeWorkoutModel';
   import { fieldDisplay, repsMeaning } from '../viewmodels/activeWorkoutModel';
-  import { canAddAttempt, choiceForEffort } from '../screens/activeWorkoutActions';
+  import { canAddAttempt, canDeleteAttempt, choiceForEffort } from '../screens/activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
   import { REASON_OPTIONS, STATUS_OPTIONS } from './exercise-row-options';
 
@@ -59,7 +59,8 @@
     onsidechange = undefined,
     onstartingchange = undefined,
     oneffortchange = undefined,
-    onaddattempt = undefined
+    onaddattempt = undefined,
+    ondeleteattempt = undefined
   }: {
     /** The row to draw. */
     row: ActiveExerciseRow;
@@ -143,6 +144,14 @@
      * empty fields. REQUIREMENT 19.9.
      */
     onaddattempt?: (() => void) | undefined;
+    /**
+     * Deletes this attempt and closes the gap it leaves.
+     *
+     * Attempts above the deleted one move down one number, so the visible
+     * list stays a run from 1. Destructive: the recorded values for this
+     * attempt are gone.
+     */
+    ondeleteattempt?: (() => void) | undefined;
   } = $props();
 
   const domId = (suffix: string): string => `${idPrefix}-${row.key}-${suffix}`;
@@ -227,11 +236,18 @@
     />
   {/if}
 
-  {#if canAddAttempt(row)}
+  {#if canAddAttempt(row) || canDeleteAttempt(row)}
     <div class="exercise-row__attempt">
-      <Button variant="secondary" disabled={disabled || busy} onclick={() => onaddattempt?.()}>
-        {busy ? 'Opening…' : 'Add another attempt'}
-      </Button>
+      {#if canAddAttempt(row)}
+        <Button variant="secondary" disabled={disabled || busy} onclick={() => onaddattempt?.()}>
+          {busy ? 'Opening…' : 'Add another attempt'}
+        </Button>
+      {/if}
+      {#if canDeleteAttempt(row)}
+        <Button variant="danger" disabled={disabled || busy} onclick={() => ondeleteattempt?.()}>
+          {busy ? 'Deleting…' : 'Delete attempt'}
+        </Button>
+      {/if}
     </div>
   {/if}
 {/snippet}

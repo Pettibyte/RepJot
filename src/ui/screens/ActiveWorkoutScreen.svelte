@@ -65,7 +65,7 @@
     wholeCountError
   } from './activeWorkoutActions';
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
-  import { containerResultKey, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
+  import { containerResultKey, encodePath, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
   import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
   import { convert, formatEditable } from '../../units/conversion';
 
@@ -223,6 +223,19 @@
     moveEntry(startingSideDrafts, fromKey, toKey);
     moveEntry(effortDrafts, fromKey, toKey);
     moveEntry(openRowPanels, fromKey, toKey);
+  }
+
+  /** Drop every per-row draft entry for one key. */
+  function dropRowDrafts(rowKey: string): void {
+    delete overrides[rowKey];
+    delete editedFields[rowKey];
+    delete fieldErrors[rowKey];
+    delete statusDrafts[rowKey];
+    delete reasonDrafts[rowKey];
+    delete sideDrafts[rowKey];
+    delete startingSideDrafts[rowKey];
+    delete effortDrafts[rowKey];
+    delete openRowPanels[rowKey];
   }
 
   /** The row key this row takes when it records `side`. */
@@ -442,6 +455,69 @@
     effortDrafts[rowKey] = choice;
     const row = rowsByKey.get(rowKey);
     if (row !== undefined) queueAndFlush(row);
+  }
+
+  /**
+   * Delete one attempt and move the drafts that the renumber touches.
+   *
+   * The service closes the gap the delete leaves: every attempt above the
+   * deleted one moves down one number. Row keys carry the attempt, so each
+   * moved attempt also takes a new key, and a draft left under the old key
+   * stops reaching the row on screen. Walk the moved attempts in the same
+   * ascending order the service used, so each destination key is already
+   * free, and drop the deleted row's drafts with it.
+   *
+   * The delete runs against the stored key, not the draft side, so a side
+   * the user has not saved yet cannot move the target.
+   * REQUIREMENT 19.9.
+   */
+  async function onDeleteAttempt(rowKey: string): Promise<void> {
+    const anchor = rowsByKey.get(rowKey);
+    if (anchor === undefined || anchor.resultKey === null || busy) return;
+    busy = true;
+    try {
+      await enqueueRowChange(anchor, async (row) => {
+        const service = sessionService;
+        if (service === null || session === null || row.resultKey === null) return;
+        const sessionId = session.id;
+        const storedKey = row.resultKey;
+        await service.queueFlush();
+
+        // Read the stored attempt before the delete, so the renumber knows
+        // which attempts sit above it.
+        const before = await service.load(sessionId);
+        const target = before.exerciseResults[storedKey];
+        if (target === undefined) return;
+        const encodedTarget = encodePath(target.executionPath);
+        const side = target.side ?? 'both';
+        const removedAttempt = target.attempt ?? 1;
+        const above: number[] = [];
+        for (const result of Object.values(before.exerciseResults)) {
+          if (encodePath(result.executionPath) !== encodedTarget) continue;
+          if ((result.side ?? 'both') !== side) continue;
+          const attempt = result.attempt ?? 1;
+          if (attempt > removedAttempt) above.push(attempt);
+        }
+        above.sort((a, b): number => (a < b ? -1 : 1));
+
+        await service.deleteAttempt(sessionId, storedKey);
+
+        // Carry the drafts down after the write succeeded, so a refused
+        // delete leaves them where they were.
+        dropRowDrafts(row.key);
+        for (const attempt of above) {
+          migrateRowDrafts(
+            `${row.keyBase}|${side}|${attempt}`,
+            `${row.keyBase}|${side}|${attempt - 1}`
+          );
+        }
+
+        session = await service.load(sessionId);
+        await tick();
+      });
+    } finally {
+      busy = false;
+    }
   }
 
   /**
@@ -984,6 +1060,7 @@
       onstartingchange={(rowKey, next) => void onStartingChange(rowKey, next)}
       oneffortchange={onEffortChange}
       onaddattempt={(rowKey) => void onAddAttempt(rowKey)}
+      ondeleteattempt={(rowKey) => void onDeleteAttempt(rowKey)}
     />
 
     {#if errorText !== ''}

@@ -559,6 +559,145 @@ describe('addAttempt', () => {
   });
 });
 
+describe('deleteAttempt', () => {
+  /** The one exercise path these tests record against. */
+  const PATH = [
+    { nodeId: 'root' },
+    { nodeId: 'squat-sets', iteration: 1 },
+    { nodeId: 'back-squat-set' }
+  ];
+
+  /** Record one completed attempt with a distinct rep count. */
+  async function putAttempt(
+    service: SessionService,
+    attempt: number,
+    reps: number,
+    side = 'both'
+  ): Promise<void> {
+    await service.saveExerciseResult(SESSION_KEY, {
+      workoutId: WORKOUT_ID,
+      exerciseId: 'back-squat',
+      executionPath: PATH,
+      side,
+      attempt,
+      status: 'completed',
+      values: { reps: { value: reps, unit: 'reps' } }
+    } as ExerciseResultDraft);
+  }
+
+  /** The side's attempts as `attempt:reps`, ascending. */
+  function attemptList(coordinator: Coordinator, side = 'both'): string[] {
+    return Object.entries(workingSession(coordinator).exerciseResults)
+      .filter(
+        ([key, result]) =>
+          key.includes('squat-sets:1/back-squat-set') &&
+          (result.side ?? 'both') === side
+      )
+      .map(([, result]) => `${result.attempt ?? 1}:${result.values?.reps?.value ?? 0}`)
+      .sort((a, b) => Number(a.split(':')[0]) - Number(b.split(':')[0]));
+  }
+
+  test('deleting a middle attempt renumbers the run contiguous', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    await putAttempt(service, 1, 5);
+    await putAttempt(service, 2, 7);
+    await putAttempt(service, 3, 9);
+    expect(attemptList(coordinator)).toEqual(['1:5', '2:7', '3:9']);
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'both', 2));
+
+    // The gap closes: 5, 7, 9 becomes 5, 9. A stored `1, 3` would read as
+    // an attempt that went missing.
+    expect(attemptList(coordinator)).toEqual(['1:5', '2:9']);
+    expect(
+      Object.keys(workingSession(coordinator).exerciseResults).filter((key) =>
+        key.includes('squat-sets:1/back-squat-set')
+      ).sort()
+    ).toEqual([
+      exerciseResultKey(PATH, 'both', 1),
+      exerciseResultKey(PATH, 'both', 2)
+    ]);
+  });
+
+  test('deleting the newest attempt leaves the others alone', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    await putAttempt(service, 1, 5);
+    await putAttempt(service, 2, 7);
+    await putAttempt(service, 3, 9);
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'both', 3));
+
+    expect(attemptList(coordinator)).toEqual(['1:5', '2:7']);
+  });
+
+  test('deleting the first attempt pulls the whole run down', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    await putAttempt(service, 1, 5);
+    await putAttempt(service, 2, 7);
+    await putAttempt(service, 3, 9);
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'both', 1));
+
+    expect(attemptList(coordinator)).toEqual(['1:7', '2:9']);
+  });
+
+  test('the renumber is scoped to the deleted attempt side', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    await putAttempt(service, 1, 5, 'left');
+    await putAttempt(service, 2, 7, 'left');
+    await putAttempt(service, 1, 11, 'right');
+    await putAttempt(service, 2, 13, 'right');
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'left', 1));
+
+    expect(attemptList(coordinator, 'left')).toEqual(['1:7']);
+    expect(attemptList(coordinator, 'right')).toEqual(['1:11', '2:13']);
+  });
+
+  test('deleting the only attempt leaves no result', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    await putAttempt(service, 1, 5);
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'both', 1));
+
+    expect(attemptList(coordinator)).toEqual([]);
+  });
+
+  test('a renumbered result key still matches its own value', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    for (const [attempt, reps] of [[1, 5], [2, 7], [3, 9], [4, 11]] as const) {
+      await putAttempt(service, attempt, reps);
+    }
+
+    await service.deleteAttempt(SESSION_KEY, exerciseResultKey(PATH, 'both', 3));
+
+    // The validator rejects a key that disagrees with its value, so a
+    // renumber that moved the number but not the key would fail the write.
+    // Reaching here with the expected list proves both agree.
+    expect(attemptList(coordinator)).toEqual(['1:5', '2:7', '3:11']);
+    for (const [key, result] of Object.entries(
+      workingSession(coordinator).exerciseResults
+    )) {
+      if (!key.includes('squat-sets:1/back-squat-set')) continue;
+      expect(key).toBe(
+        exerciseResultKey(
+          result.executionPath,
+          result.side ?? 'both',
+          result.attempt ?? 1
+        )
+      );
+    }
+  });
+
+  test('deleting an unknown attempt is refused', async () => {
+    const { service } = await makeEmptySetup();
+    const kind = await kindOfRejection(() =>
+      service.deleteAttempt(SESSION_KEY, 'nope|both|1')
+    );
+    expect(kind).toBe('invalid_document');
+  });
+});
+
 describe('addAmrapRound', () => {
   test('adds one cycle and recomputes the container score', async () => {
     const { service, coordinator } = await makeEmptySetup();
