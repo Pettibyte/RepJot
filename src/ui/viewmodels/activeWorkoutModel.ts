@@ -928,7 +928,10 @@ export function buildActiveWorkoutModel(
       groupsByKey.size > 0 ? [...groupsByKey.values()] : [null];
 
     for (const result of occurrences) {
-      const side = result?.side ?? 'both';
+      // A saved result is authoritative. An empty unilateral row starts as
+      // alternating; bilateral and unresolved rows start as both.
+      const side = result?.side ??
+        (exercise?.laterality === 'unilateral' ? 'alternating' : DEFAULT_SIDE);
       const attempt = result?.attempt ?? 1;
       const values = result?.values;
       // A recorded result carries its own `exerciseId`, read from the result
@@ -981,6 +984,9 @@ export function buildActiveWorkoutModel(
       }
       if (result?.effort !== undefined) row.effort = result.effort;
       if (result?.startingSide !== undefined) row.startingSide = result.startingSide;
+      // Alternating rows need a starting side before their first save. This
+      // remains a UI default rather than exercise reference data.
+      else if (result === null && side === 'alternating') row.startingSide = 'left';
       if (result?.reasonCode !== undefined) row.reasonCode = result.reasonCode;
       if (values !== undefined) row.storedValues = values;
 

@@ -186,7 +186,7 @@ An exercise contains classification, instructions, and supported measurements.
 | `movementPattern` | enum | yes | REP JOT movement pattern. |
 | `primaryMuscles` | enum[] | yes | Primary muscles. |
 | `secondaryMuscles` | enum[] | yes | Secondary muscles. The array can be empty. |
-| `laterality` | enum | yes | Normal bilateral or unilateral execution. |
+| `laterality` | enum | yes | Normal bilateral or unilateral execution. A new result defaults to `alternating` for unilateral and `both` for bilateral. |
 | `measurements` | nonempty measurement support[] | yes | One or more unique dimensions that prescriptions and results can use. Each entry has at least one compatible unit. |
 | `loadSemantics` | enum | yes | Meaning of recorded load. A bare allowlist entry defaults to `total`. |
 

@@ -20,7 +20,7 @@ import {
 } from '../src/ui/viewmodels/activeWorkoutModel';
 import type { ActiveExerciseRow } from '../src/ui/viewmodels/activeWorkoutModel';
 import type { Side } from '../src/domain/enums';
-import { encodePath } from '../src/domain/execution-path';
+import { encodePath, exerciseResultKey } from '../src/domain/execution-path';
 import type { Exercise, ResultsShard, Session, Workout } from '../src/domain/types';
 import { createLookupService, type LookupService } from '../src/indexes/lookup-service';
 import { createPreferenceService } from '../src/preferences/preference-service';
@@ -32,6 +32,7 @@ import {
   exercises,
   nestedSession,
   nestedWorkout,
+  workout as semanticWorkout,
   validSession,
   validShard
 } from './fixtures/semantic';
@@ -125,6 +126,54 @@ function rowByExercise(model: { rows: ActiveExerciseRow[] }, name: string): Acti
 }
 
 describe('buildActiveWorkoutModel fields', () => {
+  test('derives an alternating side for a new unilateral row', () => {
+    const list = exercises();
+    const workout = semanticWorkout();
+    const h = harness(list, [workout]);
+
+    const model = buildActiveWorkoutModel({
+      workout,
+      session: emptySession(),
+      staticData: h.staticData,
+      preferences: h.preferences.service,
+      lookup: h.lookup
+    });
+
+    const row = rowByExercise(model, 'Kettlebell Press');
+    expect(row.side).toBe('alternating');
+    expect(row.startingSide).toBe('left');
+
+    const session = emptySession();
+    const saved = {
+      workoutId: WORKOUT_ID,
+      exerciseId: 'kb-press',
+      executionPath: row.path,
+      side: 'both' as const,
+      attempt: 1,
+      status: 'completed' as const,
+      values: { reps: { value: 8, unit: 'reps' as const } }
+    };
+    session.exerciseResults[exerciseResultKey(saved.executionPath, saved.side, saved.attempt)] = saved;
+    const savedModel = buildActiveWorkoutModel({
+      workout,
+      session,
+      staticData: h.staticData,
+      preferences: h.preferences.service,
+      lookup: h.lookup
+    });
+    expect(rowByExercise(savedModel, 'Kettlebell Press').side).toBe('both');
+
+    const bilateral = harness();
+    const bilateralModel = buildActiveWorkoutModel({
+      workout: bilateral.workout,
+      session: emptySession(),
+      staticData: bilateral.staticData,
+      preferences: bilateral.preferences.service,
+      lookup: bilateral.lookup
+    });
+    expect(rowByExercise(bilateralModel, 'Back Squat').side).toBe('both');
+  });
+
   test('one field per measurement dimension, in the fixed dimension order', () => {
     const h = harness();
     const model = buildActiveWorkoutModel({

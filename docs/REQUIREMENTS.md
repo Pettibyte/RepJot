@@ -197,6 +197,7 @@ An exercise has:
 - **9.7** One or more controlled measurement dimensions and compatible units.
 - **9.8** Load semantics that distinguish total load, per-implement load, added load, and assistance.
 - **9.9** Exercises have no lifecycle flag. Presence in the allowlist controls selection. See Section 6.13.
+- **9.10** A new result for a unilateral exercise defaults to `alternating` side. A new result for a bilateral exercise defaults to `both`. The user can change the side before saving. This does not change prescription or stored-result semantics.
 
 ## 10.0 Workout Features
 
