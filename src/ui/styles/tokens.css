@@ -90,6 +90,7 @@
   /* Shape. Every corner is sharp. */
   --radius: 0px;
   --border-weight: 2px;
+  --border-heavy: 4px;
   --tap-target-min: 56px;
   --icon-size: 24px;
 
@@ -105,7 +106,7 @@
   --text-headline-lg: 32px;
   --text-display: 48px;
   --text-data-lg: 36px;
-  --text-label: 14px;
+  --text-label: 13px;
 
   /* Line heights. */
   --lh-tight: 1.1;
@@ -115,7 +116,7 @@
 
   /* Letter spacing. */
   --tracking-tight: -0.02em;
-  --tracking-label: 0.05em;
+  --tracking-label: 0.00em;
 
   /* Weights. */
   --weight-regular: 400;

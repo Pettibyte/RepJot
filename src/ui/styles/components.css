@@ -197,7 +197,7 @@
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-label);
   line-height: var(--lh-data);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-1);
 }
 
 .badge {
@@ -228,7 +228,7 @@
 }
 
 .screen--narrow {
-  max-width: 640px;
+  max-width: 850px;
 }
 
 .stack > * + * {
@@ -1016,26 +1016,19 @@
    cell background carries the color and the label carries the words. The
    outline separates one bad row from its good neighbours inside a cell
    that holds several. */
-.exercise-row--cell.exercise-row--missing {
+/* .exercise-row--cell.exercise-row--missing {
   outline: var(--border-weight) solid var(--color-error);
-}
+} */
 
-/* The matrix line and cell that hold a row needing attention. The line
-   tint answers "which exercise is wrong" and the cell tint answers "which
-   set is wrong", so the user does not have to open every cell to find it. */
+/* The matrix line and cell that hold a row needing attention. A heavy left border
+  indicates "which exercise is wrong" and the "needs attention" label indicates "which
+   set is wrong"; thus the user does not have to open every cell to find it. */
 .set-matrix__line--error > .set-matrix__name {
-  background-color: var(--color-error-container);
-  color: var(--color-on-error-container);
+
+  border-left: var(--border-heavy) solid var(--color-primary);
+  padding-left: var(--space-1);
 }
 
-.set-matrix__line--error > .set-matrix__name .set-matrix__exercise,
-.set-matrix__line--error > .set-matrix__name .set-matrix__rx {
-  color: var(--color-on-error-container);
-}
-
-.set-matrix__cell--error {
-  background-color: var(--color-error-container);
-}
 
 .exercise-row--cell + .exercise-row--cell {
   border-top: 1px solid var(--color-outline-variant);
@@ -1097,7 +1090,9 @@
   font-size: var(--text-label);
   font-weight: var(--weight-bold);
   margin-right: var(--space-2);
+  margin-bottom: var(--space-1);
   padding: var(--space-1);
+  white-space: nowrap;
 }
 
 .exercise-row__path {
@@ -1196,7 +1191,6 @@
   cursor: pointer;
   font-family: var(--font-data);
   font-size: var(--text-label);
-  min-height: var(--tap-target-min);
   padding-bottom: var(--space-2);
   padding-top: var(--space-2);
 }

@@ -172,7 +172,7 @@
                   <span class="set-matrix__rx">{line.prescriptionText}</span>
                 {/if}
                 {#if lineNeedsAttention(line)}
-                  <span class="exercise-row__missing-label">Needs attention</span>
+                  <!-- <span class="exercise-row__missing-label">Needs attention</span> -->
                 {/if}
                 <LastTimeBadge lastTime={line.lastTime} exerciseName={line.exerciseName} />
               </th>
