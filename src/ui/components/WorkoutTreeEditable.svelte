@@ -45,7 +45,8 @@
     onstartingchange = undefined,
     oneffortchange = undefined,
     onaddattempt = undefined,
-    ondeleteattempt = undefined
+    ondeleteattempt = undefined,
+    onfilllasttime = undefined
   }: {
     /** Groups and rows in prescriptive draw order. */
     blocks?: DrawBlock[];
@@ -83,6 +84,14 @@
     oneffortchange?: ((rowKey: string, choice: string) => void) | undefined;
     onaddattempt?: ((rowKey: string) => void) | undefined;
     ondeleteattempt?: ((rowKey: string) => void) | undefined;
+    /**
+     * Copy the Last Time values into the rows one badge covers.
+     *
+     * One badge over an exercise covers that exercise's sets; a badge on one
+     * row covers that row. The tree passes the list through unchanged.
+     * REQUIREMENTS 19.4, 19.11.
+     */
+    onfilllasttime?: ((rowKeys: string[]) => void) | undefined;
   } = $props();
 
   /** Deepest distinct indent before the compact path takes over. */
@@ -96,6 +105,16 @@
   /** Draft text for one row. Empty when the user has not touched it. */
   function overridesFor(rowKey: string): Record<string, string> {
     return rowOverrides[rowKey] ?? {};
+  }
+
+  /**
+   * The fill handler one row passes.
+   *
+   * `undefined` when the screen passed nothing, so the badge draws no arrow
+   * rather than one that does nothing.
+   */
+  function fillFor(rowKey: string): (() => void) | undefined {
+    return onfilllasttime === undefined ? undefined : () => onfilllasttime?.([rowKey]);
   }
 </script>
 
@@ -143,6 +162,7 @@
           {oneffortchange}
           {onaddattempt}
           {ondeleteattempt}
+          {onfilllasttime}
         />
       </div>
     {:else}
@@ -171,6 +191,7 @@
           oneffortchange={(choice) => oneffortchange?.(block.row.key, choice)}
           onaddattempt={() => onaddattempt?.(block.row.key)}
           ondeleteattempt={() => ondeleteattempt?.(block.row.key)}
+          onfilllasttime={fillFor(block.row.key)}
         />
       </div>
     {/if}

@@ -42,7 +42,8 @@
     onstartingchange,
     oneffortchange,
     onaddattempt,
-    ondeleteattempt
+    ondeleteattempt,
+    onfilllasttime = undefined
   }: {
     table: ActiveSetTable;
     idPrefix?: string;
@@ -69,6 +70,14 @@
     oneffortchange?: (rowKey: string, choice: string) => void;
     onaddattempt?: (rowKey: string) => void;
     ondeleteattempt?: (rowKey: string) => void;
+    /**
+     * Copy the Last Time values into a set of rows at once.
+     *
+     * The badge that sits over a whole exercise fills that exercise's sets,
+     * because one badge there speaks for all of them. A badge that sits on
+     * one row passes that row alone. REQUIREMENTS 19.4, 19.11.
+     */
+    onfilllasttime?: ((rowKeys: string[]) => void) | undefined;
   } = $props();
 
   /**
@@ -118,6 +127,30 @@
 
   /** The section heading carries the message once for the whole table. */
   const tableNeedsAttention = $derived(table.rows.some((row) => rowNeedsAttention(row)));
+
+  /**
+   * Every row key behind one matrix line.
+   *
+   * A cell can hold more than one row, so the line is the whole set of
+   * rows, not one row per column.
+   */
+  function lineRowKeys(line: { cells: Array<{ rows: ActiveExerciseRow[] }> }): string[] {
+    const keys: string[] = [];
+    for (const cell of line.cells) {
+      for (const row of cell.rows) keys.push(row.key);
+    }
+    return keys;
+  }
+
+  /**
+   * The fill handler one badge passes.
+   *
+   * `undefined` when the screen passed nothing, so the badge draws no arrow
+   * rather than one that does nothing.
+   */
+  function fillFor(keys: () => string[]): (() => void) | undefined {
+    return onfilllasttime === undefined ? undefined : () => onfilllasttime?.(keys());
+  }
 </script>
 
 <section class="set-table" aria-labelledby={`${idPrefix}-${table.key}-title`}>
@@ -128,7 +161,12 @@
       <span class="exercise-row__missing-label">Needs attention</span>
     {/if}
     {#if table.lastTime !== undefined}
-      <LastTimeBadge lastTime={table.lastTime} exerciseName={table.title} />
+      <LastTimeBadge
+        lastTime={table.lastTime}
+        exerciseName={table.title}
+        {disabled}
+        onfill={fillFor(() => table.rows.map((row) => row.key))}
+      />
     {/if}
   </div>
   <p class="set-table__label">{table.label}</p>
@@ -174,7 +212,12 @@
                 {#if lineNeedsAttention(line)}
                   <!-- <span class="exercise-row__missing-label">Needs attention</span> -->
                 {/if}
-                <LastTimeBadge lastTime={line.lastTime} exerciseName={line.exerciseName} />
+                <LastTimeBadge
+                  lastTime={line.lastTime}
+                  exerciseName={line.exerciseName}
+                  {disabled}
+                  onfill={fillFor(() => lineRowKeys(line))}
+                />
               </th>
               {#each line.cells as cell, columnIndex (cell.key)}
                 <td
@@ -214,6 +257,7 @@
                       oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
                       onaddattempt={() => onaddattempt?.(row.key)}
                       ondeleteattempt={() => ondeleteattempt?.(row.key)}
+                      onfilllasttime={fillFor(() => [row.key])}
                     />
                   {/each}
                   {#if cell.rows.length === 0}
@@ -270,6 +314,7 @@
             oneffortchange={(choice) => oneffortchange?.(row.key, choice)}
             onaddattempt={() => onaddattempt?.(row.key)}
             ondeleteattempt={() => ondeleteattempt?.(row.key)}
+            onfilllasttime={fillFor(() => [row.key])}
           />
         {/each}
       {/each}

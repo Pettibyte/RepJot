@@ -332,6 +332,12 @@ describe('buildActiveWorkoutModel last time', () => {
     expect(lastTime.text).toContain('12 reps');
     expect(lastTime.text).toContain('225 lb');
     expect(lastTime.text).not.toContain('3 reps');
+    // The badge carries the values whole, so a fill tap does not have to
+    // parse its own display string back apart. REQUIREMENTS 19.4, 19.11.
+    expect(lastTime.fill).toEqual({
+      reps: { value: 12, unit: 'reps' },
+      weight: { value: 225, unit: 'lb' }
+    });
   });
 
   test('an exercise with no completed result yields lastTime.kind none', () => {

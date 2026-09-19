@@ -22,9 +22,11 @@ import type {
 } from '../../domain/types';
 import type { MissingWorkItem } from '../../sessions/session-service';
 import type { ExerciseResultDraft } from '../../sessions/drafts';
+import { convert } from '../../units/conversion';
 import {
   draftRowValues,
   fieldDisplay,
+  formatStep,
   parseFieldValue,
   type ActiveExerciseRow,
   type GroupModel
@@ -118,6 +120,41 @@ export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
   }
   if (status !== 'completed') draft.reasonCode = input.reasonCode ?? 'not_completed';
   return draft;
+}
+
+/**
+ * The field text a **Fill with last time** tap writes for one row.
+ *
+ * Each value is converted into the unit the field shows, so a set recorded
+ * in kilograms fills a pound field in pounds, and is formatted on the
+ * field's own step, so the text reads the way the user would type it.
+ *
+ * A dimension the last session did not record contributes nothing. The
+ * fill therefore never erases what the user already typed there, and a
+ * value the unit vocabulary cannot convert is dropped for the same reason:
+ * the field keeps its own text rather than a number in the wrong unit.
+ * REQUIREMENTS 19.4, 19.11.
+ */
+export function lastTimeFillText(row: ActiveExerciseRow): Record<string, string> {
+  const filled: Record<string, string> = {};
+  if (row.lastTime.kind !== 'value') return filled;
+  const values = row.lastTime.fill;
+  if (values === undefined) return filled;
+
+  for (const field of row.fields) {
+    const quantity = values[field.dimension];
+    if (quantity === undefined) continue;
+    try {
+      // `formatStep`, not `formatEditable`: this is the same text a stored
+      // value shows in this field, so a filled set reads `95` the way a
+      // recorded one does rather than `95.0`.
+      filled[field.dimension] = formatStep(convert(quantity, field.unit).value, field.step);
+    } catch {
+      // An unknown or incompatible unit fills nothing. The field keeps what
+      // it had rather than show a number the user must notice is wrong.
+    }
+  }
+  return filled;
 }
 
 /** Validate an optional count field used by scored containers. */

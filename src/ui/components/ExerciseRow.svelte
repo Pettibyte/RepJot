@@ -60,7 +60,8 @@
     onstartingchange = undefined,
     oneffortchange = undefined,
     onaddattempt = undefined,
-    ondeleteattempt = undefined
+    ondeleteattempt = undefined,
+    onfilllasttime = undefined
   }: {
     /** The row to draw. */
     row: ActiveExerciseRow;
@@ -152,9 +153,29 @@
      * attempt are gone.
      */
     ondeleteattempt?: (() => void) | undefined;
+    /**
+     * Copy this row's Last Time values into its own fields.
+     *
+     * The badge decides whether the arrow appears; this decides what a tap
+     * does. Absent means the row cannot fill, so the arrow is not drawn.
+     * REQUIREMENTS 19.4, 19.11.
+     */
+    onfilllasttime?: (() => void) | undefined;
   } = $props();
 
   const domId = (suffix: string): string => `${idPrefix}-${row.key}-${suffix}`;
+
+  /**
+   * Whether this row may take a fill.
+   *
+   * A row with no inputs has nowhere to put a value, and an unresolved row
+   * has no exercise to fill from, so neither gets the arrow.
+   */
+  const rowFill = $derived(
+    onfilllasttime === undefined || !row.recordable || row.unresolved || row.fields.length === 0
+      ? undefined
+      : () => onfilllasttime?.()
+  );
 
   /** The status the row shows now, draft first. */
   const currentStatus = $derived(status ?? row.status);
@@ -279,7 +300,12 @@
       <span class="exercise-row__set-label">{setLabel}</span>
       {#if showExerciseName}
         <span class="exercise-row__set-name">{row.exerciseName}</span>
-        <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
+        <LastTimeBadge
+          lastTime={row.lastTime}
+          exerciseName={row.exerciseName}
+          {disabled}
+          onfill={rowFill}
+        />
       {/if}
       {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
     </div>
@@ -291,7 +317,12 @@
     <div class="exercise-row__head">
       <h4 class="exercise-row__name">{row.exerciseName}</h4>
       {#if missing}<span class="exercise-row__missing-label">Needs attention</span>{/if}
-      <LastTimeBadge lastTime={row.lastTime} exerciseName={row.exerciseName} />
+      <LastTimeBadge
+        lastTime={row.lastTime}
+        exerciseName={row.exerciseName}
+        {disabled}
+        onfill={rowFill}
+      />
     </div>
   {/if}
 

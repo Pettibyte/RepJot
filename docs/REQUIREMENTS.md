@@ -364,6 +364,7 @@ Example allowlist shape:
 - **19.8** The UI also supports partial rounds and optional exercise details.
 - **19.9** The UI provides appropriate controls for repetitions, weight, duration, distance, calories, EMOM, effort, and extra attempts.
 - **19.10** Finish Workout appears at the end of the workout.
+- **19.11** A Last Time badge carries a control that copies the values it shows into the sets it covers. A badge on one row fills that row. A badge over an exercise fills every set of that exercise. The control does not appear when the exercise has no history.
 
 ### 20.0 History and Summary
 

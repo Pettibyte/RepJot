@@ -60,6 +60,7 @@
     buildRowDraft,
     effortFromChoice,
     finishPlan,
+    lastTimeFillText,
     scoreFromText,
     terminalActionsAllowed,
     wholeCountError
@@ -554,6 +555,71 @@
         session = await service.load(session.id);
         await tick();
       });
+    } finally {
+      busy = false;
+    }
+  }
+  /**
+   * Fill rows with the values the Last Time badge shows.
+   *
+   * One tap covers what one badge speaks for: the row it sits on, or every
+   * set of the exercise when the badge sits over a grid.
+   *
+   * The fill saves rather than only drafting. A tap has no blur to follow
+   * it, so a draft-only fill would leave the fields looking recorded while
+   * Finish still reported the work as missing. Each row keeps its own
+   * status, side, and starting side: the fill copies values, nothing else.
+   * REQUIREMENTS 19.4, 19.11.
+   */
+  async function fillFromLastTime(rowKeys: string[]): Promise<void> {
+    const service = sessionService;
+    if (service === null || session === null || busy) return;
+
+    /** Rows that keep their stored key go in one batch edit. */
+    const batch: ExerciseResultDraft[] = [];
+    /** Rows whose draft side differs from the stored one must move, not copy. */
+    const moves: Array<{ row: ActiveExerciseRow; draft: ExerciseResultDraft }> = [];
+
+    for (const rowKey of rowKeys) {
+      const row = rowsByKey.get(rowKey);
+      if (row === undefined || !row.recordable || row.unresolved) continue;
+
+      const filled = lastTimeFillText(row);
+      if (Object.keys(filled).length === 0) continue;
+
+      overrides[row.key] = { ...(overrides[row.key] ?? {}), ...filled };
+      const edited: Record<string, boolean> = { ...(editedFields[row.key] ?? {}) };
+      for (const dimension of Object.keys(filled)) edited[dimension] = true;
+      editedFields[row.key] = edited;
+
+      // A value that will not parse stays on screen with its error and is
+      // not written, so one bad field cannot block the rest of the fill.
+      if (!validateRow(row)) continue;
+
+      const draft = draftForRow(row);
+      const draftKey = exerciseResultKey(row.path, draft.side ?? row.side, row.attempt);
+      if (row.resultKey !== null && draftKey !== row.resultKey) moves.push({ row, draft });
+      else batch.push(draft);
+    }
+
+    if (batch.length === 0 && moves.length === 0) return;
+
+    busy = true;
+    try {
+      await service.queueFlush();
+      if (batch.length > 0) await service.saveExerciseResults(session.id, batch);
+      for (const entry of moves) {
+        const fromKey = entry.row.resultKey;
+        if (fromKey === null) continue;
+        await service.moveExerciseResult(session.id, fromKey, entry.draft);
+        migrateRowDrafts(
+          entry.row.key,
+          rowKeyWithSide(entry.row, entry.draft.side ?? entry.row.side)
+        );
+      }
+      session = await service.load(session.id);
+    } catch (error: unknown) {
+      errorText = error instanceof Error ? error.message : 'REP JOT could not fill those sets.';
     } finally {
       busy = false;
     }
@@ -1075,6 +1141,7 @@
       oneffortchange={onEffortChange}
       onaddattempt={(rowKey) => void onAddAttempt(rowKey)}
       ondeleteattempt={(rowKey) => void onDeleteAttempt(rowKey)}
+      onfilllasttime={(rowKeys: string[]) => void fillFromLastTime(rowKeys)}
     />
 
     {#if errorText !== ''}

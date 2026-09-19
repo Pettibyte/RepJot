@@ -8,6 +8,7 @@ import {
   amrapPartialScore,
   buildRowDraft,
   finishPlan,
+  lastTimeFillText,
   scoreFromText,
   terminalActionsAllowed
 } from '../src/ui/screens/activeWorkoutActions';
@@ -201,6 +202,60 @@ describe('buildRowDraft', () => {
     expect(draft.side).toBe('left');
     expect(draft.attempt).toBe(2);
     expect(draft.workoutId).toBe('w');
+  });
+});
+
+describe('lastTimeFillText', () => {
+  test('fills each recorded dimension in the unit the field shows', () => {
+    const target = row({
+      lastTime: {
+        kind: 'value',
+        text: '100 kg',
+        fill: { reps: { value: 5, unit: 'reps' }, weight: { value: 100, unit: 'kg' } }
+      }
+    });
+
+    // The field shows pounds, so the fill writes pounds.
+    expect(lastTimeFillText(target)).toEqual({ reps: '5', weight: '220.5' });
+  });
+
+  test('a dimension the last session skipped is left alone', () => {
+    const target = row({
+      lastTime: { kind: 'value', text: '5 reps', fill: { reps: { value: 5, unit: 'reps' } } }
+    });
+
+    const filled = lastTimeFillText(target);
+    expect(filled.reps).toBe('5');
+    // No weight key, so a value the user already typed there survives.
+    expect(Object.keys(filled)).toEqual(['reps']);
+  });
+
+  test('no history fills nothing', () => {
+    expect(lastTimeFillText(row())).toEqual({});
+  });
+
+  test('a value the unit vocabulary cannot convert fills nothing', () => {
+    const target = row({
+      fields: [field({ dimension: 'distance', unit: 'm', compatibleUnits: ['m', 'km'] })],
+      lastTime: { kind: 'value', text: '5 kg', fill: { distance: { value: 5, unit: 'kg' } } }
+    });
+
+    expect(lastTimeFillText(target)).toEqual({});
+  });
+
+  test('the filled text records the same number the field shows', () => {
+    const target = row({
+      lastTime: { kind: 'value', text: '225 lb', fill: { weight: { value: 225, unit: 'lb' } } }
+    });
+    const filled = lastTimeFillText(target);
+
+    const draft = buildRowDraft({
+      workoutId: 'w',
+      row: target,
+      overrides: filled,
+      editedFields: { weight: true }
+    });
+    expect(draft.values?.weight).toEqual({ value: 225, unit: 'lb' });
   });
 });
 

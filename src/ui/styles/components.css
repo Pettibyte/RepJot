@@ -1069,6 +1069,7 @@
 .exercise-row {
   border-left: var(--border-weight) solid var(--color-outline-variant);
   padding-bottom: var(--space-2);
+  padding-left: var(--space-1);
   padding-top: var(--space-2);
 }
 
@@ -1106,7 +1107,7 @@
 .exercise-row__head,
 .exercise-row__set-head {
   align-items: baseline;
-  display: flex;
+  /* display: flex; */
   flex-wrap: wrap;
 }
 
@@ -1426,6 +1427,24 @@
   font-weight: var(--weight-bold);
   margin-left: var(--space-1);
   margin-right: var(--space-1);
+}
+
+/* The badge and its fill arrow travel together. Flex keeps them on one line
+   without `gap`, which the targeted browser does not support. */
+.last-time__group {
+  /* align-items: center; */
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+/* The fill arrow. It is a chip so it reads as a control, and it is filled
+   so it does not look like part of the badge text beside it. */
+.last-time__fill {
+  margin-left: var(--space-1);
+  margin-top: var(--space-1);
+  min-width: var(--tap-target-min);
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
 }
 
 /* AMRAP controls ------------------------------------------------------ */

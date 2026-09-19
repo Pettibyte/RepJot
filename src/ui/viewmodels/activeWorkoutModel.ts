@@ -172,6 +172,16 @@ export interface LastTimeModel {
   dateLabel?: string;
   /** Exercise History address. Absent when the exercise is unknown. */
   href?: string;
+  /**
+   * The recorded values behind `text`, in the units they were stored in.
+   *
+   * The **Fill with last time** control writes these into a row's fields.
+   * `text` cannot fill an input: it folds the unit into one display string,
+   * while a field needs the number and the unit apart, and needs the unit
+   * the field shows rather than the unit first recorded.
+   * REQUIREMENTS 19.4, 19.11.
+   */
+  fill?: ResultValues;
 }
 
 /** One editable exercise occurrence. */
@@ -642,6 +652,9 @@ function buildLastTime(
     return {
       kind: 'value',
       text: parts.join(' · '),
+      // The same values the badge just read, kept whole so a fill tap does
+      // not have to parse its own display string back apart.
+      fill: { ...(occurrence.values ?? {}) },
       dateLabel: occurrence.completedAtUtc.slice(0, 10),
       href
     };

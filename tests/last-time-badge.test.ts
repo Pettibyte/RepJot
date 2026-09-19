@@ -63,4 +63,37 @@ describe('LastTimeBadge', () => {
     // No stray date separator when no date is known.
     expect(html).not.toContain('Last time :');
   });
+
+  test('a caller that can fill gets the arrow', () => {
+    const lastTime: LastTimeModel = { kind: 'value', text: '225 lb' };
+    const html = renderHtml(LastTimeBadge, {
+      lastTime,
+      exerciseName: 'Back Squat',
+      onfill: () => {}
+    });
+
+    expect(html).toContain('\u{1F872}');
+    expect(html).toContain('Fill with last time data.');
+    expect(html).toContain('pill chip chip--on');
+    // The arrow alone says nothing to a screen reader.
+    expect(html).toContain('Fill Back Squat with last time data.');
+  });
+
+  test('no fill handler means no arrow', () => {
+    const lastTime: LastTimeModel = { kind: 'value', text: '225 lb' };
+    const html = renderHtml(LastTimeBadge, { lastTime, exerciseName: 'Back Squat' });
+
+    expect(html).not.toContain('<button');
+  });
+
+  test('no history gives nothing to fill', () => {
+    const lastTime: LastTimeModel = { kind: 'none', text: 'No history' };
+    const html = renderHtml(LastTimeBadge, {
+      lastTime,
+      exerciseName: 'Back Squat',
+      onfill: () => {}
+    });
+
+    expect(html).not.toContain('<button');
+  });
 });

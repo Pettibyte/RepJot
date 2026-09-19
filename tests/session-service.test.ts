@@ -1063,6 +1063,65 @@ describe('reportMissingWork', () => {
     }
   });
 
+  test('a missing unilateral set reports the alternating default row key', async () => {
+    // Regression: the report hardcoded `both`, so a new unilateral row -
+    // which the model puts on `alternating` - never matched a reported key,
+    // and its "needs attention" badge stayed hidden. Requirement 9.10.
+    const solo: Workout = {
+      id: WORKOUT_ID,
+      name: 'Solo Unilateral',
+      root: {
+        id: 'root',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'press-set',
+            type: 'exercise',
+            exerciseId: 'kb-press',
+            stimulus: 'strength',
+            prescription: { reps: 8, weight: { value: 12, unit: 'kg' } }
+          }
+        ]
+      }
+    };
+    const { service } = await makeSetupWithWorkout(emptySession(), solo);
+    const report = await service.reportMissingWork(SESSION_KEY);
+
+    expect(report.hasMissingWork).toBe(true);
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0].reason).toBe('no_result');
+    expect(report.items[0].rowKey).toBe(`${WORKOUT_ID}|root/press-set|alternating|1`);
+  });
+
+  test('a missing bilateral set still reports the both default row key', async () => {
+    const solo: Workout = {
+      id: WORKOUT_ID,
+      name: 'Solo Bilateral',
+      root: {
+        id: 'root',
+        type: 'container',
+        strategy: 'sequence',
+        strategyConfig: {},
+        children: [
+          {
+            id: 'squat-set',
+            type: 'exercise',
+            exerciseId: 'back-squat',
+            stimulus: 'strength',
+            prescription: { reps: 5, weight: { value: 100, unit: 'lb' } }
+          }
+        ]
+      }
+    };
+    const { service } = await makeSetupWithWorkout(emptySession(), solo);
+    const report = await service.reportMissingWork(SESSION_KEY);
+
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0].rowKey).toBe(`${WORKOUT_ID}|root/squat-set|both|1`);
+  });
+
   test('a session with every recordable exercise completed reports nothing missing', async () => {
     const full = emptySession();
     for (const node of resolveTree(workout())) {
