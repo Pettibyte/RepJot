@@ -41,11 +41,9 @@
                 "exerciseId": "90_90_Hip_Stretch",
                 "stimulus": "mobility",
                 "prescription": {
-                  "duration": {
-                    "value": 30,
-                    "unit": "second"
-                  }
+                  "reps": 20
                 },
+                "notes": "10 per side.",
                 "setType": "warmup"
               },
               {
@@ -163,7 +161,208 @@
                   {
                     "id": "superset-b-bent-over-row",
                     "type": "exercise",
-                    "exerciseId": "Bent_Over_Two-Dumbbell_Row",
+                    "exerciseId": "Bent_Over_Barbell_Row",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "setType": "working"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "conditioning",
+            "type": "container",
+            "name": "500 m Row for Time",
+            "strategy": "rounds",
+            "strategyConfig": {
+              "rounds": 1
+            },
+            "resultCapture": {
+              "mode": "scored",
+              "scoreType": "intervals",
+              "childDetail": "optional"
+            },
+            "children": [
+              {
+                "id": "row-500m",
+                "type": "exercise",
+                "exerciseId": "Rowing_Stationary",
+                "stimulus": "conditioning",
+                "prescription": {
+                  "distance": {
+                    "value": 500,
+                    "unit": "m"
+                  }
+                },
+                "setType": "working"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "arms-day-b",
+      "name": "Arms Day B",
+      "notes": "Partner to Arms Day A: same structure, different exercises. Mobility, then incline curl, close-grip press, lateral raise and incline bench, then a 500 m row for time.",
+      "root": {
+        "id": "arms-day-b-root",
+        "type": "container",
+        "name": "Arms Day B",
+        "strategy": "sequence",
+        "strategyConfig": {},
+        "children": [
+          {
+            "id": "mobility",
+            "type": "container",
+            "name": "Mobility",
+            "strategy": "rounds",
+            "strategyConfig": {
+              "rounds": 3
+            },
+            "children": [
+              {
+                "id": "dead-hang",
+                "type": "exercise",
+                "exerciseId": "Dead_Hang",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              },
+              {
+                "id": "hip-stretch",
+                "type": "exercise",
+                "exerciseId": "90_90_Hip_Stretch",
+                "stimulus": "mobility",
+                "prescription": {
+                  "reps": 20
+                },
+                "notes": "10 per side.",
+                "setType": "warmup"
+              },
+              {
+                "id": "deep-squat-hold",
+                "type": "exercise",
+                "exerciseId": "Deep_Squat_Hold",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              },
+              {
+                "id": "kettlebell-halos",
+                "type": "exercise",
+                "exerciseId": "Kettlebell_Halo",
+                "stimulus": "mobility",
+                "prescription": {
+                  "reps": 20
+                },
+                "notes": "10 each direction.",
+                "setType": "warmup"
+              },
+              {
+                "id": "wall-sit",
+                "type": "exercise",
+                "exerciseId": "Wall_Sit",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "notes": "Isometric knee prehab.",
+                "setType": "warmup"
+              },
+              {
+                "id": "reverse-tabletop",
+                "type": "exercise",
+                "exerciseId": "Reverse_Tabletop",
+                "stimulus": "mobility",
+                "prescription": {
+                  "duration": {
+                    "value": 30,
+                    "unit": "second"
+                  }
+                },
+                "setType": "warmup"
+              }
+            ]
+          },
+          {
+            "id": "strength",
+            "type": "container",
+            "name": "Strength",
+            "strategy": "sequence",
+            "strategyConfig": {},
+            "children": [
+              {
+                "id": "superset-a",
+                "type": "container",
+                "name": "Superset A: Biceps and Triceps",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "superset-a-incline-db-curl",
+                    "type": "exercise",
+                    "exerciseId": "Incline_Dumbbell_Curl",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "setType": "working"
+                  },
+                  {
+                    "id": "superset-a-close-grip-bb-press",
+                    "type": "exercise",
+                    "exerciseId": "Close-Grip_Barbell_Bench_Press",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "setType": "working"
+                  }
+                ]
+              },
+              {
+                "id": "superset-b",
+                "type": "container",
+                "name": "Superset B: Side Delts and Incline Press",
+                "strategy": "rounds",
+                "strategyConfig": {
+                  "rounds": 3
+                },
+                "children": [
+                  {
+                    "id": "superset-b-incline-lateral-raise",
+                    "type": "exercise",
+                    "exerciseId": "One-Arm_Incline_Lateral_Raise",
+                    "stimulus": "hypertrophy",
+                    "prescription": {
+                      "reps": 8
+                    },
+                    "notes": "8 per side.",
+                    "setType": "working"
+                  },
+                  {
+                    "id": "superset-b-bb-incline-press",
+                    "type": "exercise",
+                    "exerciseId": "Barbell_Incline_Bench_Press_-_Medium_Grip",
                     "stimulus": "hypertrophy",
                     "prescription": {
                       "reps": 8
