@@ -349,6 +349,67 @@ describe('moveExerciseResult and saveExerciseResults', () => {
     expect(drive.calls.filter((call: string): boolean => call.startsWith('updateFile'))).toHaveLength(1);
   });
 
+  test('moveExerciseResult refuses a stale source key', async () => {
+    const { service } = await makeEmptySetup();
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'cindy', iteration: 1 },
+      { nodeId: 'pushups' }
+    ];
+
+    const kind = await kindOfRejection(() => service.moveExerciseResult(
+      SESSION_KEY,
+      exerciseResultKey(path, 'both', 1),
+      {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'push-up',
+        executionPath: path,
+        side: 'left',
+        status: 'completed',
+        values: { reps: { value: 5, unit: 'reps' } }
+      }
+    ));
+
+    expect(kind).toBe('invalid_document');
+  });
+
+  test('moveExerciseResult does not overwrite an occupied target key', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'cindy', iteration: 1 },
+      { nodeId: 'pushups' }
+    ];
+    for (const side of ['left', 'right'] as const) {
+      await service.saveExerciseResult(SESSION_KEY, {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'push-up',
+        executionPath: path,
+        side,
+        status: 'completed',
+        values: { reps: { value: side === 'left' ? 5 : 8, unit: 'reps' } }
+      });
+    }
+
+    const kind = await kindOfRejection(() => service.moveExerciseResult(
+      SESSION_KEY,
+      exerciseResultKey(path, 'left', 1),
+      {
+        workoutId: WORKOUT_ID,
+        exerciseId: 'push-up',
+        executionPath: path,
+        side: 'right',
+        status: 'completed',
+        values: { reps: { value: 10, unit: 'reps' } }
+      }
+    ));
+
+    expect(kind).toBe('invalid_document');
+    const results = workingSession(coordinator).exerciseResults;
+    expect(results[exerciseResultKey(path, 'left', 1)]?.values?.reps?.value).toBe(5);
+    expect(results[exerciseResultKey(path, 'right', 1)]?.values?.reps?.value).toBe(8);
+  });
+
   test('saveExerciseResults stores all drafts in one local edit and upload', async () => {
     const { service, coordinator, drive } = await makeEmptySetup();
     const pushPath = [

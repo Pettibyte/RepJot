@@ -151,7 +151,7 @@
           missing={missingRowKeys.includes(block.row.key)}
           status={statusDrafts[block.row.key]}
           side={sideDrafts[block.row.key]}
-          startingSide={startingSideDrafts[block.row.key] ?? 'left'}
+          startingSide={startingSideDrafts[block.row.key] ?? block.row.startingSide ?? 'left'}
           effortChoice={effortDrafts[block.row.key]}
           panelOpen={openRowPanels[block.row.key] === true}
           onpaneltoggle={onpaneltoggle}

@@ -40,13 +40,17 @@ function unilateralBackSquat(): Exercise[] {
 }
 
 /** One stored result on the round-1 squat set, on the given side. */
-function shardWithResult(side: string, reps: number): ResultsShard {
+function shardWithResult(
+  side: string | null,
+  reps: number,
+  startingSide?: 'left' | 'right'
+): ResultsShard {
   const shard = validShard();
   const session = shard.sessions[SESSION_KEY];
   if (session === undefined) throw new Error('The session fixture is missing.');
   session.status = 'in_progress';
   delete session.completedAtUtc;
-  session.exerciseResults = {
+  session.exerciseResults = side === null ? {} : {
     [`root/squat-sets:1/back-squat-set|${side}|1`]: {
       workoutId: WORKOUT_ID,
       executionPath: [
@@ -57,6 +61,7 @@ function shardWithResult(side: string, reps: number): ResultsShard {
       exerciseId: 'back-squat',
       side: side as never,
       attempt: 1,
+      ...(startingSide === undefined ? {} : { startingSide }),
       status: 'completed',
       values: { reps: { value: reps, unit: 'reps' } }
     }
@@ -65,8 +70,12 @@ function shardWithResult(side: string, reps: number): ResultsShard {
   return shard;
 }
 
-async function mountWith(side: string, reps: number): Promise<HTMLElement> {
-  const shard = shardWithResult(side, reps);
+async function mountWith(
+  side: string | null,
+  reps = 0,
+  startingSide?: 'left' | 'right'
+): Promise<HTMLElement> {
+  const shard = shardWithResult(side, reps, startingSide);
   // `signIn` builds its own static data, so stand up the same stack here
   // with the squat made unilateral. That is what puts the side control on
   // the screen.
@@ -188,11 +197,85 @@ describe('a side change does not duplicate the set', () => {
     await settle(40);
     flushSync();
 
-    expect((await storedSides()).length).toBe(1);
+    expect(await storedSides()).toEqual(['both']);
+  });
+
+  test('a blank row keeps its side draft until the first value is saved', async () => {
+    const target = await mountWith(null);
+
+    chip(target, 'Alternate').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle(20);
+    flushSync();
+    expect(await storedSides()).toEqual([]);
+
+    const input = repsInput(target);
+    input.value = '10';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await settle(40);
+    flushSync();
+
+    expect(await storedSides()).toEqual(['alternating']);
+  });
+
+  test('a first value followed immediately by a side pick leaves one key', async () => {
+    const target = await mountWith(null);
+    const input = repsInput(target);
+    input.value = '10';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    chip(target, 'Alternate').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await settle(50);
+    flushSync();
+
+    expect(await storedSides()).toEqual(['alternating']);
+  });
+
+  test('a field save racing a side pick uses the moved row', async () => {
+    const target = await mountWith('both', 12);
+
+    chip(target, 'Alternate').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const input = repsInput(target);
+    input.value = '14';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await settle(50);
+    flushSync();
+
+    expect(await storedSides()).toEqual(['alternating']);
+    const session = await sessionService.load(SESSION_KEY);
+    expect(Object.values(session.exerciseResults)[0]?.values?.reps?.value).toBe(14);
+  });
+
+  test('an invalid field after a side pick cannot restore the old-side key', async () => {
+    const target = await mountWith('both', 12);
+
+    chip(target, 'Alternate').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const input = repsInput(target);
+    input.value = '1.5';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await settle(50);
+    flushSync();
+
+    expect(await storedSides()).toEqual(['alternating']);
   });
 });
 
 describe('the alternating split shows under the field', () => {
+  test('a stored starting side is shown', async () => {
+    const target = await mountWith('alternating', 9, 'right');
+    const groups = Array.from(row(target).querySelectorAll<HTMLElement>('.chip-group'));
+    const startsOn = groups.find((group) =>
+      group.querySelector('.chip-group__label')?.textContent?.trim() === 'Starts on'
+    );
+    const right = Array.from(startsOn?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.trim() === 'Right');
+
+    expect(right?.getAttribute('aria-pressed')).toBe('true');
+    expect(row(target).querySelector('.exercise-row__meaning')?.textContent).toContain('5 right');
+  });
+
   test('alternating puts the total line in exercise-row__meaning', async () => {
     const target = await mountWith('both', 12);
     chip(target, 'Alternate').dispatchEvent(new MouseEvent('click', { bubbles: true }));

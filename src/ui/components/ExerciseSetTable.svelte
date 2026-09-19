@@ -195,7 +195,7 @@
                       missing={missingRowKeys.includes(row.key)}
                       status={statusDrafts[row.key]}
                       side={sideDrafts[row.key]}
-                      startingSide={startingSideDrafts[row.key] ?? 'left'}
+                      startingSide={startingSideDrafts[row.key] ?? row.startingSide ?? 'left'}
                       effortChoice={effortDrafts[row.key]}
                       panelOpen={openRowPanels[row.key] === true}
                       onpaneltoggle={onpaneltoggle}
@@ -250,7 +250,7 @@
             missing={missingRowKeys.includes(row.key)}
             status={statusDrafts[row.key]}
             side={sideDrafts[row.key]}
-            startingSide={startingSideDrafts[row.key] ?? 'left'}
+            startingSide={startingSideDrafts[row.key] ?? row.startingSide ?? 'left'}
             effortChoice={effortDrafts[row.key]}
             panelOpen={openRowPanels[row.key] === true}
             onpaneltoggle={onpaneltoggle}

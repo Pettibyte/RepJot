@@ -243,30 +243,47 @@
    * The queued save is flushed before the move so a queued write cannot
    * land after it and resurrect the key just cleared.
    */
-  async function persistRow(row: ActiveExerciseRow): Promise<void> {
+  async function persistRow(
+    row: ActiveExerciseRow,
+    draftSnapshot?: ExerciseResultDraft
+  ): Promise<void> {
     const service = sessionService;
     if (service === null || session === null || row.resultKey === null) return;
     const sessionId = session.id;
-    const draft = draftForRow(row);
+    const draft = draftSnapshot ?? draftForRow(row);
     const draftSide = draft.side ?? row.side;
     const targetKey = exerciseResultKey(row.path, draftSide, row.attempt);
-    const identityMoved = row.hasSavedResult && row.resultKey !== targetKey;
+    const identityMoved = row.resultKey !== targetKey;
 
     try {
       if (isBlankExerciseDraft(draft)) {
         service.queueClearExerciseResult(sessionId, row.resultKey, row.path);
         await service.queueFlush();
       } else if (identityMoved) {
+        // A first keystroke can be queued before the model reports a saved
+        // result. Flush and inspect storage, rather than trusting the stale
+        // `hasSavedResult` flag and writing a second side key.
         await service.queueFlush();
-        await service.moveExerciseResult(sessionId, row.resultKey, draft);
+        const latest = await service.load(sessionId);
+        if (latest.exerciseResults[row.resultKey] !== undefined) {
+          await service.moveExerciseResult(sessionId, row.resultKey, draft);
+        } else {
+          service.queueSaveExerciseResult(sessionId, draft);
+          await service.queueFlush();
+        }
       } else {
         service.queueSaveExerciseResult(sessionId, draft);
         await service.queueFlush();
       }
-      // Move the drafts before the model rebuilds, so the row that arrives
-      // under the new key already carries what the user typed.
-      migrateRowDrafts(row.key, rowKeyWithSide(row, draftSide));
+      // A saved result follows its side-based key. A blank row does not: the
+      // model recreates it on the default `both` key, while its side remains
+      // draft data until the user records a value.
+      const nextRowKey = isBlankExerciseDraft(draft)
+        ? rowKeyWithSide(row, 'both')
+        : rowKeyWithSide(row, draftSide);
+      migrateRowDrafts(row.key, nextRowKey);
       session = await service.load(sessionId);
+      await tick();
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
     }
@@ -279,8 +296,39 @@
    * Drive synchronization keeps its separate quiet period, so blur never
    * waits for or directly starts a network cycle.
    */
+  /**
+   * All mutations of an exercise row share one chain.
+   *
+   * A side move reloads the model. A blur or control tap that runs during
+   * that reload otherwise keeps the old result key and can recreate the row
+   * the move deleted. Resolve the current row by its stable path and attempt
+   * after the preceding mutation completes.
+   */
+  let rowChangeChain: Promise<void> = Promise.resolve();
+
+  function currentRow(anchor: ActiveExerciseRow): ActiveExerciseRow | undefined {
+    return rowsByKey.get(anchor.key) ?? (model?.rows ?? []).find(
+      (candidate) => candidate.keyBase === anchor.keyBase && candidate.attempt === anchor.attempt
+    );
+  }
+
+  function enqueueRowChange(
+    anchor: ActiveExerciseRow,
+    change: (row: ActiveExerciseRow) => void | Promise<void>
+  ): Promise<void> {
+    rowChangeChain = rowChangeChain
+      .then(async () => {
+        const row = currentRow(anchor);
+        if (row !== undefined) await change(row);
+      })
+      .catch((error: unknown) => {
+        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
+      });
+    return rowChangeChain;
+  }
+
   function queueAndFlush(row: ActiveExerciseRow): void {
-    void persistRow(row);
+    void enqueueRowChange(row, persistRow);
   }
 
   function validateRow(row: ActiveExerciseRow): boolean {
@@ -315,27 +363,32 @@
     overrides[rowKey] = forRow;
     editedFields[rowKey] = { ...(editedFields[rowKey] ?? {}), [dimension]: true };
 
-    const service = sessionService;
     const row = rowsByKey.get(rowKey);
-    if (service === null || session === null || row === undefined) return;
-    if (!validateRow(row)) {
-      restoreRowAfterInvalid(row);
-      return;
-    }
-    const draft = draftForRow(row);
-    if (isBlankExerciseDraft(draft)) {
-      if (row.resultKey !== null) {
-        service.queueClearExerciseResult(session.id, row.resultKey, row.path);
+    if (row === undefined) return;
+    void enqueueRowChange(row, (current) => {
+      const service = sessionService;
+      if (service === null || session === null) return;
+      if (!validateRow(current)) {
+        restoreRowAfterInvalid(current);
+        return;
       }
-      return;
-    }
-    service.queueSaveExerciseResult(session.id, draft);
+      const draft = draftForRow(current);
+      if (isBlankExerciseDraft(draft)) {
+        if (current.resultKey !== null) {
+          service.queueClearExerciseResult(session.id, current.resultKey, current.path);
+        }
+        return;
+      }
+      service.queueSaveExerciseResult(session.id, draft);
+    });
   }
 
   function onFieldBlur(rowKey: string): void {
     const row = rowsByKey.get(rowKey);
-    if (row === undefined || !validateRow(row)) return;
-    queueAndFlush(row);
+    if (row === undefined) return;
+    void enqueueRowChange(row, async (current) => {
+      if (validateRow(current)) await persistRow(current);
+    });
   }
 
   function onStatusChange(rowKey: string, status: ResultStatus): void {
@@ -354,62 +407,34 @@
   /**
    * Change the side one row records.
    *
-   * The side is part of the result key, so a side change moves the set to
-   * a different key. The old key is cleared first, otherwise a `left` set
-   * edited to `right` would leave the `left` result behind and read as two
-   * recorded sets. REQUIREMENTS 11.5, 22.4.7.
+   * The side is part of the result key, so this runs on the same mutation
+   * chain as field, status, starting-side, and effort writes. Each operation
+   * sees the row left by the operation before it.
    */
-  /**
-   * Serialize side changes so two picks cannot interleave.
-   *
-   * A side change awaits a flush and a reload. A second pick started inside
-   * that window reads the row as it was before the first change, so it
-   * computes a stale previous key. The first change moves `both` to
-   * `alternating`; the second then moves a key that is already gone and
-   * writes `both` back beside the `alternating` result. Two sets appear
-   * from one exercise, and the panel the user was looking at is gone.
-   *
-   * Chaining makes each pick read the state the previous one left.
-   */
-  let sideChangeChain: Promise<void> = Promise.resolve();
+  async function onSideChange(rowKey: string, nextSide: Side): Promise<void> {
+    const anchor = rowsByKey.get(rowKey);
+    if (anchor === undefined || anchor.resultKey === null) return;
 
-  async function runSideChange(rowKey: string, nextSide: Side): Promise<void> {
-    const service = sessionService;
-    const row = rowsByKey.get(rowKey);
-    if (service === null || session === null || row === undefined) return;
-    if (row.resultKey === null) return;
-
+    // Capture what the row held at the tap. A later keystroke can happen
+    // before this queued move starts; it must not turn this valid result into
+    // a blank or invalid move retroactively.
     sideDrafts[rowKey] = nextSide;
     if (nextSide !== 'alternating') delete startingSideDrafts[rowKey];
-
-    // The row moves to a new key. Open the panel there first, so the panel
-    // the user was working in stays open across the rebuild instead of
-    // collapsing on the row it no longer has.
-    const nextKey = rowKeyWithSide(row, nextSide);
+    const draft = draftForRow(anchor);
+    const nextKey = rowKeyWithSide(anchor, nextSide);
     if (openRowPanels[rowKey] === true) openRowPanels[nextKey] = true;
 
-    // `persistRow` moves the stored result when the draft side differs
-    // from the stored one, and carries the drafts to the new key.
-    await persistRow(row);
-  }
-
-  async function onSideChange(rowKey: string, nextSide: Side): Promise<void> {
-    sideChangeChain = sideChangeChain
-      .then(() => runSideChange(rowKey, nextSide))
-      .catch((error: unknown) => {
-        errorText = error instanceof Error ? error.message : 'REP JOT could not save that value.';
-      });
-    await sideChangeChain;
+    await enqueueRowChange(anchor, (row) => persistRow(row, draft));
   }
 
   /** Change the side an alternating set starts on. */
   async function onStartingChange(rowKey: string, next: StartingSide): Promise<void> {
-    startingSideDrafts[rowKey] = next;
-    const row = rowsByKey.get(rowKey);
-    if (row === undefined) return;
-    // Re-save on the side the row already records, draft first, so a
-    // starting-side change never reverts a side the user just picked.
-    await onSideChange(rowKey, sideDrafts[rowKey] ?? row.side);
+    const anchor = rowsByKey.get(rowKey);
+    if (anchor === undefined) return;
+    await enqueueRowChange(anchor, async (row) => {
+      startingSideDrafts[row.key] = next;
+      await persistRow(row);
+    });
   }
 
   /** Record or clear the effort one row carries. */
@@ -427,17 +452,18 @@
    * REQUIREMENT 19.9.
    */
   async function onAddAttempt(rowKey: string): Promise<void> {
-    const service = sessionService;
-    const row = rowsByKey.get(rowKey);
-    if (service === null || session === null || busy) return;
-    if (row === undefined || row.resultKey === null) return;
+    const anchor = rowsByKey.get(rowKey);
+    if (anchor === undefined || anchor.resultKey === null || busy) return;
     busy = true;
     try {
-      await service.queueFlush();
-      await service.addAttempt(session.id, row.resultKey);
-      session = await service.load(session.id);
-    } catch (error: unknown) {
-      errorText = error instanceof Error ? error.message : 'REP JOT could not add that attempt.';
+      await enqueueRowChange(anchor, async (row) => {
+        const service = sessionService;
+        if (service === null || session === null || row.resultKey === null) return;
+        await service.queueFlush();
+        await service.addAttempt(session.id, row.resultKey);
+        session = await service.load(session.id);
+        await tick();
+      });
     } finally {
       busy = false;
     }

@@ -655,6 +655,20 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     );
 
     await editNow(sessionId, (next: Session): void => {
+      if (next.exerciseResults[previousKey] === undefined) {
+        throw new AppError(
+          'invalid_document',
+          { reason: 'unknown_result', sessionId, resultKey: previousKey },
+          'The result changed before REP JOT could move it. Try again.'
+        );
+      }
+      if (nextKey !== previousKey && next.exerciseResults[nextKey] !== undefined) {
+        throw new AppError(
+          'invalid_document',
+          { reason: 'result_key_conflict', sessionId, previousKey, nextKey },
+          'A result already exists for that side and attempt.'
+        );
+      }
       delete next.exerciseResults[previousKey];
       next.exerciseResults[nextKey] = clone(result);
       rescoreAncestors(next, workout, result.executionPath);
