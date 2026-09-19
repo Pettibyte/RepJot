@@ -197,5 +197,110 @@
         ]
       }
     ]
+  },
+  {
+    "id": "Incline_Dumbbell_Curl",
+    "movementPattern": "flexion",
+    "laterality": "bilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Close-Grip_Barbell_Bench_Press",
+    "movementPattern": "horizontal_push",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "One-Arm_Incline_Lateral_Raise",
+    "movementPattern": "other",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Barbell_Incline_Bench_Press_-_Medium_Grip",
+    "movementPattern": "horizontal_push",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Bent_Over_Barbell_Row",
+    "movementPattern": "horizontal_pull",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
   }
 ]

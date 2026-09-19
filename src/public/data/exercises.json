@@ -418,6 +418,205 @@
         }
       ],
       "loadSemantics": "total"
+    },
+    {
+      "id": "Incline_Dumbbell_Curl",
+      "name": "Incline Dumbbell Curl",
+      "instructions": [
+        "Sit back on an incline bench with a dumbbell in each hand held at arms length. Keep your elbows close to your torso and rotate the palms of your hands until they are facing forward. This will be your starting position.",
+        "While holding the upper arm stationary, curl the weights forward while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the dumbbells are at shoulder level. Hold the contracted position for a second.",
+        "Slowly begin to bring the dumbbells back to starting position as your breathe in.",
+        "Repeat for the recommended amount of repetitions."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "flexion",
+      "primaryMuscles": [
+        "biceps"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Close-Grip_Barbell_Bench_Press",
+      "name": "Close-Grip Barbell Bench Press",
+      "instructions": [
+        "Lie back on a flat bench. Using a close grip (around shoulder width), lift the bar from the rack and hold it straight over you with your arms locked. This will be your starting position.",
+        "As you breathe in, come down slowly until you feel the bar on your middle chest. Tip: Make sure that - as opposed to a regular bench press - you keep the elbows close to the torso at all times in order to maximize triceps involvement.",
+        "After a second pause, bring the bar back to the starting position as you breathe out and push the bar using your triceps muscles. Lock your arms in the contracted position, hold for a second and then start coming down slowly again. Tip: It should take at least twice as long to go down than to come up.",
+        "Repeat the movement for the prescribed amount of repetitions.",
+        "When you are done, place the bar back in the rack."
+      ],
+      "equipment": "barbell",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "horizontal_push",
+      "primaryMuscles": [
+        "triceps"
+      ],
+      "secondaryMuscles": [
+        "chest",
+        "shoulders"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "One-Arm_Incline_Lateral_Raise",
+      "name": "One-Arm Incline Lateral Raise",
+      "instructions": [
+        "Lie down sideways on an incline bench press with a dumbbell in the hand. Make sure the shoulder is pressing against the incline bench and the arm is lying across your body with the palm around your navel.",
+        "Hold a dumbbell in your uppermost arm while keeping it extended in front of you parallel to the floor. This is your starting position.",
+        "While keeping the dumbbell parallel to the floor at all times, perform a lateral raise. Your arm should travel straight up until it is pointing at the ceiling. Tip: Exhale as you perform this movement. Hold the dumbbell in the position and feel the contraction in the shoulders for a second.",
+        "While inhaling lower the weight across your body back into the starting position.",
+        "Repeat the movement for the prescribed amount of repetitions.",
+        "Switch arms and repeat the movement."
+      ],
+      "equipment": "dumbbell",
+      "force": "push",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "other",
+      "primaryMuscles": [
+        "shoulders"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "unilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Barbell_Incline_Bench_Press_-_Medium_Grip",
+      "name": "Barbell Incline Bench Press - Medium Grip",
+      "instructions": [
+        "Lie back on an incline bench. Using a medium-width grip (a grip that creates a 90-degree angle in the middle of the movement between the forearms and the upper arms), lift the bar from the rack and hold it straight over you with your arms locked. This will be your starting position.",
+        "As you breathe in, come down slowly until you feel the bar on you upper chest.",
+        "After a second pause, bring the bar back to the starting position as you breathe out and push the bar using your chest muscles. Lock your arms in the contracted position, squeeze your chest, hold for a second and then start coming down slowly again. Tip: it should take at least twice as long to go down than to come up.",
+        "Repeat the movement for the prescribed amount of repetitions.",
+        "When you are done, place the bar back in the rack."
+      ],
+      "equipment": "barbell",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "horizontal_push",
+      "primaryMuscles": [
+        "chest"
+      ],
+      "secondaryMuscles": [
+        "shoulders",
+        "triceps"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
+    },
+    {
+      "id": "Bent_Over_Barbell_Row",
+      "name": "Bent Over Barbell Row",
+      "instructions": [
+        "Holding a barbell with a pronated grip (palms facing down), bend your knees slightly and bring your torso forward, by bending at the waist, while keeping the back straight until it is almost parallel to the floor. Tip: Make sure that you keep the head up. The barbell should hang directly in front of you as your arms hang perpendicular to the floor and your torso. This is your starting position.",
+        "Now, while keeping the torso stationary, breathe out and lift the barbell to you. Keep the elbows close to the body and only use the forearms to hold the weight. At the top contracted position, squeeze the back muscles and hold for a brief pause.",
+        "Then inhale and slowly lower the barbell back to the starting position.",
+        "Repeat for the recommended amount of repetitions."
+      ],
+      "equipment": "barbell",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "beginner",
+      "movementPattern": "horizontal_pull",
+      "primaryMuscles": [
+        "middle back"
+      ],
+      "secondaryMuscles": [
+        "biceps",
+        "lats",
+        "shoulders"
+      ],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "total"
     }
   ]
 }
