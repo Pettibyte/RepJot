@@ -14,6 +14,7 @@
 // account reaches a chooser with nothing to tap.
 
 import type { PublishedStatus, Workout } from '../../domain/types';
+import type { SessionStatus } from '../../domain/enums';
 import type { SessionSummary } from '../../indexes/types';
 import { formatRoute } from '../../routing/routes';
 
@@ -38,6 +39,8 @@ export interface SessionListItemModel {
   sessionId: string;
   /** The workout name carried by the summary. */
   workoutName: string;
+  /** The raw session status. Drives the completed mark. */
+  status: SessionStatus;
   /** 'In progress', 'Completed', or 'Abandoned'. */
   statusLabel: string;
   /** 'Today 06:30' for a session started today, '2026-08-31' for an earlier day. */
@@ -224,6 +227,7 @@ function toSessionItem(
     sessionId: summary.id,
     workoutName: summary.workoutName,
     statusLabel: statusLabel(summary.status),
+    status: summary.status,
     // REQUIREMENTS 17.5: an in-progress entry shows its start time. The label
     // uses `startedAtUtc` for every row, because that is the timestamp each
     // list sorts by. `updatedAtUtc` stays the active-list sort key, which

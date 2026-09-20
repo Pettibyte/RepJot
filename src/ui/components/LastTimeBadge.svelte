@@ -17,6 +17,7 @@
   badge drawn without one stays the read-only summary it always was.
 -->
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import type { LastTimeModel } from '../viewmodels/activeWorkoutModel';
 
   let {
@@ -30,9 +31,9 @@
     /** True while a save is in flight, so a double tap cannot fill twice. */
     disabled?: boolean;
     /**
-     * Runs when the fill arrow is tapped.
+     * Runs when the fill control is tapped.
      *
-     * Absent means no arrow. A caller that cannot record — a finished
+     * Absent means no control. A caller that cannot record — a finished
      * session, a row with no fields — leaves this out rather than drawing a
      * control that would do nothing.
      */
@@ -47,7 +48,7 @@
       : `${exerciseName === '' ? '' : `${exerciseName}: `}No history`
   );
 
-  /** The arrow carries no readable text, so its name is spelled out. */
+  /** The icon carries no readable text, so its name is spelled out. */
   const fillLabel = $derived(
     exerciseName === ''
       ? 'Fill with last time data.'
@@ -55,7 +56,7 @@
   );
 
   /**
-   * Whether the arrow may be drawn.
+   * Whether the fill control may be drawn.
    *
    * A badge with no recorded values has nothing to copy, so the control
    * would be a promise the model cannot keep.
@@ -99,7 +100,9 @@
         aria-label={fillLabel}
         {disabled}
         onclick={handleFill}
-      >&#x1F872;</button>
+      >
+        <Icon name="input" decorative />
+      </button>
     {/if}
   </span>
 {:else}

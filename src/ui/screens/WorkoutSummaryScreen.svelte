@@ -23,6 +23,7 @@
   import Button from '../components/Button.svelte';
   import DataError from '../components/DataError.svelte';
   import SummaryTree from '../components/SummaryTree.svelte';
+  import StatusLabel from '../components/StatusLabel.svelte';
   import { services } from '../../services/registry';
   import { getRouter } from '../../routing/router-registry';
   import { formatRoute } from '../../routing/routes';
@@ -118,7 +119,7 @@
     <header class="summary-screen__head">
       <h1 class="summary-screen__title">{model.title}</h1>
       <p class="summary-screen__meta">
-        <span class="badge">{model.statusLabel}</span>
+        <StatusLabel class="badge" status={model.status} label={model.statusLabel} />
         {#if model.startedLabel !== ''}
           <span class="summary-screen__date">Started {model.startedLabel}</span>
         {/if}

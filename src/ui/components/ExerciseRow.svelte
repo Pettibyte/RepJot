@@ -24,6 +24,7 @@
   import EffortControl from './EffortControl.svelte';
   import LastTimeBadge from './LastTimeBadge.svelte';
   import SideControl from './SideControl.svelte';
+  import StatusLabel from './StatusLabel.svelte';
   import ValueInput from './ValueInput.svelte';
   import Button from './Button.svelte';
   import type { ActiveExerciseRow } from '../viewmodels/activeWorkoutModel';
@@ -374,7 +375,9 @@
           onpaneltoggle?.(row.key, target.open);
         }}
       >
-        <summary class="exercise-row__options-summary">Set options · {currentStatus}</summary>
+        <summary class="exercise-row__options-summary">
+          Set options · <StatusLabel status={currentStatus} label={currentStatus} />
+        </summary>
         <div class="exercise-row__options-body">{@render resultControls()}</div>
       </details>
     {:else}

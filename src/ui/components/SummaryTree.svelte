@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import DataError from './DataError.svelte';
+  import StatusLabel from './StatusLabel.svelte';
   import type {
     SummaryContainerRow,
     SummaryDisplayBlock,
@@ -67,7 +68,7 @@
       {/if}
     </span>
     {#if score.detailed}<span class="summary-row__note">Recorded as detailed</span>{/if}
-    <span class="summary-row__status">{score.statusLabel}</span>
+    <StatusLabel class="summary-row__status" status={score.status} label={score.statusLabel} />
     {#if score.reasonLabel !== undefined}
       <p class="summary-row__reason">{score.reasonLabel}</p>
     {/if}
@@ -95,7 +96,7 @@
         {/if}
       {/if}
       {#if row.attempt > 1}<span class="summary-row__attempt">Attempt {row.attempt}</span>{/if}
-      <span class="summary-row__status">{row.statusLabel}</span>
+      <StatusLabel class="summary-row__status" status={row.status} label={row.statusLabel} />
     </div>
     {#if row.valuesLabel !== ''}<p class="summary-row__values">{row.valuesLabel}</p>{/if}
     {#if row.alternatingLabel !== undefined}

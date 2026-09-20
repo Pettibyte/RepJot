@@ -139,9 +139,24 @@
 
   /** The tab items, with the current route marked. */
   const tabItems = $derived([
-    { href: '#/', label: 'Workout', current: current.name === 'home' },
-    { href: '#/history', label: 'History', current: current.name === 'history' },
-    { href: '#/settings', label: 'Settings', current: current.name === 'settings' }
+    {
+      href: '#/',
+      label: 'Workout',
+      icon: 'fitness_center',
+      current: current.name === 'home'
+    },
+    {
+      href: '#/history',
+      label: 'History',
+      icon: 'receipt_long',
+      current: current.name === 'history'
+    },
+    {
+      href: '#/settings',
+      label: 'Settings',
+      icon: 'settings',
+      current: current.name === 'settings'
+    }
   ]);
 
   /**

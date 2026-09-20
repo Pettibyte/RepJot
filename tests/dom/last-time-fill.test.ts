@@ -127,7 +127,7 @@ function squatTable(target: HTMLElement): HTMLElement {
 
 function fillButton(scope: HTMLElement): HTMLButtonElement {
   const found = scope.querySelector<HTMLButtonElement>('.last-time__fill');
-  if (found === null) throw new Error('the fill arrow did not render');
+  if (found === null) throw new Error('the fill control did not render');
   return found;
 }
 
@@ -152,11 +152,14 @@ function tap(el: HTMLElement): void {
 }
 
 describe('fill with last time data', () => {
-  test('the arrow sits beside the badge and says what it does', async () => {
+  test('the fill control sits beside the badge and says what it does', async () => {
     const target = await mountScreen(true);
     const button = fillButton(squatTable(target));
 
-    expect(button.textContent).toBe('\u{1F872}');
+    // The mark is the reviewed `input` glyph drawn as inline SVG. A raw
+    // Unicode codepoint can render as a blank box where no font covers it.
+    expect(button.querySelector('svg')).not.toBeNull();
+    expect(button.textContent?.trim()).toBe('');
     expect(button.getAttribute('title')).toBe('Fill with last time data.');
     expect(button.className).toContain('pill');
     expect(button.className).toContain('chip');

@@ -25,6 +25,15 @@
   width: 32px;
 }
 
+/* Status label ------------------------------------------------------- */
+
+/* The completed mark rides inside the caller's own status class, so only the
+   space between mark and text is owned here. No `gap`: the targeted browser
+   has no flexbox `gap`. */
+.status-label .icon {
+  margin-right: var(--space-1);
+}
+
 /* Button ------------------------------------------------------------- */
 
 .btn {

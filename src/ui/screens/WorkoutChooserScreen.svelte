@@ -110,7 +110,12 @@
   }
 
   function openFilter(): void {
-    if (filterOpen) return;
+    if (filterOpen) {
+      // The tune button is the cancel action. Pending changes never affect the
+      // applied list, so closing restores no additional state.
+      filterOpen = false;
+      return;
+    }
     pendingStatuses = new Set(appliedStatuses);
     filterOpen = true;
   }

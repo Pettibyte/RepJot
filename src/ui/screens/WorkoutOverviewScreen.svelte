@@ -84,6 +84,7 @@
       <Button
         variant="primary"
         block
+        icon="play_arrow"
         disabled={starting || $services.sessionService === null}
         onclick={() => void startWorkout()}
       >

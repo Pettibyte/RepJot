@@ -71,6 +71,15 @@ export interface HistoryRow {
   sessionId: string;
   /** The workout name, or the exercise name on an Exercise History row. */
   workoutName: string;
+  /**
+   * The raw status behind `statusLabel`.
+   *
+   * A Workout History row carries the session status and an Exercise History
+   * row carries the result status, so the field holds either vocabulary.
+   * `'completed'` is the one value both share, and it is the only value the
+   * completed mark reads.
+   */
+  status: string;
   /** `In progress`, `Completed`, or `Abandoned`. */
   statusLabel: string;
   /** `Today 06:30`, `Mar 14`, or `2025-03-14`. See `formatHistoryDate`. */
@@ -233,6 +242,7 @@ export function buildWorkoutHistoryModel(
     sessionId: summary.id,
     workoutName: summary.workoutName,
     statusLabel: sessionStatusLabel(summary.status),
+    status: summary.status,
     dateLabel: formatHistoryDate(summary.startedAtUtc, nowValue, localTimeZone),
     startedAtUtc: summary.startedAtUtc,
     href: formatRoute({ name: 'session-summary', sessionId: summary.id })
@@ -257,6 +267,7 @@ export function buildExerciseHistoryModel(
     sessionId: occurrence.sessionId,
     workoutName: exerciseName === '' ? occurrence.exerciseId : exerciseName,
     statusLabel: sessionStatusLabel(occurrence.status),
+    status: occurrence.status,
     dateLabel: formatHistoryDate(occurrence.completedAtUtc, nowValue, localTimeZone),
     startedAtUtc: occurrence.completedAtUtc,
     href: formatRoute({ name: 'session-summary', sessionId: occurrence.sessionId }),

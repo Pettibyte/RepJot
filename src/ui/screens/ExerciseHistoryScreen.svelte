@@ -24,6 +24,7 @@
 
   import Button from '../components/Button.svelte';
   import LoadOlder from '../components/LoadOlder.svelte';
+  import StatusLabel from '../components/StatusLabel.svelte';
   import { services } from '../../services/registry';
   import { formatRoute } from '../../routing/routes';
   import {
@@ -164,7 +165,7 @@
             <a class="session-row session-item" href={row.href}>
               <span class="session-item__name">{row.workoutName}</span>
               <span class="session-item__meta">
-                <span class="session-item__status">{row.statusLabel}</span>
+                <StatusLabel class="session-item__status" status={row.status} label={row.statusLabel} />
                 {#if row.detailLabel !== undefined && row.detailLabel !== ''}
                   <span class="session-item__time">{row.detailLabel}</span>
                 {/if}

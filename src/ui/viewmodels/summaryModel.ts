@@ -19,7 +19,7 @@
 //    its row and adds one entry to `unresolved`, which the screen turns into
 //    one `DataError` card. REQUIREMENTS 6.10.
 
-import type { ReasonCode, ResultStatus, SetType, Side, Stimulus } from '../../domain/enums';
+import type { ReasonCode, ResultStatus, SessionStatus, SetType, Side, Stimulus } from '../../domain/enums';
 import type {
   ContainerResult,
   ExerciseResult,
@@ -303,6 +303,8 @@ export type SummaryDisplayBlock =
 export interface SummaryModel {
   /** The workout name, or the stored `workoutId` when the bundle lacks it. */
   title: string;
+  /** The raw session status. Drives the completed mark. */
+  status: SessionStatus;
   /** `In progress`, `Completed`, or `Abandoned`. */
   statusLabel: string;
   /** The start date label. Empty when the stamp is unusable. */
@@ -922,6 +924,7 @@ export function buildSummaryModel(input: SummaryModelInput): SummaryModel {
   const model: SummaryModel = {
     title: workout?.name ?? session.workoutId,
     statusLabel: SESSION_STATUS_LABELS.get(session.status) ?? session.status,
+    status: session.status,
     startedLabel: formatHistoryDate(session.startedAtUtc, nowValue, localTimeZone),
     completedLabel: formatHistoryDate(session.completedAtUtc, nowValue, localTimeZone),
     groups: orderedGroups,

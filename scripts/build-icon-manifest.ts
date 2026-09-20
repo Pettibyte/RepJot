@@ -59,6 +59,7 @@ export const REVIEWED_GLYPHS: string[] = [
   'weight', // load and reps metrics
   'arrow_back', // BackHeader back control
   'add', // AMRAP quick round control
+  'input', // Fill with last time data control
 ];
 
 const PACKAGE_NAME = '@iconify-json/material-symbols';

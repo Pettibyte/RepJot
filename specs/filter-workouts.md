@@ -77,9 +77,10 @@ open, their checkbox values copy the currently applied filter. This permits a
 user to make several changes and apply them together.
 
 `Apply` commits the checkbox values to the in-memory applied filter, resets
-the workout-list offset to zero, and hides the controls. No Cancel control is
-needed: closing occurs only after Apply, and un-applied checkbox changes are
-not used by the list.
+the workout-list offset to zero, and hides the controls. When the controls are
+open, tapping the `tune` button again closes and cancels them. It discards
+un-applied checkbox changes and leaves the applied filter unchanged. There is
+no separate Cancel control.
 
 An empty selection is valid. It shows no workout rows and displays `No workouts
 match the selected visibility.` The active-session and Recent sections do not
@@ -145,8 +146,10 @@ authorization.
    checkboxes, and Apply.
 9. Checkbox changes do not change rows until Apply.
 10. Apply updates the rows, resets the page offset, and hides the controls.
-11. A remounted chooser resets to live-only visibility.
-12. Draft and deprecated workouts remain in the complete static lookup and can
+11. Tapping `tune` while controls are open hides them, discards pending changes,
+    and leaves the applied filter unchanged.
+12. A remounted chooser resets to live-only visibility.
+13. Draft and deprecated workouts remain in the complete static lookup and can
     still resolve existing sessions.
-13. No preferences document, route, or start-authorization test changes for
+14. No preferences document, route, or start-authorization test changes for
     this feature.

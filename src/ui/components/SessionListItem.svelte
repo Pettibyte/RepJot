@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
   import DataError from './DataError.svelte';
+  import StatusLabel from './StatusLabel.svelte';
   import type { SessionListItemModel } from '../viewmodels/chooserModel';
 
   let { item }: { item: SessionListItemModel } = $props();
@@ -57,7 +58,7 @@
   <a class="session-row session-item" href={item.href}>
     <span class="session-item__name">{item.workoutName}</span>
     <span class="session-item__meta">
-      <span class="session-item__status">{item.statusLabel}</span>
+      <StatusLabel class="session-item__status" status={item.status} label={item.statusLabel} />
       <span class="session-item__time">{item.timeLabel}</span>
     </span>
   </a>
