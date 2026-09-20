@@ -19,7 +19,7 @@ import type { Quantity } from '../../domain/types';
 import type { ExerciseOccurrence, SessionSummary } from '../../indexes/types';
 import { formatRoute } from '../../routing/routes';
 import { nowUtc as wallClockUtc } from '../../domain/time';
-import { formatAlternatingReps, unitLabel } from '../../units/format';
+import { formatAlternatingReps, formatMinuteValue, unitLabel } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
 import type { ResultValues } from '../../domain/types';
 
@@ -285,7 +285,7 @@ export function buildExerciseHistoryModel(
  * number drops its trailing `.0`: `225 lb`, not `225.0 lb`.
  */
 function formatReadQuantity(q: Quantity): string {
-  const text = formatEditable(q);
+  const text = q.unit === 'minute' ? formatMinuteValue(q.value) : formatEditable(q);
   const trimmed = text.endsWith('.0') ? text.slice(0, -2) : text;
   return `${trimmed} ${unitLabel(q.unit)}`;
 }

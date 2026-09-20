@@ -22,13 +22,16 @@
   import type { DraftChild } from '../../sessions/draft-expansion';
   import type { GroupModel } from '../viewmodels/activeWorkoutModel';
   import { formatStep } from '../viewmodels/activeWorkoutModel';
-  import { unitLabel } from '../../units/format';
+  import { formatMinuteValue, unitLabel } from '../../units/format';
 
   /** Show one derived quantity on a read-only line. */
   function showQuantity(quantity: { value: number; unit: string }): string {
     // Reps read as whole numbers. Every other dimension reads to 0.1.
     const step = quantity.unit === 'reps' ? 1 : 0.1;
-    return `${formatStep(quantity.value, step)} ${unitLabel(quantity.unit)}`;
+    const value = quantity.unit === 'minute'
+      ? formatMinuteValue(quantity.value)
+      : formatStep(quantity.value, step);
+    return `${value} ${unitLabel(quantity.unit)}`;
   }
 
   let {

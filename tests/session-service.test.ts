@@ -1403,24 +1403,42 @@ describe('terminal fields stay put across complete and abandon', () => {
     expect(JSON.stringify(after)).toBe(before);
   });
 
-  test('complete on an abandoned session is refused', async () => {
+  test('setTerminalStatus reclassifies an abandoned session without moving workout timestamps', async () => {
     const left = emptySession('abandoned');
+    left.startedAtUtc = '2026-08-01T10:00:00Z';
     left.completedAtUtc = '2026-08-01T11:00:00Z';
     const { service, coordinator } = await makeSetup([shardWith(left)]);
 
-    const kind = await kindOfRejection(() => service.complete(SESSION_KEY));
-    expect(kind).toBe('invalid_document');
-    expect(workingSession(coordinator).status).toBe('abandoned');
-    expect(workingSession(coordinator).completedAtUtc).toBe('2026-08-01T11:00:00Z');
+    await service.setTerminalStatus(SESSION_KEY, 'completed');
+
+    const after = workingSession(coordinator);
+    expect(after.status).toBe('completed');
+    expect(after.startedAtUtc).toBe('2026-08-01T10:00:00Z');
+    expect(after.completedAtUtc).toBe('2026-08-01T11:00:00Z');
   });
 
-  test('abandon on a completed session is refused', async () => {
+  test('setTerminalStatus reclassifies a completed session without moving workout timestamps', async () => {
     const done = emptySession('completed');
+    done.startedAtUtc = '2026-08-01T10:00:00Z';
     done.completedAtUtc = '2026-08-01T11:00:00Z';
-    const { service } = await makeSetup([shardWith(done)]);
+    const { service, coordinator } = await makeSetup([shardWith(done)]);
 
-    const kind = await kindOfRejection(() => service.abandon(SESSION_KEY, 'time_constraint'));
+    await service.setTerminalStatus(SESSION_KEY, 'abandoned');
+
+    const after = workingSession(coordinator);
+    expect(after.status).toBe('abandoned');
+    expect(after.startedAtUtc).toBe('2026-08-01T10:00:00Z');
+    expect(after.completedAtUtc).toBe('2026-08-01T11:00:00Z');
+  });
+
+  test('setTerminalStatus refuses an in-progress session', async () => {
+    const { service, coordinator } = await makeEmptySetup();
+
+    const kind = await kindOfRejection(() => service.setTerminalStatus(SESSION_KEY, 'completed'));
+
     expect(kind).toBe('invalid_document');
+    expect(workingSession(coordinator).status).toBe('in_progress');
+    expect(workingSession(coordinator).completedAtUtc).toBeUndefined();
   });
 
   test('the first complete fixes completedAtUtc and a second complete cannot move it', async () => {

@@ -62,7 +62,7 @@ describe('buildOverviewModel: container summaries', () => {
 
   test('an AMRAP names its duration', () => {
     const cindy = model?.nodes.find((node) => node.label === 'Cindy');
-    expect(cindy?.prescriptionText).toBe('AMRAP 20 min');
+    expect(cindy?.prescriptionText).toBe('AMRAP 20:00 min');
   });
 
   test('an EMOM names its cycles and interval', () => {
@@ -304,7 +304,7 @@ describe('formatPrescription', () => {
   test('a duration in seconds folds to minutes when it divides evenly', () => {
     expect(formatPrescription({ duration: { value: 120, unit: 'second' } })).toBe('2 min');
     expect(formatPrescription({ duration: { value: 90, unit: 'second' } })).toBe('90 s');
-    expect(formatPrescription({ duration: { value: 30, unit: 'minute' } })).toBe('30 min');
+    expect(formatPrescription({ duration: { value: 30, unit: 'minute' } })).toBe('30:00 min');
   });
 
   test('a distance and a calorie target render with their units', () => {

@@ -25,7 +25,7 @@ import type {
 } from '../../domain/types';
 import { resolveTree } from '../../sessions/tree-resolver';
 import { encodePath, type PathSegment } from '../../domain/execution-path';
-import { unitLabel } from '../../units/format';
+import { formatMinuteValue, unitLabel } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
 import { formatRoute } from '../../routing/routes';
 
@@ -201,7 +201,7 @@ const STIMULUS_LABELS: Record<string, string> = {
  * a whole number drops its trailing `.0`: `225 lb`, not `225.0 lb`.
  */
 function formatReadQuantity(q: Quantity): string {
-  const text = formatEditable(q);
+  const text = q.unit === 'minute' ? formatMinuteValue(q.value) : formatEditable(q);
   const trimmed = text.endsWith('.0') ? text.slice(0, -2) : text;
   return `${trimmed} ${unitLabel(q.unit)}`;
 }

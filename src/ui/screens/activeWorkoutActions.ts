@@ -23,6 +23,7 @@ import type {
 import type { MissingWorkItem } from '../../sessions/session-service';
 import type { ExerciseResultDraft } from '../../sessions/drafts';
 import { convert } from '../../units/conversion';
+import { formatMinuteValue } from '../../units/format';
 import {
   draftRowValues,
   fieldDisplay,
@@ -145,10 +146,12 @@ export function lastTimeFillText(row: ActiveExerciseRow): Record<string, string>
     const quantity = values[field.dimension];
     if (quantity === undefined) continue;
     try {
-      // `formatStep`, not `formatEditable`: this is the same text a stored
-      // value shows in this field, so a filled set reads `95` the way a
-      // recorded one does rather than `95.0`.
-      filled[field.dimension] = formatStep(convert(quantity, field.unit).value, field.step);
+      // Match the field's stored-value display, so a fill uses `95` rather
+      // than `95.0` and a minute duration uses its clock form.
+      const converted = convert(quantity, field.unit);
+      filled[field.dimension] = field.unit === 'minute'
+        ? formatMinuteValue(converted.value)
+        : formatStep(converted.value, field.step);
     } catch {
       // An unknown or incompatible unit fills nothing. The field keeps what
       // it had rather than show a number the user must notice is wrong.

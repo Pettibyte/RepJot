@@ -339,7 +339,7 @@ describe('WorkoutOverviewScreen', () => {
     expect(out).toContain('Demo Workout');
     expect(out).toContain('workout-tree');
     expect(out).toContain('Start Workout');
-    expect(out).toContain('AMRAP 20 min');
+    expect(out).toContain('AMRAP 20:00 min');
   });
 
   test('the start button is disabled with no session service', () => {

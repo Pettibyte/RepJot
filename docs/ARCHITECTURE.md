@@ -370,9 +370,9 @@ Use styled native HTML controls. Application actions use Material Symbols. Fitne
 6. Debounce Drive synchronization separately for each logical file.
 7. Start a local flush on `pagehide`. Do not claim that a network save completed.
 8. Do not make route publication wait for Drive.
-9. Complete or abandon a session by setting its terminal status and timestamps.
+9. Complete or abandon a session by setting its terminal status and timestamps. A completed session can be reclassified as abandoned, and an abandoned session can be reclassified as completed; either change preserves `startedAtUtc` and `completedAtUtc`.
 10. Delete a session by removing its key from the shard `sessions` map.
-11. Edit terminal sessions against the current tree. Preserve terminal status, `startedAtUtc`, and `completedAtUtc`.
+11. Edit terminal sessions against the current tree. Ordinary edits preserve terminal status, `startedAtUtc`, and `completedAtUtc`.
 
 A stale device can restore a deleted session because release one stores no tombstone. The user can delete the restored session again.
 

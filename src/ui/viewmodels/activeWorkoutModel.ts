@@ -64,7 +64,7 @@ import {
   nextCompatibleUnit,
   type Dimension
 } from '../../units/conversion';
-import { formatAlternating, unitLabel } from '../../units/format';
+import { formatAlternating, formatMinuteValue, unitLabel } from '../../units/format';
 import {
   CONTAINER_FALLBACK_NAMES,
   formatContainerSummary,
@@ -558,6 +558,11 @@ export function prescribedRepsValue(reps: RepsPrescription | undefined): number 
   return undefined;
 }
 
+/** Format one field value in the unit it will display. */
+function formatFieldValue(value: number, unit: string, step: number): string {
+  return unit === 'minute' ? formatMinuteValue(value) : formatStep(value, step);
+}
+
 /** The stored value for one dimension, as the display string in the preferred unit. */
 function storedText(
   values: ResultValues | undefined,
@@ -569,7 +574,7 @@ function storedText(
   if (quantity === undefined || preferredUnit === undefined) return '';
   try {
     const converted = convert(quantity, preferredUnit);
-    return formatStep(converted.value, step);
+    return formatFieldValue(converted.value, preferredUnit, step);
   } catch {
     return '';
   }
@@ -645,7 +650,7 @@ function buildLastTime(
       // A read-only line drops the trailing `.0`. `formatEditable` keeps one
       // decimal because an editable field must show the digit the user types
       // into; a badge is not a field. `225 lb`, not `225.0 lb`.
-      parts.push(`${formatStep(quantity.value, stepFor(dimension))} ${unitLabel(quantity.unit)}`);
+      parts.push(`${formatFieldValue(quantity.value, quantity.unit, stepFor(dimension))} ${unitLabel(quantity.unit)}`);
     }
     if (parts.length === 0) break;
 
@@ -1340,13 +1345,11 @@ export function convertFieldDisplay(
   display: string,
   targetUnit: string
 ): string {
-  const trimmed = display.trim();
-  if (trimmed === '') return '';
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) return '';
+  const parsed = parseFieldValue(field, display);
+  if (parsed === null) return '';
   try {
-    const converted = convert({ value: parsed, unit: field.unit }, targetUnit);
-    return formatStep(converted.value, field.step);
+    const converted = convert(parsed, targetUnit);
+    return formatFieldValue(converted.value, targetUnit, field.step);
   } catch {
     // A unit the table cannot read leaves the text alone. The pill never
     // invents a number.

@@ -21,6 +21,7 @@ import {
 import type { ActiveExerciseRow } from '../src/ui/viewmodels/activeWorkoutModel';
 import type { Side } from '../src/domain/enums';
 import { encodePath, exerciseResultKey } from '../src/domain/execution-path';
+import { formatMinuteValue } from '../src/units/format';
 import type { Exercise, ResultsShard, Session, Workout } from '../src/domain/types';
 import { createLookupService, type LookupService } from '../src/indexes/lookup-service';
 import { createPreferenceService } from '../src/preferences/preference-service';
@@ -614,6 +615,12 @@ describe('field parsing', () => {
     expect(fieldInputError(field, '')).toBeUndefined();
   });
 
+  test('minute values default to mm:ss', () => {
+    expect(formatMinuteValue(2.25)).toBe('2:15');
+    expect(formatMinuteValue(2)).toBe('2:00');
+    expect(formatMinuteValue(60)).toBe('60:00');
+  });
+
   describe('a duration field accepts a clock entry', () => {
     const minutes = {
       ...field,
@@ -713,6 +720,20 @@ describe('unit pill conversion', () => {
     expect(result.nextUnit).toBe('lb');
     // 100 kg is 220.462... lb.
     expect(result.display).toBe('220.5');
+  });
+
+  test('a duration unit tap renders minute values as mm:ss', async () => {
+    const h = harness();
+    const result = await tapUnitPill({
+      exercise: h.staticData.exerciseById.get('row'),
+      dimension: 'duration',
+      currentUnit: 'second',
+      display: '135',
+      preferences: h.preferences.service
+    });
+
+    expect(result.nextUnit).toBe('minute');
+    expect(result.display).toBe('2:15');
   });
 
   test('leaving the rounded value unchanged keeps the full-precision stored value', async () => {

@@ -63,8 +63,17 @@ export function unitLabel(unit: string): string {
  * The number is the editable display value, rounded to the nearest `0.1`.
  * The stored quantity is untouched. REQUIREMENTS 12.5, 12.6.
  */
+/** Format a minute value as `mm:ss`, rounded to the nearest second. */
+export function formatMinuteValue(value: number): string {
+  const totalSeconds = Math.round(value * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds - minutes * 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function formatQuantity(q: Quantity): string {
-  return `${formatEditable(q)} ${unitLabel(q.unit)}`;
+  const value = q.unit === 'minute' ? formatMinuteValue(q.value) : formatEditable(q);
+  return `${value} ${unitLabel(q.unit)}`;
 }
 
 /**

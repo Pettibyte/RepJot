@@ -89,6 +89,9 @@ export type ResultStatus = 'completed' | 'incomplete' | 'skipped';
 /** Session lifecycle. Mirrors `results/v1.schema.json` `session.status`. */
 export type SessionStatus = 'in_progress' | 'completed' | 'abandoned';
 
+/** A session status that records an ended workout. */
+export type TerminalSessionStatus = Exclude<SessionStatus, 'in_progress'>;
+
 /** Why a result is not completed. Mirrors `results/v1.schema.json` `$defs.reasonCode`. */
 export type ReasonCode =
   | 'user_skipped'

@@ -17,7 +17,7 @@ editing, container scoring, and aggregate expansion.
 3. Resolve the session tree from the current bundle on every load.
 4. Compute container scores from saved child detail, with a `nonstandard` fallback.
 5. Produce inferred drafts from an aggregate-only container that become real only on save.
-6. Preserve terminal status and immutable timestamps during historical edits.
+6. Preserve terminal status and immutable timestamps during historical edits, while allowing completed and abandoned sessions to be reclassified.
 
 ## Interfaces
 
@@ -48,6 +48,7 @@ export interface SessionService {
   expandAggregate(sessionId: string, containerKey: string): Promise<DraftChild[]>;
   complete(sessionId: string): Promise<void>;
   abandon(sessionId: string, reasonCode: ReasonCode): Promise<void>;
+  setTerminalStatus(sessionId: string, status: TerminalSessionStatus): Promise<void>;
   remove(sessionId: string): Promise<void>;
 }
 export function createSessionService(deps: {
@@ -110,16 +111,18 @@ export function expandAggregateToDraft(
 8. Detail that breaks progression or cannot derive the exact aggregate sets
    `score: { type: 'nonstandard' }`.
 9. `complete` sets `status: 'completed'` and `completedAtUtc`. `abandon` sets
-   `status: 'abandoned'` and `completedAtUtc`. A terminal `status` never changes
-   after it is written, and `completedAtUtc` is written once. A call that would
-   turn an abandoned session into a completed one, or the reverse, throws
-   `invalid_document` with reason `terminal_status_conflict`. A call that repeats
-   the status already held writes nothing.
+   `status: 'abandoned'` and `completedAtUtc`. `setTerminalStatus` changes a
+   completed session to abandoned or an abandoned session to completed; these
+   are the only status reclassifications. `completedAtUtc` is written once and
+   preserved when the terminal status changes. A call that repeats the status
+   already held writes nothing.
 10. `remove` deletes the key from the shard `sessions` map. No tombstone. The
     call loads the shard first, and refuses with `session_not_found` when the
     shard does not hold the session.
-11. Any mutation on a terminal session preserves `status`, `startedAtUtc`, and
-    `completedAtUtc` and sets a new `updatedAtUtc`.
+11. Ordinary mutations on a terminal session preserve `status`, `startedAtUtc`,
+    and `completedAtUtc` and set a new `updatedAtUtc`. `setTerminalStatus` is
+    the one exception: it changes only `status` and still preserves both workout
+    timestamps.
 12. Every mutation runs the semantic validator on the candidate before the
     coordinator writes it.
 

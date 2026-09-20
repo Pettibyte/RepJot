@@ -13,10 +13,11 @@
 // 2. The candidate is validated before it is written. `validateSession` runs
 //    inside the mutator, so a rejected candidate throws before the coordinator
 //    stores anything and the previous records stay untouched.
-// 3. Terminal fields never move during a historical edit. `status`,
+// 3. Terminal timestamps never move during a historical edit. `status`,
 //    `startedAtUtc`, and `completedAtUtc` are copied back from the stored
-//    session on every ordinary mutation. Only `complete` and `abandon` write
-//    them, and they write them once. REQUIREMENTS 11.19, 11.20.
+//    session on every ordinary mutation. Only terminal lifecycle and
+//    reclassification methods can change status; they preserve both workout
+//    timestamps. REQUIREMENTS 11.19, 11.20.
 // 4. Saved child detail is authoritative. Once children exist under a scored
 //    container, the container score is derived from them on every later edit,
 //    because the semantic validator rejects a stored score the detail does not
@@ -37,7 +38,7 @@ import {
 } from '../domain/execution-path';
 import { createSessionId } from '../domain/ids';
 import { nowUtc, shardName, yearMonthUtc } from '../domain/time';
-import type { ReasonCode, SessionStatus } from '../domain/enums';
+import type { ReasonCode, TerminalSessionStatus } from '../domain/enums';
 import type {
   ContainerNode,
   ExerciseResult,
@@ -121,10 +122,12 @@ export interface SessionService {
   setContainerScore(sessionId: string, draft: ContainerResultDraft): Promise<void>;
   /** Build the inferred draft set behind an aggregate-only container. Writes nothing. */
   expandAggregate(sessionId: string, containerKey: string): Promise<DraftChild[]>;
-  /** Mark the session completed. */
+  /** Mark an in-progress session completed. */
   complete(sessionId: string): Promise<void>;
-  /** Mark the session abandoned. */
+  /** Mark an in-progress session abandoned. */
   abandon(sessionId: string, reasonCode: ReasonCode): Promise<void>;
+  /** Reclassify a completed or abandoned session without changing its timestamps. */
+  setTerminalStatus(sessionId: string, status: TerminalSessionStatus): Promise<void>;
   /** Delete the session from its shard. No tombstone. */
   remove(sessionId: string): Promise<void>;
   /** Report the prescribed work a session has not recorded. */
@@ -989,48 +992,35 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   }
 
   /**
-   * Refuse a terminal status that would overwrite a different terminal status.
-   *
-   * A terminal `status` never changes once written, and `completedAtUtc` never
-   * changes once written. Converting abandoned work into completed work, or the
-   * reverse, misreports a workout the user walked away from, so the service
-   * refuses the call instead of applying it. The screen confirms with the user
-   * and, if the user wants the other outcome, deletes the session and records
-   * it again. REQUIREMENTS 11.19, 11.20.
-   *
-   * Runs inside the mutator, so it reads the stored status at write time and a
-   * concurrent edit cannot slip a different status past the check.
-   */
-  function assertTerminalTransition(stored: Session, target: SessionStatus, sessionId: string): void {
-    if (stored.status === target) return;
-    if (stored.status === 'completed' || stored.status === 'abandoned') {
-      throw new AppError(
-        'invalid_document',
-        { reason: 'terminal_status_conflict', sessionId, status: stored.status, target },
-        'That session already ended as ' + stored.status + '.'
-      );
-    }
-  }
-
-  /**
-   * Move one in-progress session to a terminal status, once.
+   * Move an in-progress session to a terminal status.
    *
    * `completedAtUtc` is written only when the session has none, so the first
-   * terminal write fixes the timestamp and no later call moves it.
+   * terminal write fixes the timestamp. Terminal reclassification belongs to
+   * `setTerminalStatus`, which preserves that timestamp.
    */
-  async function markTerminal(sessionId: string, target: SessionStatus): Promise<void> {
+  async function markTerminal(sessionId: string, target: TerminalSessionStatus): Promise<void> {
     const session = await load(sessionId);
     // Already in the target status: nothing to write, so nothing is written.
     // REQUIREMENT 11.2.
     if (session.status === target) return;
     if (session.status !== 'in_progress') {
-      assertTerminalTransition(session, target, sessionId);
+      throw new AppError(
+        'invalid_document',
+        { reason: 'terminal_status_change_requires_setter', sessionId, status: session.status, target },
+        'Use setTerminalStatus to change an ended session.'
+      );
     }
 
     await editNow(
       sessionId,
       (next: Session): void => {
-        assertTerminalTransition(next, target, sessionId);
+        if (next.status !== 'in_progress') {
+          throw new AppError(
+            'invalid_document',
+            { reason: 'terminal_status_change_requires_setter', sessionId, status: next.status, target },
+            'Use setTerminalStatus to change an ended session.'
+          );
+        }
         next.status = target;
         if (next.completedAtUtc === undefined) next.completedAtUtc = nowUtc();
       },
@@ -1052,6 +1042,36 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       code: 'session_abandoned',
       context: { sessionId, reasonCode }
     });
+  }
+
+  async function setTerminalStatus(
+    sessionId: string,
+    target: TerminalSessionStatus
+  ): Promise<void> {
+    const session = await load(sessionId);
+    if (session.status === 'in_progress') {
+      throw new AppError(
+        'invalid_document',
+        { reason: 'terminal_status_required', sessionId, target },
+        'That session has not ended yet.'
+      );
+    }
+    if (session.status === target) return;
+
+    await editNow(
+      sessionId,
+      (next: Session): void => {
+        if (next.status === 'in_progress') {
+          throw new AppError(
+            'invalid_document',
+            { reason: 'terminal_status_required', sessionId, target },
+            'That session has not ended yet.'
+          );
+        }
+        next.status = target;
+      },
+      true
+    );
   }
 
   async function remove(sessionId: string): Promise<void> {
@@ -1243,6 +1263,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     expandAggregate,
     complete,
     abandon,
+    setTerminalStatus,
     remove,
     reportMissingWork,
     queueSaveExerciseResult,

@@ -470,6 +470,8 @@ export interface ContainerResult {
  * One workout session. Mirrors `$defs.session`.
  * Schema rules the type cannot express: `id` must equal the `sessions` map key;
  * `'in_progress'` forbids `completedAtUtc`; a terminal status requires it.
+ * A terminal session may be reclassified between `completed` and `abandoned`,
+ * but its workout timestamps remain unchanged.
  */
 export interface Session {
   id: string;

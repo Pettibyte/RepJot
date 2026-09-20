@@ -47,14 +47,14 @@ describe('formatQuantity', () => {
   test('renders the rounded value with the unit label', () => {
     expect(formatQuantity({ value: 220.46226218487757, unit: 'lb' })).toBe('220.5 lb');
     expect(formatQuantity({ value: 3.1068559675852835, unit: 'mi' })).toBe('3.1 mi');
-    expect(formatQuantity({ value: 1.5, unit: 'minute' })).toBe('1.5 min');
+    expect(formatQuantity({ value: 1.5, unit: 'minute' })).toBe('1:30 min');
     expect(formatQuantity({ value: 45, unit: 'second' })).toBe('45.0 s');
     expect(formatQuantity({ value: 12, unit: 'reps' })).toBe('12.0 reps');
   });
 
   test('a small positive conversion renders 0.0 without changing the value', () => {
     const oneSecondInMinutes: Quantity = { value: 1 / 60, unit: 'minute' };
-    expect(formatQuantity(oneSecondInMinutes)).toBe('0.0 min');
+    expect(formatQuantity(oneSecondInMinutes)).toBe('0:01 min');
     expect(oneSecondInMinutes.value).toBeGreaterThan(0);
   });
 });

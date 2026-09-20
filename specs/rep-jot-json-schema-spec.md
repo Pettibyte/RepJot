@@ -899,7 +899,7 @@ New session IDs use the prefix `session-` followed by a collision-resistant UUID
 
 No session stores an `executionPlan`, in progress or terminal. An in-progress session resolves its tree from the current bundle on each load. A deploy during an active workout can change that workout. The user restarts the session or edits the result afterward.
 
-Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor starts from the current workout tree and overlays recorded results by execution path. New current-tree nodes appear with blank results. Editing preserves `status`, `startedAtUtc`, and `completedAtUtc`. Release one does not permit edits to workout timestamps.
+Completed and abandoned sessions remain terminal while the Active Workout editor changes their results. The editor starts from the current workout tree and overlays recorded results by execution path. New current-tree nodes appear with blank results. Ordinary result editing preserves `status`, `startedAtUtc`, and `completedAtUtc`. The editor can reclassify a completed session as abandoned, or an abandoned session as completed; reclassification preserves `startedAtUtc` and `completedAtUtc`. Release one does not permit edits to workout timestamps.
 
 REP JOT creates no sync copy. A merge conflict resolves by the last-syncer-wins rule without a new session ID and without a label. History shows one entry per session ID. No session carries a `conflictOfSessionId` field.
 

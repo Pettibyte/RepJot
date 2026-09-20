@@ -219,6 +219,19 @@ describe('lastTimeFillText', () => {
     expect(lastTimeFillText(target)).toEqual({ reps: '5', weight: '220.5' });
   });
 
+  test('fills a minute duration as mm:ss', () => {
+    const target = row({
+      fields: [field({
+        dimension: 'duration',
+        unit: 'minute',
+        compatibleUnits: ['second', 'minute']
+      })],
+      lastTime: { kind: 'value', text: '135 s', fill: { duration: { value: 135, unit: 'second' } } }
+    });
+
+    expect(lastTimeFillText(target)).toEqual({ duration: '2:15' });
+  });
+
   test('a dimension the last session skipped is left alone', () => {
     const target = row({
       lastTime: { kind: 'value', text: '5 reps', fill: { reps: { value: 5, unit: 'reps' } } }

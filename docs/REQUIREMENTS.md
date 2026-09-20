@@ -242,12 +242,13 @@ An exercise has:
 - **11.16** Completed and abandoned sessions can be edited with the Active Workout editor.
 - **11.17** Historical editing uses the current retained workout tree and overlays recorded results by execution path.
 - **11.18** No session stores an `executionPlan`, in progress or terminal. Every view resolves the tree from the current bundle. See Section 6.17.
-- **11.19** Editing preserves the session status and UTC workout timestamps while it saves result corrections.
+- **11.19** Ordinary historical editing preserves the session status and UTC workout timestamps while it saves result corrections. The Active Workout editor can reclassify a completed session as abandoned, or an abandoned session as completed. Reclassification preserves the UTC workout timestamps.
 - **11.20** Workout timestamps are immutable in release one. `startedAtUtc` and `completedAtUtc` never change after they are written.
 - **11.21** `updatedAtUtc` is system-managed and is not covered by Section 11.20. The application sets it on every saved write. The user cannot edit it.
 - **11.22** New session IDs use the prefix `session-` followed by a collision-resistant UUID v4. The prefix is required by Section 3.18. The ID does not encode workout time.
 - **11.23** REP JOT creates no sync copy. A merge conflict resolves under Section 4.9 without a new session ID and without a label.
 - **11.24** History shows one entry per session ID. No entry carries a `conflictOfSessionId` field.
+- **11.25** A completed session can change to abandoned, and an abandoned session can change to completed. This reclassification preserves `startedAtUtc` and `completedAtUtc`; no other status change is allowed.
 
 ## 12.0 User Preferences
 

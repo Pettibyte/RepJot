@@ -228,6 +228,27 @@ describe('buildSummaryModel: values come from the session, not the tree', () => 
     expect(row?.valuesLabel).toContain('260 m');
   });
 
+  test('a minute duration prints as mm:ss', () => {
+    const session = validSession();
+    const key = 'root/emom-block:2/emom-row|both|1';
+    session.exerciseResults[key] = {
+      ...session.exerciseResults[key],
+      values: {
+        ...session.exerciseResults[key].values,
+        duration: { value: 2.25, unit: 'minute' }
+      }
+    };
+
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(),
+      localTimeZone: 'UTC',
+      nowUtc: NOW
+    });
+    const row = allRows(model).find((candidate) => candidate.encodedPath === 'root/emom-block:2/emom-row');
+    expect(row?.valuesLabel).toBe('260 m · 2:15 min');
+  });
+
   test('a skipped result keeps its status label and reason', () => {
     const session = validSession();
     const key = 'root/warmup/warmup-squat|both|1';

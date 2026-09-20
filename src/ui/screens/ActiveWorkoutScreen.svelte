@@ -27,13 +27,15 @@
 
   A finished session stays editable. REQUIREMENT 11.16 says a completed or
   abandoned session opens in this same editor so the user can correct a
-  value, and the session service holds `status` and the workout timestamps
-  still on every ordinary write. What a finished session does not get is the
-  finish bar, because a terminal status cannot be written twice.
+  value. Ordinary writes retain its status and workout timestamps; the
+  bottom status chips can correct one terminal status to the other without
+  moving those timestamps. What a finished session does not get is the
+  finish bar, because it cannot be ended a second time.
 -->
 <script lang="ts">
   import { tick } from 'svelte';
   import Button from '../components/Button.svelte';
+  import ChipGroup from '../components/ChipGroup.svelte';
   import WorkoutTreeEditable from '../components/WorkoutTreeEditable.svelte';
   import AmrapControls from '../components/AmrapControls.svelte';
   import EmomControls from '../components/EmomControls.svelte';
@@ -44,6 +46,7 @@
   import { getRouter } from '../../routing/router-registry';
   import {
     buildActiveWorkoutModel,
+    convertFieldDisplay,
     fieldDisplay,
     fieldInputError,
     tapUnitPill,
@@ -68,7 +71,6 @@
   import type { ReasonCode, ResultStatus, Side, StartingSide } from '../../domain/enums';
   import { containerResultKey, defaultSideForLaterality, encodePath, exerciseResultKey, type PathSegment } from '../../domain/execution-path';
   import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
-  import { convert, formatEditable } from '../../units/conversion';
 
   let { sessionId = '' }: { sessionId?: string } = $props();
 
@@ -147,6 +149,11 @@
   const missingRowKeys = $derived(missingItems.map((item) => item.rowKey));
 
   const sessionService = $derived($services.sessionService);
+
+  const terminalStatusOptions = [
+    { value: 'completed', label: 'Completed' },
+    { value: 'abandoned', label: 'Abandoned' }
+  ];
 
   /** Draft text for one row, keyed by dimension. */
   function overridesFor(row: ActiveExerciseRow): Record<string, string> {
@@ -676,12 +683,7 @@
       const candidateField = candidate.fields.find((item) => item.dimension === dimension);
       if (candidateField === undefined) continue;
       const current = fieldDisplay(candidateField, overridesFor(candidate));
-      const converted = current.trim() === ''
-        ? ''
-        : formatEditable(
-            convert({ value: Number(current), unit: candidateField.unit }, result.nextUnit),
-            candidateField.step
-          );
+      const converted = convertFieldDisplay(candidateField, current, result.nextUnit);
       overrides[candidate.key] = {
         ...(overrides[candidate.key] ?? {}),
         [dimension]: candidate.key === row.key ? result.display : converted
@@ -989,6 +991,25 @@
     }
   }
 
+  /** Correct the terminal status without changing its recorded end time. */
+  async function changeTerminalStatus(nextStatus: 'completed' | 'abandoned'): Promise<void> {
+    const service = sessionService;
+    if (service === null || session === null || busy || session.status === nextStatus) return;
+    busy = true;
+    errorText = '';
+    try {
+      await service.queueFlush();
+      await service.setTerminalStatus(session.id, nextStatus);
+      session = await service.load(session.id);
+    } catch (error: unknown) {
+      errorText = error instanceof Error
+        ? error.message
+        : 'REP JOT could not update the workout status.';
+    } finally {
+      busy = false;
+    }
+  }
+
   /** Abandon the session and leave it in History. */
   async function abandonWorkout(): Promise<void> {
     const service = sessionService;
@@ -1149,9 +1170,21 @@
     {/if}
 
     {#if isTerminal}
+      <ChipGroup
+        label="Workout status"
+        options={terminalStatusOptions}
+        value={session?.status ?? ''}
+        idPrefix="active-workout-status"
+        disabled={sessionService === null || busy}
+        onchange={(nextStatus: string) => {
+          if (nextStatus === 'completed' || nextStatus === 'abandoned') {
+            void changeTerminalStatus(nextStatus);
+          }
+        }}
+      />
       <p class="active-workout__hint" role="status">
-        This workout ended as {session?.status}. You can still correct a value
-        here; the status and the workout times stay as they are.
+        This workout ended as {session?.status}. You can still correct its values or status;
+        the workout times stay as they are.
       </p>
     {:else}
       <FinishWorkoutBar
