@@ -2,7 +2,7 @@
   "source": {
     "repo": "Pettibyte/free-exercise-db",
     "ref": "main",
-    "commit": "b332c93a82191d3386bfed2b275ef6e42ee5f72a",
+    "commit": "9b80d7e235562dd1129ccaca143b0def7f764fe4",
     "path": "dist/exercises.json"
   },
   "allowlist": "scripts/exercise-allowlist.json",

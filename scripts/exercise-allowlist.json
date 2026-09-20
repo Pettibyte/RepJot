@@ -302,5 +302,167 @@
         ]
       }
     ]
+  },
+  {
+    "id": "Hammer_Curls",
+    "movementPattern": "flexion",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Barbell_Squat",
+    "movementPattern": "squat",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Kettlebell_Swing",
+    "movementPattern": "hinge",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Barbell_Bench_Press_-_Medium_Grip",
+    "movementPattern": "horizontal_push",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Dumbbell_Lunges",
+    "movementPattern": "squat",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Barbell_Deadlift",
+    "movementPattern": "hinge",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Plank",
+    "movementPattern": "anti_rotation",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "duration",
+        "units": [
+          "second",
+          "minute"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Dumbbell_Hip_Thrust",
+    "movementPattern": "hinge",
+    "laterality": "bilateral",
+    "loadSemantics": "total",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
   }
 ]
