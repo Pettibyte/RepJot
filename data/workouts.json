@@ -5,6 +5,7 @@
     {
       "id": "arms-day-a",
       "name": "Arms Day A",
+      "publishedStatus": "deprecated",
       "notes": "Mobility, arm and back strength, then a 500 m row for time.",
       "root": {
         "id": "arms-day-a-root",
@@ -207,6 +208,7 @@
     {
       "id": "arms-day-b",
       "name": "Arms Day B",
+      "publishedStatus": "deprecated",
       "notes": "Partner to Arms Day A: same structure, different exercises. Mobility, then incline curl, close-grip press, lateral raise and incline bench, then a 500 m row for time.",
       "root": {
         "id": "arms-day-b-root",
@@ -408,6 +410,7 @@
     {
       "id": "upper-body-a",
       "name": "Upper Body A",
+      "publishedStatus": "live",
       "notes": "Mobility, a biceps/triceps and a back/rear-delt superset, then a 500 m row for time.",
       "root": {
         "id": "upper-body-a-root",
@@ -609,6 +612,7 @@
     {
       "id": "upper-body-b",
       "name": "Upper Body B",
+      "publishedStatus": "live",
       "notes": "Mobility, a long-head and a brachialis/side-delt superset, then a 500 m row for time.",
       "root": {
         "id": "upper-body-b-root",
@@ -813,6 +817,7 @@
     {
       "id": "squat-bench",
       "name": "Squat / Bench",
+      "publishedStatus": "live",
       "notes": "Mobility, a squat/power and a chest/single-leg superset, then a 500 m row for time.",
       "root": {
         "id": "squat-bench-root",
@@ -1014,6 +1019,7 @@
     {
       "id": "deadlift-posterior-chain",
       "name": "Deadlift / Posterior Chain",
+      "publishedStatus": "live",
       "notes": "Mobility, a deadlift/core and a posterior-chain/power superset, then a 500 m row for time.",
       "root": {
         "id": "deadlift-posterior-chain-root",
