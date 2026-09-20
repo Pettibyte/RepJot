@@ -84,9 +84,17 @@ describe('workout published status', () => {
     );
   });
 
+  test('accepts live, draft, and deprecated publishedStatus values', () => {
+    for (const publishedStatus of ['live', 'draft', 'deprecated']) {
+      const doc = workoutsDoc();
+      (doc.workouts as Record<string, unknown>[])[0]!.publishedStatus = publishedStatus;
+      expect(() => validateAgainst('repjot/workouts', 1, doc)).not.toThrow();
+    }
+  });
+
   test('rejects a workout with an unsupported publishedStatus', () => {
     const doc = workoutsDoc();
-    (doc.workouts as Record<string, unknown>[])[0]!.publishedStatus = 'draft';
+    (doc.workouts as Record<string, unknown>[])[0]!.publishedStatus = 'retired';
 
     expect(captureError(() => validateAgainst('repjot/workouts', 1, doc))?.detail.issues).toContain(
       "publishedStatus"

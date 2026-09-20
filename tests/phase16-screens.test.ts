@@ -286,6 +286,19 @@ describe('WorkoutChooserScreen', () => {
     expect(out).not.toContain('In progress');
   });
 
+  test('the workout visibility filter starts hidden behind its tune button', () => {
+    const lookup = { listActiveSessions: () => [], index: { terminalSessions: [] } };
+    setServices({
+      lookup: lookup as never,
+      staticData: { workoutById: new Map<string, Workout>([['demo', workout()]]) } as never
+    });
+
+    const out = html(WorkoutChooserScreen, {});
+    expect(out).toContain('aria-label="Filter workouts"');
+    expect(out).toContain('aria-expanded="false"');
+    expect(out).not.toContain('Select workout visibility');
+  });
+
   test('**Load older** appears only when history exists past the cap', () => {
     const many = Array.from({ length: 7 }, (_, i) =>
       summary({ id: `s${i}`, startedAtUtc: `2026-08-${String(i + 1).padStart(2, '0')}T06:00:00Z` })

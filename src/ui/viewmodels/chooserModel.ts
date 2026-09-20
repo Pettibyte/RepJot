@@ -7,13 +7,13 @@
 //
 // Three lists, in the order the screen shows them:
 //   1. In progress  every session the user has not finished, newest touched first
-//   2. Workouts     live workouts in the bundle, paginated
+//   2. Workouts     selected-status workouts in the bundle, paginated
 //   3. Recent       finished sessions, capped, with "load older" beyond the cap
 //
 // The workout list is the path for a user with no history. Without it a new
 // account reaches a chooser with nothing to tap.
 
-import type { Workout } from '../../domain/types';
+import type { PublishedStatus, Workout } from '../../domain/types';
 import type { SessionSummary } from '../../indexes/types';
 import { formatRoute } from '../../routing/routes';
 
@@ -22,6 +22,9 @@ export const RECENT_PAGE_SIZE = 5;
 
 /** Workouts shown before the user asks for more. */
 export const WORKOUT_PAGE_SIZE = 10;
+
+/** The chooser starts with the normal published workouts only. */
+export const DEFAULT_VISIBLE_WORKOUT_STATUSES: ReadonlySet<PublishedStatus> = new Set(['live']);
 
 /** Status text per session status. The three values are the whole vocabulary. */
 const STATUS_LABELS: Record<string, string> = {
@@ -90,8 +93,10 @@ export interface ChooserModelInput {
   localTimeZone: string;
   /** Workout IDs the bundle holds. Omit to treat every reference as resolvable. */
   knownWorkoutIds?: Set<string>;
-  /** Every workout in the bundle, in bundle order. Deprecated workouts are filtered here. */
+  /** Every workout in the bundle, in bundle order. */
   workouts?: Workout[];
+  /** Statuses selected in the chooser's in-memory visibility filter. */
+  visibleStatuses?: ReadonlySet<PublishedStatus>;
   /** First workout of the page. Default 0. */
   workoutOffset?: number;
   /** Workouts per page. Default `WORKOUT_PAGE_SIZE`. */
@@ -270,9 +275,10 @@ export function buildChooserModel(input: ChooserModelInput): ChooserModel {
       toSessionItem(summary, nowUtc, localTimeZone, input.knownWorkoutIds, input.rawJsonFor)
     );
 
-  // Filter before pagination so a deprecated workout cannot consume a row or
+  // Filter before pagination so an excluded workout cannot consume a row or
   // cause a misleading Show more workouts control.
-  const all = (input.workouts ?? []).filter((workout) => workout.publishedStatus === 'live');
+  const visibleStatuses = input.visibleStatuses ?? DEFAULT_VISIBLE_WORKOUT_STATUSES;
+  const all = (input.workouts ?? []).filter((workout) => visibleStatuses.has(workout.publishedStatus));
   const offset = Math.max(0, input.workoutOffset ?? 0);
   const limit = Math.max(0, input.workoutLimit ?? WORKOUT_PAGE_SIZE);
   const workouts = all.slice(offset, offset + limit).map((workout) => {

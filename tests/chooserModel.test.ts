@@ -338,20 +338,52 @@ describe('buildChooserModel: workout list', () => {
     expect(model.workouts[0].href).toBe('#/workouts/w1');
   });
 
-  test('hides deprecated workouts before pagination', () => {
+  test('defaults to live-only visibility', () => {
+    const model = buildChooserModel({
+      active: [],
+      recent: [],
+      nowUtc: NOW,
+      localTimeZone: TZ,
+      workouts: [
+        makeWorkout('live', 'Current workout'),
+        makeWorkout('draft', 'Draft workout', 'draft'),
+        makeWorkout('deprecated', 'Old workout', 'deprecated')
+      ]
+    });
+
+    expect(model.workouts.map((item) => item.workoutId)).toEqual(['live']);
+  });
+
+  test('shows only selected statuses before pagination', () => {
     const model = buildChooserModel({
       active: [],
       recent: [],
       nowUtc: NOW,
       localTimeZone: TZ,
       workoutLimit: 1,
+      visibleStatuses: new Set(['draft', 'deprecated']),
       workouts: [
-        makeWorkout('deprecated', 'Old workout', 'deprecated'),
-        makeWorkout('live', 'Current workout')
+        makeWorkout('live', 'Current workout'),
+        makeWorkout('draft', 'Draft workout', 'draft'),
+        makeWorkout('deprecated', 'Old workout', 'deprecated')
       ]
     });
 
-    expect(model.workouts.map((item) => item.workoutId)).toEqual(['live']);
+    expect(model.workouts.map((item) => item.workoutId)).toEqual(['draft']);
+    expect(model.workoutsHasMore).toBe(true);
+  });
+
+  test('an empty status selection has no rows or more control', () => {
+    const model = buildChooserModel({
+      active: [],
+      recent: [],
+      nowUtc: NOW,
+      localTimeZone: TZ,
+      visibleStatuses: new Set(),
+      workouts: [makeWorkout('live', 'Current workout')]
+    });
+
+    expect(model.workouts).toEqual([]);
     expect(model.workoutsHasMore).toBe(false);
   });
 });

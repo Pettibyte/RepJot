@@ -149,11 +149,11 @@ REP JOT treats published exercise and workout data as editable facts. It is not 
 
 ### Workout publication status
 
-- **6.13** Every workout has a required `publishedStatus` field with the value `live` or `deprecated`. Exercises have no publication-status field.
+- **6.13** Every workout has a required `publishedStatus` field with the value `live`, `draft`, or `deprecated`. Exercises have no publication-status field.
 - **6.14** An exercise appears in selection when the allowlist lists it. Removing it from the allowlist removes it from selection.
-- **6.15** The workout chooser hides only workouts whose `publishedStatus` is `deprecated`. It shows every `live` workout.
-- **6.16** The complete workout lookup retains `deprecated` workouts for session resolution, history, summary, and historical editing. Publication status does not change session or result data.
-- **6.17** Publication status adds no start authorization, routing, Settings, or preferences behavior. REP JOT performs no deprecation report, affected-container analysis, or `nonstandard` fallback for a removed exercise. No session stores an `executionPlan`. An in-progress session resolves its tree from the current bundle on each load.
+- **6.15** The Workout chooser has an in-memory applied-status visibility filter. It defaults to `live` only and can show any combination of `live`, `draft`, and `deprecated` workouts. The filter applies before chooser pagination.
+- **6.16** The complete workout lookup retains workouts with all publication statuses for session resolution, history, summary, and historical editing. Publication status does not change session or result data.
+- **6.17** Publication status adds no start authorization, routing, Settings, preferences, synchronization, or persisted state behavior. A `draft` or `deprecated` workout remains available through an existing direct overview route and the existing start path. The chooser filter is reset to `live` only when its screen is left, reloaded, or remounted. REP JOT performs no deprecation report, affected-container analysis, or `nonstandard` fallback for a removed exercise. No session stores an `executionPlan`. An in-progress session resolves its tree from the current bundle on each load.
 - **6.18** A deploy during an active workout can change that workout. The user restarts the session or edits the result afterward. REP JOT accepts this risk.
 
 ### Build validation
@@ -202,7 +202,7 @@ An exercise has:
 
 ## 10.0 Workout Features
 
-- **10.1** A workout is an ordered tree of containers and exercises with a required `publishedStatus` of `live` or `deprecated`. See Section 6.13.
+- **10.1** A workout is an ordered tree of containers and exercises with a required `publishedStatus` of `live`, `draft`, or `deprecated`. See Section 6.13.
 - **10.2** Top-level prescription fields apply to every iteration.
 - **10.3** An `iterations` entry overrides only the fields that it contains for its one-based iteration.
 - **10.4** Each iteration number appears at most once in one prescription.
@@ -341,11 +341,14 @@ Example allowlist shape:
 ### 17.0 Choose Workout
 
 - **17.1** The authenticated landing screen shows active workouts with title and last completion date.
-- **17.2** A `Load older` control loads more workouts when necessary.
-- **17.3** Recent shows up to five completed or abandoned sessions, newest first.
-- **17.4** All in-progress sessions appear above Recent, sorted by `updatedAtUtc`, newest first.
-- **17.5** An in-progress entry shows its start time today or its date on an earlier day.
-- **17.6** Tapping an in-progress entry resumes it.
+- **17.2** The Workout section header places an icon-only `tune` button after the `Workouts` heading. Its accessible name is `Filter workouts`; `aria-expanded` reflects the controls' visibility and `aria-controls` identifies the controls container. The decorative icon is hidden from assistive technology.
+- **17.3** The filter controls are initially hidden. Opening them directly below the header shows a native fieldset and legend, `Select workout visibility`, with `Live`, `Draft`, and `Deprecated` checkboxes and an `Apply` control. The checkboxes start with the currently applied statuses.
+- **17.4** `Apply` commits the selected statuses only in the mounted chooser, resets the workout-list offset to zero, and hides the controls. It is the only closing action; no Cancel control is provided. Unapplied changes do not affect the list. An empty selection is valid: the Workout section shows `No workouts match the selected visibility.` and no `Show more workouts` control. Active Workout and Recent do not change.
+- **17.5** A `Load older` control loads more workouts when necessary.
+- **17.6** Recent shows up to five completed or abandoned sessions, newest first.
+- **17.7** All in-progress sessions appear above Recent, sorted by `updatedAtUtc`, newest first.
+- **17.8** An in-progress entry shows its start time today or its date on an earlier day.
+- **17.9** Tapping an in-progress entry resumes it.
 
 ### 18.0 Workout Overview
 

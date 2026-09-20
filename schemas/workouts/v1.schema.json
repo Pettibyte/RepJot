@@ -74,7 +74,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/nonEmptyString" },
-        "publishedStatus": { "enum": ["live", "deprecated"] },
+        "publishedStatus": { "enum": ["live", "draft", "deprecated"] },
         "notes": { "type": "string" },
         "root": { "$ref": "#/$defs/containerNode" }
       }

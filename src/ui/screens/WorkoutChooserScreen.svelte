@@ -5,7 +5,7 @@
   Three lists, top to bottom:
     In progress  sessions the user has not finished. Resume is the first thing
                  a returning user wants, so this list sits above everything.
-    Workouts     every live workout in the bundle. This is the path for a user with
+    Workouts     workouts selected by the visibility filter. This is the path for a user with
                  no history, and the path to a workout other than the last one.
     Recent       finished sessions, newest first, with **Load older** past the cap.
 
@@ -20,11 +20,14 @@
 -->
 <script lang="ts">
   import SessionListItem from '../components/SessionListItem.svelte';
+  import Icon from '../components/Icon.svelte';
   import { services } from '../../services/registry';
+  import type { PublishedStatus } from '../../domain/types';
   import type { SessionSummary } from '../../indexes/types';
   import {
     buildChooserModel,
     resolveLocalTimeZone,
+    DEFAULT_VISIBLE_WORKOUT_STATUSES,
     RECENT_PAGE_SIZE,
     WORKOUT_PAGE_SIZE
   } from '../viewmodels/chooserModel';
@@ -38,6 +41,9 @@
 
   let recentLimit = $state(RECENT_PAGE_SIZE);
   let workoutOffset = $state(0);
+  let filterOpen = $state(false);
+  let appliedStatuses = $state<Set<PublishedStatus>>(new Set(DEFAULT_VISIBLE_WORKOUT_STATUSES));
+  let pendingStatuses = $state<Set<PublishedStatus>>(new Set(DEFAULT_VISIBLE_WORKOUT_STATUSES));
 
   /**
    * The raw text behind one row, read from the shard the warm already loaded.
@@ -86,6 +92,7 @@
         ? new Set(staticData.workoutById.keys())
         : undefined,
       workouts,
+      visibleStatuses: appliedStatuses,
       workoutOffset,
       workoutLimit: WORKOUT_STEP,
       lastPerformedUtcByWorkoutId: lastPerformed,
@@ -101,9 +108,29 @@
   function showMoreWorkouts(): void {
     workoutOffset += WORKOUT_STEP;
   }
+
+  function openFilter(): void {
+    if (filterOpen) return;
+    pendingStatuses = new Set(appliedStatuses);
+    filterOpen = true;
+  }
+
+  function setPendingStatus(status: PublishedStatus, event: Event): void {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    const next = new Set(pendingStatuses);
+    if (checked) next.add(status);
+    else next.delete(status);
+    pendingStatuses = next;
+  }
+
+  function applyFilter(): void {
+    appliedStatuses = new Set(pendingStatuses);
+    workoutOffset = 0;
+    filterOpen = false;
+  }
 </script>
 
-<div class="screen chooser">
+<div class="screen chooser screen--narrow">
   {#if model === null}
     <p class="chooser__loading" role="status">Loading your workouts…</p>
   {:else}
@@ -119,10 +146,56 @@
     {/if}
 
     <section class="chooser__section" aria-labelledby="chooser-workouts">
-      <h2 class="chooser__heading" id="chooser-workouts">Workouts</h2>
+      <div class="chooser__section-header">
+        <h2 class="chooser__heading" id="chooser-workouts">Workouts</h2>
+        <button
+          class="chooser__filter-button"
+          type="button"
+          aria-label="Filter workouts"
+          aria-controls="workout-visibility-filter"
+          aria-expanded={filterOpen}
+          onclick={openFilter}
+        >
+          <Icon name="tune" decorative />
+        </button>
+      </div>
+
+      {#if filterOpen}
+        <fieldset class="chooser__filter" id="workout-visibility-filter">
+          <legend>Select workout visibility</legend>
+          <label class="chooser__filter-option">
+            <input
+              type="checkbox"
+              checked={pendingStatuses.has('live')}
+              onchange={(event) => setPendingStatus('live', event)}
+            />
+            Live
+          </label>
+          <label class="chooser__filter-option">
+            <input
+              type="checkbox"
+              checked={pendingStatuses.has('draft')}
+              onchange={(event) => setPendingStatus('draft', event)}
+            />
+            Draft
+          </label>
+          <label class="chooser__filter-option">
+            <input
+              type="checkbox"
+              checked={pendingStatuses.has('deprecated')}
+              onchange={(event) => setPendingStatus('deprecated', event)}
+            />
+            Deprecated
+          </label>
+          <button class="btn btn--primary" type="button" onclick={applyFilter}>Apply</button>
+        </fieldset>
+      {/if}
+
       {#if model.workouts.length === 0}
         <p class="chooser__empty" role="status">
-          This build has no workouts. REP JOT loads them from its bundled data.
+          {appliedStatuses.size === 0
+            ? 'No workouts match the selected visibility.'
+            : 'This build has no workouts that match the selected visibility.'}
         </p>
       {:else}
         <div class="chooser__list">

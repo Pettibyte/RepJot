@@ -330,7 +330,7 @@ export interface ExerciseNode {
 export type WorkoutNode = ContainerNode | ExerciseNode;
 
 /** Publication state for one bundled workout. */
-export type PublishedStatus = 'live' | 'deprecated';
+export type PublishedStatus = 'live' | 'draft' | 'deprecated';
 
 /** One workout definition. Mirrors `$defs.workout`. */
 export interface Workout {

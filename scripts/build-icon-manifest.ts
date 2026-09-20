@@ -55,6 +55,7 @@ export const REVIEWED_GLYPHS: string[] = [
   'receipt_long', // session and history records
   'settings', // settings navigation
   'timer', // rest timers and durations
+  'tune', // workout visibility filter
   'weight', // load and reps metrics
   'arrow_back', // BackHeader back control
   'add', // AMRAP quick round control

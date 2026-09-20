@@ -146,7 +146,7 @@ The browser profile is not a secure enclave. A person or extension that can read
 | ADR-012 | Resolve a same-session conflict as last synchronizer wins. | The local full session replaces the remote full session during this synchronization. An edit beats a conflicting delete. Do not make a sync copy. |
 | ADR-013 | Rebuild indexes in memory. | Do not persist derived indexes. |
 | ADR-014 | Resolve every session against the current static workout tree. | Do not persist an `executionPlan`. A deploy can change an active workout. |
-| ADR-015 | Treat static data as editable published facts. | Every workout has required `publishedStatus` of `live` or `deprecated`. The chooser hides only deprecated workouts; the complete lookup retains them for sessions and history. Build validates this through the schema, plus node-ID uniqueness and exercise references. Do not compare a release with a prior bundle. |
+| ADR-015 | Treat static data as editable published facts. | Every workout has required `publishedStatus` of `live`, `draft`, or `deprecated`. The chooser has a screen-local applied-status filter that defaults to `live` only; the complete lookup retains every status for sessions and history. The filter does not authorize starts, change routes, or persist. Build validates this through the schema, plus node-ID uniqueness and exercise references. Do not compare a release with a prior bundle. |
 | ADR-016 | Keep diagnostics in a bounded in-memory ring. | Retain at most 200 events. Do not persist, salt, alias, synchronize, or upload diagnostics. |
 | ADR-017 | Use a single `DataError` component for data problems. | The component offers **View Raw JSON** and **Dismiss**. It handles corrupt, unsupported, duplicate, and unresolved data without guessing. |
 | ADR-018 | Keep a typed delete phrase. | Delete All User Data requires `DELETE ALL USER DATA` and warns that another device can recreate files. |
@@ -301,7 +301,7 @@ No result stores a frozen workout plan. The UI overlays recorded results on the 
 | Pending local state | Base copy, working document, and pending delta | This browser's unsynchronized user intent |
 | Validated models | Current in-memory document representation | Read model after validation |
 | Runtime indexes | Maps, sets, and sorted arrays | Derived only |
-| Svelte state | Route, selection, status, field text | Presentation only |
+| Svelte state | Route, selection, status, field text, and mounted-screen filter state | Presentation only; the chooser's applied and pending status filters are never persisted |
 | Diagnostics | At most 200 in-memory support events | Never canonical and never synchronized |
 
 The UI shows **Saved** only after the IndexedDB transaction succeeds. It can show a separate pending synchronization state.
@@ -314,7 +314,7 @@ The seed script copies approved source fields, normalizes equipment against the 
 
 `bun run seed:check` regenerates the document in memory and compares it with the committed file. `bun run seed:bump` updates the pinned source only after all generated data validates.
 
-Static data is editable. Every workout has required `publishedStatus` of `live` or `deprecated`. The chooser hides deprecated workouts only. The complete workout lookup retains them for session resolution and history.
+Static data is editable. Every workout has required `publishedStatus` of `live`, `draft`, or `deprecated`. The Workout chooser's mounted-screen applied-status filter defaults to `live` only and can include any combination of the three statuses. It filters before chooser pagination. The complete workout lookup retains every status for session resolution and history.
 
 Build validation does only these identity checks:
 
@@ -336,7 +336,7 @@ Build validation does only these identity checks:
 
 The loading sequence gives priority to preferences, the current shard, active sessions, and recent history. It then loads more history when a screen requests it.
 
-The workout chooser hides deprecated workouts only; it otherwise uses the complete live workout list. Publication status does not authorize session starts or change routes, Settings, or preferences. All in-progress sessions appear first, sorted by `updatedAtUtc` newest first. Recent shows at most five completed or abandoned sessions, newest first. Each `Load older` action extends the requested history list.
+The workout chooser initially applies only the `live` status. Its `tune` button opens a native fieldset of pending `Live`, `Draft`, and `Deprecated` checkboxes. `Apply` commits those values to the screen-local filter, resets the workout offset, and closes the fieldset; there is no Cancel control. An empty applied set shows the chooser-only message `No workouts match the selected visibility.` The model filters before pagination, so excluded workouts do not consume a row or produce a misleading show-more control. Leaving or reloading the chooser resets the filter to `live` only. Publication status and this filter do not authorize session starts or change routes, Settings, preferences, synchronization, sessions, results, History, or the complete static lookup. A `draft` or `deprecated` workout remains available through an existing direct overview route and the existing start path. All in-progress sessions appear first, sorted by `updatedAtUtc` newest first. Recent shows at most five completed or abandoned sessions, newest first. Each `Load older` action extends the requested history list.
 
 A static-data failure blocks normal use. A corrupt cache is discarded and downloaded again. A corrupt remote file, future schema version, or duplicate file blocks only its logical file.
 
@@ -604,7 +604,7 @@ Errors contain safe typed context. Diagnostics do not record raw error messages,
 | Synchronization | Different session IDs, same-session conflicts, edit-versus-delete, preference mappings, metadata races, ambiguous upload, three-retry limit, and cache commits. |
 | Duplicate files | Valid automatic consolidation, deterministic primary choice, read-back before deletion, corrupt duplicate blocks, and changed-cleanup blocks. |
 | Google adapters | Redirect state, callback replay, remember storage, expiry, account binding, pagination, `401`, `403`, `429`, and malformed responses. |
-| Svelte | Routes, save status, DataError, raw export, diagnostics export, typed deletion phrase, and accessible controls. |
+| Svelte | Routes, save status, DataError, raw export, diagnostics export, typed deletion phrase, accessible controls, and the ephemeral chooser status filter (default, Apply behavior, pagination, and reset). |
 | Compatibility | ES2019 parsing, prohibited syntax scan, classic loader order, and required polyfills. |
 | Kindle smoke | Redirect authorization, restored token, IndexedDB save, blur save, reload, synchronization, export, delete warning, and long workout scroll. |
 
