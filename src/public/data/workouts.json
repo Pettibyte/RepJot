@@ -1020,7 +1020,7 @@
       "id": "deadlift-posterior-chain",
       "name": "Deadlift / Posterior Chain",
       "publishedStatus": "live",
-      "notes": "Mobility, a deadlift/core and a posterior-chain/power superset, then a 500 m row for time.",
+      "notes": "Mobility, a deadlift/core and a front-delt/power superset, then a 500 m row for time.",
       "root": {
         "id": "deadlift-posterior-chain-root",
         "type": "container",
@@ -1158,16 +1158,16 @@
               {
                 "id": "superset-b",
                 "type": "container",
-                "name": "Superset B: Posterior Chain and Power",
+                "name": "Superset B: Front Delts and Power",
                 "strategy": "rounds",
                 "strategyConfig": {
                   "rounds": 3
                 },
                 "children": [
                   {
-                    "id": "superset-b-dumbbell-hip-thrust",
+                    "id": "superset-b-barbell-incline-bench-press",
                     "type": "exercise",
-                    "exerciseId": "Dumbbell_Hip_Thrust",
+                    "exerciseId": "Barbell_Incline_Bench_Press_-_Medium_Grip",
                     "stimulus": "hypertrophy",
                     "prescription": {
                       "reps": 8
