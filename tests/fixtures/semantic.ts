@@ -169,6 +169,7 @@ export function workout(): Workout {
   return {
     id: WORKOUT_ID,
     name: 'Demo Workout',
+    publishedStatus: 'live',
     root: {
       id: 'root',
       type: 'container',

@@ -17,6 +17,7 @@ function deepWorkout(): Workout {
   return {
     id: 'deep',
     name: 'Deep Workout',
+    publishedStatus: 'live',
     root: {
       id: 'strength',
       type: 'container',
@@ -57,6 +58,7 @@ function repeatedRootWorkout(): Workout {
   return {
     id: 'repeated-root',
     name: 'Repeated Root Workout',
+    publishedStatus: 'live',
     root: {
       id: 'root',
       type: 'container',

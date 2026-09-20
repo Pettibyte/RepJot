@@ -329,9 +329,13 @@ export interface ExerciseNode {
 /** Any node in a workout tree. Mirrors `$defs.node`. */
 export type WorkoutNode = ContainerNode | ExerciseNode;
 
+/** Publication state for one bundled workout. */
+export type PublishedStatus = 'live' | 'deprecated';
+
 /** One workout definition. Mirrors `$defs.workout`. */
 export interface Workout {
   id: string;
+  publishedStatus: PublishedStatus;
   name: string;
   notes?: string;
   root: ContainerNode;

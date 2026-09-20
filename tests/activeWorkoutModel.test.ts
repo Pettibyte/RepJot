@@ -80,6 +80,7 @@ function validWorkout(): Workout {
   return {
     id: WORKOUT_ID,
     name: 'Demo',
+    publishedStatus: 'live',
     root: {
       id: 'root',
       type: 'container',
@@ -387,6 +388,7 @@ describe('buildActiveWorkoutModel unresolved rows', () => {
     const staleWorkout: Workout = {
       id: WORKOUT_ID,
       name: 'Demo',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',
@@ -766,6 +768,7 @@ describe('set-table presentation', () => {
     return {
       id: WORKOUT_ID,
       name: 'Three Squat Sets',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',
@@ -898,6 +901,7 @@ describe('circuit set-table presentation', () => {
     return {
       id: WORKOUT_ID,
       name: 'Circuit',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',
@@ -963,6 +967,7 @@ describe('circuit set-table presentation', () => {
     const workout = {
       id: WORKOUT_ID,
       name: 'Nested',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',

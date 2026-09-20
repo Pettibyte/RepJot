@@ -55,24 +55,6 @@ function containersOf<S extends ContainerStrategy>(candidate: Workout, strategy:
   ) as ContainerNodeFor<S>[];
 }
 
-function allKeys(value: unknown): string[] {
-  const keys: string[] = [];
-  const stack: unknown[] = [value];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (current === null || typeof current !== 'object') continue;
-    if (Array.isArray(current)) {
-      stack.push(...current);
-      continue;
-    }
-    for (const [key, child] of Object.entries(current)) {
-      keys.push(key);
-      stack.push(child);
-    }
-  }
-  return keys;
-}
-
 describe('synthetic static fixtures', () => {
   test('the fixture documents carry their envelopes', () => {
     expect(fixture.exercises.length).toBeGreaterThan(0);
@@ -97,9 +79,8 @@ describe('synthetic static fixtures', () => {
     expect(unresolved).toEqual([]);
   });
 
-  test('the fixture carries no deprecated field', () => {
-    const document = { format: 'repjot/static-fixture', ...fixture };
-    expect(allKeys(document).filter((key) => key === 'deprecated')).toEqual([]);
+  test('every fixture workout declares a supported publication status', () => {
+    expect(fixture.workouts.map((candidate) => candidate.publishedStatus)).toEqual(['live']);
   });
 
   test('package.json registers check:static inside the build chain', () => {

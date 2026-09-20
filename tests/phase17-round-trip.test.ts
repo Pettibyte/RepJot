@@ -215,6 +215,7 @@ function singleExerciseWorkout(
   return {
     id: WORKOUT_ID,
     name: 'Round Trip',
+    publishedStatus: 'live',
     root: {
       id: 'root',
       type: 'container',
@@ -466,6 +467,7 @@ describe('V-5 round trip: the AMRAP partial survives a round add', () => {
     const workoutTree: Workout = {
       id: WORKOUT_ID,
       name: 'AMRAP Trip',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',

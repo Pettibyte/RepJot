@@ -5,7 +5,7 @@
   Three lists, top to bottom:
     In progress  sessions the user has not finished. Resume is the first thing
                  a returning user wants, so this list sits above everything.
-    Workouts     every workout in the bundle. This is the path for a user with
+    Workouts     every live workout in the bundle. This is the path for a user with
                  no history, and the path to a workout other than the last one.
     Recent       finished sessions, newest first, with **Load older** past the cap.
 

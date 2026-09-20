@@ -37,10 +37,15 @@ function summary(
   };
 }
 
-function makeWorkout(id: string, name: string): Workout {
+function makeWorkout(
+  id: string,
+  name: string,
+  publishedStatus: Workout['publishedStatus'] = 'live'
+): Workout {
   return {
     id,
     name,
+    publishedStatus,
     root: {
       id: `${id}-root`,
       type: 'container',
@@ -331,6 +336,23 @@ describe('buildChooserModel: workout list', () => {
     });
 
     expect(model.workouts[0].href).toBe('#/workouts/w1');
+  });
+
+  test('hides deprecated workouts before pagination', () => {
+    const model = buildChooserModel({
+      active: [],
+      recent: [],
+      nowUtc: NOW,
+      localTimeZone: TZ,
+      workoutLimit: 1,
+      workouts: [
+        makeWorkout('deprecated', 'Old workout', 'deprecated'),
+        makeWorkout('live', 'Current workout')
+      ]
+    });
+
+    expect(model.workouts.map((item) => item.workoutId)).toEqual(['live']);
+    expect(model.workoutsHasMore).toBe(false);
   });
 });
 

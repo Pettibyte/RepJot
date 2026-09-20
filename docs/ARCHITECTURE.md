@@ -15,7 +15,7 @@ The v4 contract removes these prior designs:
 - Frozen session `executionPlan` documents.
 - Session tombstones.
 - Sync copies and `conflictOfSessionId`.
-- The `deprecated` flag and its result reason code.
+- The exercise `deprecated` flag and its result reason code. Workouts instead use the required `publishedStatus` field defined by the current requirements.
 - Static-data hashes, ID registries, and prior-production comparison.
 - Persistent, salted diagnostic logs.
 - IndexedDB repository and receipt layers beyond the required small storage facade.
@@ -146,7 +146,7 @@ The browser profile is not a secure enclave. A person or extension that can read
 | ADR-012 | Resolve a same-session conflict as last synchronizer wins. | The local full session replaces the remote full session during this synchronization. An edit beats a conflicting delete. Do not make a sync copy. |
 | ADR-013 | Rebuild indexes in memory. | Do not persist derived indexes. |
 | ADR-014 | Resolve every session against the current static workout tree. | Do not persist an `executionPlan`. A deploy can change an active workout. |
-| ADR-015 | Treat static data as editable published facts. | Build validates schema, node-ID uniqueness, and exercise references only. Do not compare a release with a prior bundle. |
+| ADR-015 | Treat static data as editable published facts. | Every workout has required `publishedStatus` of `live` or `deprecated`. The chooser hides only deprecated workouts; the complete lookup retains them for sessions and history. Build validates this through the schema, plus node-ID uniqueness and exercise references. Do not compare a release with a prior bundle. |
 | ADR-016 | Keep diagnostics in a bounded in-memory ring. | Retain at most 200 events. Do not persist, salt, alias, synchronize, or upload diagnostics. |
 | ADR-017 | Use a single `DataError` component for data problems. | The component offers **View Raw JSON** and **Dismiss**. It handles corrupt, unsupported, duplicate, and unresolved data without guessing. |
 | ADR-018 | Keep a typed delete phrase. | Delete All User Data requires `DELETE ALL USER DATA` and warns that another device can recreate files. |
@@ -314,7 +314,9 @@ The seed script copies approved source fields, normalizes equipment against the 
 
 `bun run seed:check` regenerates the document in memory and compares it with the committed file. `bun run seed:bump` updates the pinned source only after all generated data validates.
 
-Static data is editable. Build validation does only these identity checks:
+Static data is editable. Every workout has required `publishedStatus` of `live` or `deprecated`. The chooser hides deprecated workouts only. The complete workout lookup retains them for session resolution and history.
+
+Build validation does only these identity checks:
 
 1. Each static document validates against its JSON Schema.
 2. A workout has no duplicate node ID.
@@ -334,7 +336,7 @@ Static data is editable. Build validation does only these identity checks:
 
 The loading sequence gives priority to preferences, the current shard, active sessions, and recent history. It then loads more history when a screen requests it.
 
-The workout chooser shows all in-progress sessions first, sorted by `updatedAtUtc` newest first. Recent shows at most five completed or abandoned sessions, newest first. Each `Load older` action extends the requested history list.
+The workout chooser hides deprecated workouts only; it otherwise uses the complete live workout list. Publication status does not authorize session starts or change routes, Settings, or preferences. All in-progress sessions appear first, sorted by `updatedAtUtc` newest first. Recent shows at most five completed or abandoned sessions, newest first. Each `Load older` action extends the requested history list.
 
 A static-data failure blocks normal use. A corrupt cache is discarded and downloaded again. A corrupt remote file, future schema version, or duplicate file blocks only its logical file.
 
@@ -360,7 +362,7 @@ Use styled native HTML controls. Application actions use Material Symbols. Fitne
 
 ### Workout-session lifecycle
 
-1. Create a session only from a current workout in the static bundle.
+1. Create a session only from a current workout in the static bundle. Publication status does not add a start-authorization check.
 2. Generate a secure session UUID and a UTC start timestamp.
 3. Save the new session to its UTC shard locally before navigating to Active Workout.
 4. Resolve the session against the current workout tree on each load.

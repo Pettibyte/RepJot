@@ -147,13 +147,13 @@ REP JOT treats published exercise and workout data as editable facts. It is not 
 - **6.12** The user resolves an unresolved reference by editing the result, or by restoring the ID to the static data.
 - **6.23** Recorded work renders from the session's own stored data. Each result carries its `exerciseId`, `executionPath`, values, and units. The app does not need the current workout tree to *display* recorded work. It needs the tree only to order and edit it. When the tree cannot resolve a path, the view falls back to the recorded values and sorts by the `executionPath` string. See Section 20.3.
 
-### No lifecycle machinery
+### Workout publication status
 
-- **6.13** REP JOT has no `deprecated` flag on exercises or workouts.
+- **6.13** Every workout has a required `publishedStatus` field with the value `live` or `deprecated`. Exercises have no publication-status field.
 - **6.14** An exercise appears in selection when the allowlist lists it. Removing it from the allowlist removes it from selection.
-- **6.15** A workout appears in the chooser when `workouts.json` lists it.
-- **6.16** REP JOT performs no deprecation report, no affected-container analysis, and no `nonstandard` fallback for a removed exercise.
-- **6.17** No session stores an `executionPlan`. An in-progress session resolves its tree from the current bundle on each load.
+- **6.15** The workout chooser hides only workouts whose `publishedStatus` is `deprecated`. It shows every `live` workout.
+- **6.16** The complete workout lookup retains `deprecated` workouts for session resolution, history, summary, and historical editing. Publication status does not change session or result data.
+- **6.17** Publication status adds no start authorization, routing, Settings, or preferences behavior. REP JOT performs no deprecation report, affected-container analysis, or `nonstandard` fallback for a removed exercise. No session stores an `executionPlan`. An in-progress session resolves its tree from the current bundle on each load.
 - **6.18** A deploy during an active workout can change that workout. The user restarts the session or edits the result afterward. REP JOT accepts this risk.
 
 ### Build validation
@@ -196,13 +196,13 @@ An exercise has:
 - **9.6** Force, mechanics, category, movement pattern, and laterality as separate concepts.
 - **9.7** One or more controlled measurement dimensions and compatible units.
 - **9.8** Load semantics that distinguish total load, per-implement load, added load, and assistance.
-- **9.9** Exercises have no lifecycle flag. Presence in the allowlist controls selection. See Section 6.13.
+- **9.9** Exercises have no lifecycle flag. Presence in the allowlist controls selection.
 - **9.10** A new result defaults its side from the exercise's `laterality`: `alternating` for a unilateral exercise, `both` for a bilateral exercise. This does not change prescription or stored-result semantics.
 - **9.11** Side choice is a capability, not a consequence of the default. The side control is reachable when the exercise is unilateral **or** when it loads per implement, because either shape lets the sides be worked apart. A bilateral exercise with one shared load -- a barbell, a bodyweight hold, a rowing machine -- records `both` only and shows no side control.
 
 ## 10.0 Workout Features
 
-- **10.1** A workout is an ordered tree of containers and exercises.
+- **10.1** A workout is an ordered tree of containers and exercises with a required `publishedStatus` of `live` or `deprecated`. See Section 6.13.
 - **10.2** Top-level prescription fields apply to every iteration.
 - **10.3** An `iterations` entry overrides only the fields that it contains for its one-based iteration.
 - **10.4** Each iteration number appears at most once in one prescription.
@@ -396,7 +396,7 @@ REP JOT is a single-user hobby tool. The decisions below remove machinery that p
 | Allowlist-driven seed script | Ad-hoc exercise authoring, second write path for `exercises.json` |
 | No prior-bundle diff | Bundle download step, ID diff, immutability gate |
 | No hashes or provenance | Checksum fields, provenance records, content digests |
-| No `deprecated` flag | Deprecation reports, affected-container analysis, `nonstandard` fallback for removals |
+| Workout `publishedStatus` is limited to chooser visibility | Deprecation reports, affected-container analysis, `nonstandard` fallback for removals |
 | No `executionPlan` freeze | Plan snapshot per session, plan cleanup on completion |
 | Unresolved ID shows an error card | Per-case recovery logic, substitution heuristics |
 
@@ -470,13 +470,13 @@ Monthly result shards (Section 3.3, Section 3.4), UTC-only persisted timestamps 
 
 1. ~~Rewrite `specs/storage-and-lookup.md`.~~ Done. Plan freezing, tombstones, and the prior-bundle comparison are gone. The merge and the keyed-map shapes from Section 22.4 are specified.
 2. ~~Update `specs/schema-versioning.md`.~~ Done. The chain stays, with the empty-chain-at-v1 rule and the newer-version rejection rule.
-3. ~~Update `specs/rep-jot-json-schema-spec.md`.~~ Done. Sessions, preferences, and both result kinds are keyed maps on the composite keys in Section 22.4.4 and Section 22.4.9. `deprecated`, `executionPlan`, `sessionTombstones`, and `conflictOfSessionId` are gone.
+3. ~~Update `specs/rep-jot-json-schema-spec.md`.~~ Done. Sessions, preferences, and both result kinds are keyed maps on the composite keys in Section 22.4.4 and Section 22.4.9. `executionPlan`, `sessionTombstones`, and `conflictOfSessionId` are gone.
 4. ~~Add `scripts/seed-exercises.ts` and `scripts/exercise-allowlist.json`.~~ Done. `bun run seed`, `bun run seed:check`, and `bun run seed:bump` implement `specs/exercise-seeding.md`. The pinned source commit lives in `scripts/seed-config.json`. The allowlist entry schema is `schemas/seed-allowlist/v1.schema.json`.
-5. Remove the `deprecated` field from the exercise schema and every reference to it in code and mockups. The specs no longer declare it; the code still does.
+5. Remove the obsolete `deprecated` field from the exercise schema and every reference to it in code and mockups. Workout `publishedStatus` remains required under Section 6.13.
 6. Add the `DataError` component and the **View Raw JSON** screen.
 7. Add `jsondiffpatch` as a dependency and confirm its bundle size against the Kindle budget in `docs/CAPABILITIES-kindle-scribe.md`.
 8. Implement the local storage façade from Section 3.11 through Section 3.16. Keep it under about 50 lines and keep IndexedDB behind it.
-9. ~~Rewrite `schemas/exercises/v1.schema.json`, `schemas/workouts/v1.schema.json`, `schemas/preferences/v1.schema.json`, and `schemas/results/v1.schema.json` to match the v4 contract in `specs/rep-jot-json-schema-spec.md`.~~ Done. The pre-v4 model is gone: `sessions` is a keyed map, `sessionTombstones`, `executionPlan`, `conflictOfSessionId`, and the `deprecated` reason code are removed. The `identifier` pattern bans `/`, `|`, and `:` per Section 22.4.6. `bun run check:schemas` now reads these files with `ajv`.
+9. ~~Rewrite `schemas/exercises/v1.schema.json`, `schemas/workouts/v1.schema.json`, `schemas/preferences/v1.schema.json`, and `schemas/results/v1.schema.json` to match the v4 contract in `specs/rep-jot-json-schema-spec.md`.~~ Done. The pre-v4 model is gone: `sessions` is a keyed map, `sessionTombstones`, `executionPlan`, `conflictOfSessionId`, and the `deprecated` result reason code are removed. The `identifier` pattern bans `/`, `|`, and `:` per Section 22.4.6. `bun run check:schemas` now reads these files with `ajv`.
 10. ~~Add the `movementPattern` value `none` and the `level` field to `schemas/exercises/v1.schema.json` when item 9 runs.~~ Done with item 9. The exercise schema also drops the top-level equipment registry and `equipmentIds` for the single `equipment` string or `null` field in Section 13.16, and uses the `reps` unit spelling from the spec.
 11. ~~Write the seed specification for Section 13.0. No spec covers the pinned source commit, the seed defaults in Section 13.16, the strictness rules in Section 13.11, the `seed:bump` command in Section 13.18, or the output path `src/public/data/exercises.json`. Item 4 cannot be built correctly until this exists.~~ Done. `specs/exercise-seeding.md` covers all of it, and item 4 is built against that spec.
 12. Specify the raw-file export in Section 12.10. `specs/schema-versioning.md` cites it as the user-facing escape hatch but never defines it. Only the diagnostic-log download is specified today.

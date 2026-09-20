@@ -114,6 +114,7 @@ describe('buildOverviewModel: semantic presentation', () => {
     const circuitWorkout = {
       id: 'circuit-w',
       name: 'Circuit Day',
+      publishedStatus: 'live',
       root: {
         id: 'croot',
         type: 'container',
@@ -171,6 +172,7 @@ describe('buildOverviewModel: semantic presentation', () => {
     const scoredWorkout = {
       id: 'scored-w',
       name: 'Scored Day',
+      publishedStatus: 'live',
       root: {
         id: 'sroot',
         type: 'container',
@@ -323,6 +325,7 @@ describe('overview circuit matrix', () => {
   const circuitWorkout = {
     id: 'ov-circuit',
     name: 'Circuit Day',
+    publishedStatus: 'live',
     root: {
       id: 'ov-root',
       type: 'container',
@@ -386,6 +389,7 @@ describe('overview circuit matrix', () => {
     const singleWorkout = {
       id: 'ov-single',
       name: 'Single Day',
+      publishedStatus: 'live',
       root: {
         id: 'ov-sroot',
         type: 'container',

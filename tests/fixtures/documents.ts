@@ -42,6 +42,7 @@ export function workoutsDoc(): Record<string, unknown> {
       {
         id: 'full-body',
         name: 'Full Body',
+        publishedStatus: 'live',
         root: {
           id: 'root',
           type: 'container',

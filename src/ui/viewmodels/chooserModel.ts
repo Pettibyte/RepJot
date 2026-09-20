@@ -7,7 +7,7 @@
 //
 // Three lists, in the order the screen shows them:
 //   1. In progress  every session the user has not finished, newest touched first
-//   2. Workouts     every workout in the bundle, paginated
+//   2. Workouts     live workouts in the bundle, paginated
 //   3. Recent       finished sessions, capped, with "load older" beyond the cap
 //
 // The workout list is the path for a user with no history. Without it a new
@@ -90,7 +90,7 @@ export interface ChooserModelInput {
   localTimeZone: string;
   /** Workout IDs the bundle holds. Omit to treat every reference as resolvable. */
   knownWorkoutIds?: Set<string>;
-  /** Every workout in the bundle, in bundle order. */
+  /** Every workout in the bundle, in bundle order. Deprecated workouts are filtered here. */
   workouts?: Workout[];
   /** First workout of the page. Default 0. */
   workoutOffset?: number;
@@ -270,7 +270,9 @@ export function buildChooserModel(input: ChooserModelInput): ChooserModel {
       toSessionItem(summary, nowUtc, localTimeZone, input.knownWorkoutIds, input.rawJsonFor)
     );
 
-  const all = input.workouts ?? [];
+  // Filter before pagination so a deprecated workout cannot consume a row or
+  // cause a misleading Show more workouts control.
+  const all = (input.workouts ?? []).filter((workout) => workout.publishedStatus === 'live');
   const offset = Math.max(0, input.workoutOffset ?? 0);
   const limit = Math.max(0, input.workoutLimit ?? WORKOUT_PAGE_SIZE);
   const workouts = all.slice(offset, offset + limit).map((workout) => {

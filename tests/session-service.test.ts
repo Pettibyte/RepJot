@@ -1070,6 +1070,7 @@ describe('reportMissingWork', () => {
     const solo: Workout = {
       id: WORKOUT_ID,
       name: 'Solo Unilateral',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',
@@ -1099,6 +1100,7 @@ describe('reportMissingWork', () => {
     const solo: Workout = {
       id: WORKOUT_ID,
       name: 'Solo Bilateral',
+      publishedStatus: 'live',
       root: {
         id: 'root',
         type: 'container',

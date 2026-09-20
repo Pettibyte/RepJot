@@ -70,10 +70,11 @@
     "workout": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "root"],
+      "required": ["id", "name", "publishedStatus", "root"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/nonEmptyString" },
+        "publishedStatus": { "enum": ["live", "deprecated"] },
         "notes": { "type": "string" },
         "root": { "$ref": "#/$defs/containerNode" }
       }

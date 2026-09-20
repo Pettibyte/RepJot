@@ -74,6 +74,26 @@ describe('shipped v1 schemas', () => {
   });
 });
 
+describe('workout published status', () => {
+  test('rejects a workout without publishedStatus', () => {
+    const doc = workoutsDoc();
+    delete (doc.workouts as Record<string, unknown>[])[0]?.publishedStatus;
+
+    expect(captureError(() => validateAgainst('repjot/workouts', 1, doc))?.detail.issues).toContain(
+      "publishedStatus"
+    );
+  });
+
+  test('rejects a workout with an unsupported publishedStatus', () => {
+    const doc = workoutsDoc();
+    (doc.workouts as Record<string, unknown>[])[0]!.publishedStatus = 'draft';
+
+    expect(captureError(() => validateAgainst('repjot/workouts', 1, doc))?.detail.issues).toContain(
+      "publishedStatus"
+    );
+  });
+});
+
 describe('format assertion', () => {
   test('rejects a Utc field with a numeric offset', () => {
     const doc = preferencesDoc();
