@@ -23,11 +23,10 @@ import type {
 import type { MissingWorkItem } from '../../sessions/session-service';
 import type { ExerciseResultDraft } from '../../sessions/drafts';
 import { convert } from '../../units/conversion';
-import { formatMinuteValue } from '../../units/format';
+import { formatMinuteValue, formatStep } from '../../units/format';
 import {
   draftRowValues,
   fieldDisplay,
-  formatStep,
   parseFieldValue,
   type ActiveExerciseRow,
   type GroupModel

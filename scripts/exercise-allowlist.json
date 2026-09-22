@@ -464,5 +464,47 @@
         ]
       }
     ]
+  },
+  {
+    "id": "Seated_Bent-Over_Rear_Delt_Raise",
+    "movementPattern": "horizontal_pull",
+    "laterality": "bilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "Dumbbell_Alternating_Renegade_Row",
+    "movementPattern": "horizontal_pull",
+    "laterality": "unilateral",
+    "loadSemantics": "per_implement",
+    "measurements": [
+      {
+        "dimension": "reps",
+        "units": [
+          "reps"
+        ]
+      },
+      {
+        "dimension": "weight",
+        "units": [
+          "kg",
+          "lb"
+        ]
+      }
+    ]
   }
 ]

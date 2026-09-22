@@ -315,8 +315,45 @@ describe('WorkoutChooserScreen', () => {
 });
 
 describe('WorkoutOverviewScreen', () => {
-  function lookupFor(w: Workout | undefined) {
-    return { getWorkout: () => w } as never;
+  /**
+   * A lookup over one workout and, optionally, one exercise's history.
+   *
+   * `getExerciseHistory` answers with an empty page by default, so a test
+   * that says nothing about history draws no badge. A test that passes rows
+   * sees them on the row that names that exercise.
+   */
+  function lookupFor(w: Workout | undefined, history: unknown[] = []) {
+    return {
+      getWorkout: () => w,
+      // The stub answers per exercise, so a test that gives history for one
+      // name does not hand the same set to every other exercise.
+      getExerciseHistory: (exerciseId: string) => {
+        const items = history.filter(
+          (row) => (row as { exerciseId?: string }).exerciseId === exerciseId
+        );
+        return {
+          items,
+          offset: 0,
+          limit: items.length,
+          total: items.length,
+          hasMore: false
+        };
+      }
+    } as never;
+  }
+
+  /** One completed set the badge can report. */
+  function completedSet(exerciseId: string, sessionId: string) {
+    return {
+      sessionId,
+      exerciseId,
+      resultKey: 'k',
+      encodedPath: 'root/k',
+      attempt: 1,
+      status: 'completed',
+      values: { reps: { value: 12, unit: 'reps' } },
+      completedAtUtc: '2026-08-10T15:05:00Z'
+    };
   }
 
   test('an unknown workout id renders a not-found state', () => {
@@ -353,12 +390,70 @@ describe('WorkoutOverviewScreen', () => {
     expect(out).toContain('disabled');
     expect(out).toContain('not connected to your Drive folder');
   });
+
+  test('the start action sits beside the title and at the foot of the page', () => {
+    setServices({
+      lookup: lookupFor(workout()),
+      staticData: { exerciseById: exerciseIndex(exercises()) } as never,
+      sessionService: { start: async () => ({ id: 'x' }) } as never
+    });
+
+    const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
+    // Two controls, one above the tree and one below it. REQUIREMENTS 18.2.
+    expect(out.match(/Start Workout/g)?.length).toBe(2);
+    expect(out).toContain('overview__actions--top');
+  });
+
+  test('a linear exercise row carries Last Time and links to its history', () => {
+    setServices({
+      lookup: lookupFor(workout(), [completedSet('back-squat', 'session-old')]),
+      staticData: { exerciseById: exerciseIndex(exercises()) } as never,
+      sessionService: { start: async () => ({ id: 'x' }) } as never
+    });
+
+    const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
+    // REQUIREMENTS 19.3, 19.4: the badge reports and links.
+    expect(out).toContain('last-time');
+    expect(out).toContain('12 reps');
+    expect(out).toContain('#/exercises/back-squat/history');
+  });
+
+  test('the overview badge carries no fill control', () => {
+    setServices({
+      lookup: lookupFor(workout(), [completedSet('back-squat', 'session-old')]),
+      staticData: { exerciseById: exerciseIndex(exercises()) } as never,
+      sessionService: { start: async () => ({ id: 'x' }) } as never
+    });
+
+    const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
+    // The Overview records nothing, so it draws no fill arrow.
+    // REQUIREMENTS 19.11 covers the editable screen only.
+    expect(out).not.toContain('last-time__fill');
+  });
+
+  test('an exercise with no history reads No history', () => {
+    setServices({
+      lookup: lookupFor(workout(), [completedSet('back-squat', 'session-old')]),
+      staticData: { exerciseById: exerciseIndex(exercises()) } as never,
+      sessionService: { start: async () => ({ id: 'x' }) } as never
+    });
+
+    const out = html(WorkoutOverviewScreen, { workoutId: 'demo' });
+    // Push Up holds no row in the stub, so its badge falls back.
+    // REQUIREMENT 19.5.
+    expect(out).toContain('No history');
+    // The squat row still reports its own values.
+    expect(out).toContain('12 reps');
+  });
 });
 
 describe('WorkoutOverviewScreen: repeated rounds', () => {
   test('a repeated single exercise uses compact numbered sets', () => {
     setServices({
-      lookup: { getWorkout: () => workout() } as never,
+      lookup: {
+        getWorkout: () => workout(),
+        getExerciseHistory: () => ({ items: [], offset: 0, limit: 0, total: 0, hasMore: false })
+      } as never,
       staticData: { exerciseById: exerciseIndex(exercises()) } as never,
       sessionService: { start: async () => ({ id: 'x' }) } as never
     });

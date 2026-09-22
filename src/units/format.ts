@@ -133,6 +133,18 @@ export function formatAlternating(total: number, startingSide: StartingSide): st
 }
 
 /**
+ * Show one number on a read-only line.
+ *
+ * `formatEditable` keeps one decimal because an editable field must show the
+ * digit the user types into. A read-only line drops the trailing `.0`, so a
+ * badge reads `225 lb` and not `225.0 lb`.
+ */
+export function formatStep(value: number, step: number): string {
+  const text = formatEditable({ value, unit: '' }, step);
+  return text.endsWith('.0') ? text.slice(0, -2) : text;
+}
+
+/**
  * The alternating text for one stored value, when the value carries reps.
  *
  * A convenience over `formatAlternating` for a caller holding a

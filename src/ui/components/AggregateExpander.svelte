@@ -21,8 +21,7 @@
   import Button from './Button.svelte';
   import type { DraftChild } from '../../sessions/draft-expansion';
   import type { GroupModel } from '../viewmodels/activeWorkoutModel';
-  import { formatStep } from '../viewmodels/activeWorkoutModel';
-  import { formatMinuteValue, unitLabel } from '../../units/format';
+  import { formatMinuteValue, formatStep, unitLabel } from '../../units/format';
 
   /** Show one derived quantity on a read-only line. */
   function showQuantity(quantity: { value: number; unit: string }): string {

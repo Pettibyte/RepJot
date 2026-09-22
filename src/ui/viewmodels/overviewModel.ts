@@ -25,6 +25,8 @@ import type {
 } from '../../domain/types';
 import { resolveTree } from '../../sessions/tree-resolver';
 import { encodePath, type PathSegment } from '../../domain/execution-path';
+import type { LookupService } from '../../indexes/lookup-service';
+import { buildLastTime, type LastTimeModel } from './lastTimeModel';
 import { formatMinuteValue, unitLabel } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
 import { formatRoute } from '../../routing/routes';
@@ -47,6 +49,16 @@ export interface OverviewNodeModel {
    * hide the rest of the workout. REQUIREMENTS 15.6.
    */
   unresolved?: boolean;
+  /**
+   * What the user last recorded for this exercise.
+   *
+   * Present on every exercise row the bundle resolves, and absent on a
+   * container row and on an unresolved one, where there is no exercise to
+   * ask about. The Overview draws this as a read-only badge: it reports and
+   * links to Exercise History, and it carries no fill control because the
+   * Overview records nothing. REQUIREMENTS 19.3, 19.4.
+   */
+  lastTime?: LastTimeModel;
 }
 
 /**
@@ -81,6 +93,13 @@ export interface OverviewSetMatrixRow {
   label: string;
   /** The prescription this exercise asks for, read from its first cell. */
   prescriptionText: string;
+  /**
+   * What the user last recorded for this exercise.
+   *
+   * The grid states one exercise per row, so the badge rides the row header
+   * and speaks for that exercise alone. REQUIREMENTS 19.3, 19.4.
+   */
+  lastTime?: LastTimeModel;
   /** Cells aligned to `OverviewSetMatrix.columns` by index. */
   cells: Array<{ key: string; prescriptionText: string }>;
 }
@@ -110,6 +129,16 @@ export interface OverviewSetTable {
   rounds: OverviewSetRound[];
   /** Every row in draw order. Derived from `rounds`; never set apart from it. */
   rows: OverviewSetRow[];
+  /**
+   * What the user last recorded, for the one exercise this table lists.
+   *
+   * Set only on a single-exercise table, where one badge over the heading
+   * speaks for every set below it. A circuit names several exercises under
+   * one heading, so one exercise's Last Time would read as the whole
+   * table's and the badge rides each matrix row instead.
+   * REQUIREMENTS 19.3, 19.4.
+   */
+  lastTime?: LastTimeModel;
   /** The exercise-by-set grid. Present only when `multiExercise` is true. */
   matrix?: OverviewSetMatrix;
 }
@@ -141,6 +170,7 @@ function buildOverviewMatrix(rounds: OverviewSetRound[]): OverviewSetMatrix {
       key: nodeId,
       label: firstRound?.label ?? '',
       prescriptionText: base,
+      lastTime: firstRound?.lastTime,
       cells: rounds.map((round) => {
         const row = round.rows.find((candidate) => candidate.nodeId === nodeId);
         return {
@@ -173,6 +203,15 @@ export interface OverviewModel {
 /** The exercise directory the model needs. */
 export interface OverviewExerciseIndex {
   exerciseById: Map<string, Exercise>;
+  /**
+   * The read model behind the Last Time badge.
+   *
+   * Absent means the badge cannot be read, so no row carries a `lastTime`
+   * and the Overview draws the tree without badges. An anonymous visitor
+   * has no history to show, so this stays absent rather than drawing
+   * `No history` on every row. REQUIREMENTS 19.3, 19.5.
+   */
+  lookup?: LookupService | null;
 }
 
 /** Name for a container that carries none, keyed by strategy. */
@@ -357,6 +396,24 @@ export function buildOverviewModel(
   };
   indexNode(workout.root);
 
+  /**
+   * The Last Time badge for one exercise, read once per exercise.
+   *
+   * A workout names the same exercise across many sets, and the read walks
+   * the history list each time. The cache keeps a wide workout from walking
+   * it once per row. The Overview holds no session, so nothing is excluded:
+   * the newest completed set is the answer.
+   */
+  const lastTimeCache = new Map<string, LastTimeModel>();
+  const lastTimeFor = (exerciseId: string): LastTimeModel | undefined => {
+    if (staticData.lookup === undefined || staticData.lookup === null) return undefined;
+    const cached = lastTimeCache.get(exerciseId);
+    if (cached !== undefined) return cached;
+    const built = buildLastTime(exerciseId, staticData.lookup);
+    lastTimeCache.set(exerciseId, built);
+    return built;
+  };
+
   interface RawOverviewNode {
     model: OverviewNodeModel;
     path: PathSegment[];
@@ -400,7 +457,8 @@ export function buildOverviewModel(
           depth: resolved.level,
           prescriptionText,
           isExercise: true,
-          exerciseHref: formatRoute({ name: 'exercise-history', exerciseId: node.exerciseId })
+          exerciseHref: formatRoute({ name: 'exercise-history', exerciseId: node.exerciseId }),
+          lastTime: lastTimeFor(node.exerciseId)
         };
 
     const parentSegment = resolved.path[resolved.path.length - 2];
@@ -490,6 +548,13 @@ export function buildOverviewModel(
                 multiExercise,
                 rounds,
                 rows: tableRowsFlat,
+                // A single-exercise table puts one badge over the heading,
+                // where it speaks for every set below it. A circuit does
+                // not: the badge rides each matrix row instead, because one
+                // exercise's Last Time would read as the whole table's.
+                ...(!multiExercise && first.model.lastTime !== undefined
+                  ? { lastTime: first.model.lastTime }
+                  : {}),
                 ...(multiExercise ? { matrix: buildOverviewMatrix(rounds) } : {})
               }
             });

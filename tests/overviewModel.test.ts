@@ -430,3 +430,157 @@ describe('overview circuit matrix', () => {
     expect(table.table.matrix).toBeUndefined();
   });
 });
+
+describe('buildOverviewModel: Last Time', () => {
+  /** A lookup that answers one exercise's history and nothing else. */
+  function lookupWith(rows: Array<{ exerciseId: string; text: string }>) {
+    return {
+      getExerciseHistory: (exerciseId: string) => {
+        const matches = rows.filter((row) => row.exerciseId === exerciseId);
+        return {
+          items: matches.map((row) => ({
+            sessionId: 'session-old',
+            exerciseId: row.exerciseId,
+            resultKey: `k-${row.exerciseId}`,
+            encodedPath: `root/${row.exerciseId}`,
+            attempt: 1,
+            status: 'completed',
+            values: { reps: { value: Number(row.text), unit: 'reps' } },
+            completedAtUtc: '2026-08-10T15:05:00Z'
+          })),
+          offset: 0,
+          limit: matches.length,
+          total: matches.length,
+          hasMore: false
+        };
+      }
+    } as never;
+  }
+
+  const circuitWorkout = {
+    id: 'ov-lt-circuit',
+    name: 'Circuit Last Time',
+    publishedStatus: 'live',
+    root: {
+      id: 'ov-lt-root',
+      type: 'container',
+      strategy: 'sequence',
+      strategyConfig: {},
+      children: [
+        {
+          id: 'ov-lt-sup',
+          type: 'container',
+          name: 'Superset A',
+          strategy: 'rounds',
+          strategyConfig: { rounds: 2 },
+          children: [
+            {
+              id: 'ov-lt-squat',
+              type: 'exercise',
+              exerciseId: 'back-squat',
+              stimulus: 'hypertrophy',
+              setType: 'working',
+              prescription: { reps: 10 }
+            },
+            {
+              id: 'ov-lt-bench',
+              type: 'exercise',
+              exerciseId: 'push-up',
+              stimulus: 'hypertrophy',
+              setType: 'working',
+              prescription: { reps: 8 }
+            }
+          ]
+        }
+      ]
+    }
+  } as never;
+
+  test('an exercise row carries the values the user last recorded', () => {
+    const model = buildOverviewModel(workout(), {
+      exerciseById: exerciseIndex(exercises()),
+      lookup: lookupWith([{ exerciseId: 'back-squat', text: '9' }])
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const row = model.nodes.find((node) => node.label === 'Back Squat');
+    expect(row?.lastTime?.kind).toBe('value');
+    expect(row?.lastTime?.text).toBe('9 reps');
+    expect(row?.lastTime?.href).toBe('#/exercises/back-squat/history');
+  });
+
+  test('an exercise with no completed result reads No history', () => {
+    const model = buildOverviewModel(workout(), {
+      exerciseById: exerciseIndex(exercises()),
+      lookup: lookupWith([{ exerciseId: 'back-squat', text: '9' }])
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const row = model.nodes.find((node) => node.label === 'Push Up');
+    expect(row?.lastTime?.kind).toBe('none');
+    expect(row?.lastTime?.text).toBe('No history');
+  });
+
+  test('a container row carries no Last Time', () => {
+    const model = buildOverviewModel(workout(), {
+      exerciseById: exerciseIndex(exercises()),
+      lookup: lookupWith([{ exerciseId: 'back-squat', text: '9' }])
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const cindy = model.nodes.find((node) => node.label === 'Cindy');
+    expect(cindy?.lastTime).toBeUndefined();
+  });
+
+  test('a single-exercise table carries one badge over its heading', () => {
+    const model = buildOverviewModel(workout(), {
+      exerciseById: exerciseIndex(exercises()),
+      lookup: lookupWith([{ exerciseId: 'back-squat', text: '9' }])
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const table = model.blocks.find(
+      (block) => block.kind === 'set-table' && block.table.multiExercise === false
+    );
+    expect(table?.kind).toBe('set-table');
+    if (table?.kind !== 'set-table') return;
+    expect(table.table.lastTime?.text).toBe('9 reps');
+  });
+
+  test('a circuit puts the badge on each matrix line, not on the heading', () => {
+    const model = buildOverviewModel(circuitWorkout, {
+      exerciseById: exerciseIndex(exercises()),
+      lookup: lookupWith([{ exerciseId: 'back-squat', text: '9' }])
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    const table = model.blocks.find((block) => block.kind === 'set-table');
+    expect(table?.kind).toBe('set-table');
+    if (table?.kind !== 'set-table') return;
+
+    // One exercise's Last Time would read as the whole circuit's, so the
+    // heading carries none.
+    expect(table.table.lastTime).toBeUndefined();
+    const matrix = table.table.matrix;
+    expect(matrix).toBeDefined();
+    const squatLine = matrix!.rows.find((line) => line.lastTime?.kind === 'value');
+    expect(squatLine?.lastTime?.text).toBe('9 reps');
+  });
+
+  test('no lookup means no Last Time on any row', () => {
+    const model = buildOverviewModel(workout(), {
+      exerciseById: exerciseIndex(exercises())
+    });
+    expect(model).not.toBeNull();
+    if (model === null) return;
+
+    // An anonymous visitor has no history to show, so the tree draws no
+    // badges rather than `No history` on every row.
+    expect(model.nodes.some((node) => node.lastTime !== undefined)).toBe(false);
+  });
+});

@@ -706,6 +706,17 @@
   margin-top: var(--space-stack);
 }
 
+/*
+ * The start control beside the title. A long programmed tree pushes the
+ * foot button past the fold on a Kindle screen, so the action stays
+ * reachable before the user scrolls. The top copy carries the same handler
+ * and the same disabled state as the foot copy.
+ */
+.overview__actions--top {
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-3);
+}
+
 .overview__id {
   font-family: var(--font-data);
 }

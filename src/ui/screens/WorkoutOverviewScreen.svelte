@@ -34,7 +34,10 @@
 
   const model = $derived(
     buildOverviewModel(workout, {
-      exerciseById: $services.staticData?.exerciseById ?? new Map()
+      exerciseById: $services.staticData?.exerciseById ?? new Map(),
+      // The Last Time badge reads the same index the chooser reads. Absent
+      // with no account, and the tree draws no badges. REQUIREMENTS 19.3.
+      lookup: $services.lookup
     })
   );
 
@@ -67,20 +70,13 @@
       <Button variant="primary" href={formatRoute({ name: 'home' })}>Back to workouts</Button>
     </div>
   {:else}
-    <header class="overview__header">
-      <h1 class="overview__title">{model.title}</h1>
-      {#if model.notes !== undefined}
-        <p class="overview__notes">{model.notes}</p>
-      {/if}
-    </header>
-
-    <WorkoutTreeReadOnly nodes={model.nodes} blocks={model.blocks} idPrefix="overview" />
-
-    {#if startError !== ''}
-      <p class="overview__error" role="alert">{startError}</p>
-    {/if}
-
-    <div class="overview__actions">
+    <!--
+      One start control, drawn twice. A long programmed tree pushes the foot
+      copy past the fold on a Kindle screen, so the same button rides beside
+      the title too. Both copies read one `starting` guard and call one
+      handler, so neither can start a session twice. REQUIREMENTS 18.2.
+    -->
+    {#snippet startButton()}
       <Button
         variant="primary"
         block
@@ -90,7 +86,24 @@
       >
         {starting ? 'Starting…' : 'Start Workout'}
       </Button>
-    </div>
+    {/snippet}
+
+    <header class="overview__header">
+      <h1 class="overview__title">{model.title}</h1>
+      {#if model.notes !== undefined}
+        <p class="overview__notes">{model.notes}</p>
+      {/if}
+    </header>
+
+    <div class="overview__actions overview__actions--top">{@render startButton()}</div>
+
+    <WorkoutTreeReadOnly nodes={model.nodes} blocks={model.blocks} idPrefix="overview" />
+
+    {#if startError !== ''}
+      <p class="overview__error" role="alert">{startError}</p>
+    {/if}
+
+    <div class="overview__actions">{@render startButton()}</div>
 
     {#if $services.sessionService === null}
       <p class="overview__hint" role="status">

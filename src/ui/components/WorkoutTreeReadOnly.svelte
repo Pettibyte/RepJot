@@ -7,6 +7,7 @@
   rendered here.
 -->
 <script lang="ts">
+  import LastTimeBadge from './LastTimeBadge.svelte';
   import type { OverviewBlock, OverviewNodeModel } from '../viewmodels/overviewModel';
 
   let {
@@ -66,6 +67,15 @@
                 {block.table.title}
               {/if}
             </h3>
+            <!--
+              One badge over the heading speaks for every set of this one
+              exercise. It is drawn with no `onfill`, so the fill control is
+              absent: the Overview reports and links, and records nothing.
+              REQUIREMENTS 19.3, 19.4.
+            -->
+            {#if block.table.lastTime !== undefined}
+              <LastTimeBadge lastTime={block.table.lastTime} exerciseName={block.table.title} />
+            {/if}
           </div>
           <p class="set-table__label">{block.table.label}</p>
           <div class="overview-set__rows">
@@ -88,6 +98,16 @@
                           <span class="set-matrix__exercise">{line.label}</span>
                           {#if line.prescriptionText !== ''}
                             <span class="set-matrix__rx">{line.prescriptionText}</span>
+                          {/if}
+                          <!--
+                            The grid names several exercises under one
+                            heading, so the badge sits on the exercise line
+                            and speaks for that exercise across the whole
+                            row. No `onfill`: the Overview records nothing.
+                            REQUIREMENTS 19.3, 19.4.
+                          -->
+                          {#if line.lastTime !== undefined}
+                            <LastTimeBadge lastTime={line.lastTime} exerciseName={line.label} />
                           {/if}
                         </th>
                         {#each line.cells as cell (cell.key)}
@@ -139,6 +159,15 @@
         {/if}
         {#if block.node.prescriptionText !== ''}
           <span class="tree-row__prescription">{block.node.prescriptionText}</span>
+        {/if}
+        <!--
+          A linear exercise row carries its own badge, because the row names
+          one exercise and nothing else. No `onfill`: the Overview reports
+          and links to Exercise History, and records nothing.
+          REQUIREMENTS 19.3, 19.4.
+        -->
+        {#if block.node.lastTime !== undefined}
+          <LastTimeBadge lastTime={block.node.lastTime} exerciseName={block.node.label} />
         {/if}
       </li>
     {/if}

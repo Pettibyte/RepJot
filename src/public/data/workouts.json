@@ -564,9 +564,9 @@
                     "setType": "working"
                   },
                   {
-                    "id": "superset-b-rear-delt-raise",
+                    "id": "superset-b-seated-bent-over-rear-delt-raise",
                     "type": "exercise",
-                    "exerciseId": "Lying_Rear_Delt_Raise",
+                    "exerciseId": "Seated_Bent-Over_Rear_Delt_Raise",
                     "stimulus": "hypertrophy",
                     "prescription": {
                       "reps": 8
@@ -1141,17 +1141,15 @@
                     "setType": "working"
                   },
                   {
-                    "id": "superset-a-plank",
+                    "id": "superset-a-dumbbell-alternating-renegade-row",
                     "type": "exercise",
-                    "exerciseId": "Plank",
+                    "exerciseId": "Dumbbell_Alternating_Renegade_Row",
                     "stimulus": "hypertrophy",
                     "prescription": {
-                      "duration": {
-                        "value": 30,
-                        "unit": "second"
-                      }
+                      "reps": 16
                     },
-                    "setType": "working"
+                    "setType": "working",
+                    "notes": "8 per side."
                   }
                 ]
               },

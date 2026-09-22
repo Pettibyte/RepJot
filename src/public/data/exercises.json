@@ -944,6 +944,89 @@
         }
       ],
       "loadSemantics": "total"
+    },
+    {
+      "id": "Seated_Bent-Over_Rear_Delt_Raise",
+      "name": "Seated Bent-Over Rear Delt Raise",
+      "instructions": [
+        "Place a couple of dumbbells looking forward in front of a flat bench.",
+        "Sit on the end of the bench with your legs together and the dumbbells behind your calves.",
+        "Bend at the waist while keeping the back straight in order to pick up the dumbbells. The palms of your hands should be facing each other as you pick them. This will be your starting position.",
+        "Keeping your torso forward and stationary, and the arms slightly bent at the elbows, lift the dumbbells straight to the side until both arms are parallel to the floor. Exhale as you lift the weights. (Note: avoid swinging the torso or bringing the arms back as opposed to the side.)",
+        "After a one second contraction at the top, slowly lower the dumbbells back to the starting position.",
+        "Repeat for the recommended amount of repetitions."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "level": "intermediate",
+      "movementPattern": "horizontal_pull",
+      "primaryMuscles": [
+        "shoulders"
+      ],
+      "secondaryMuscles": [],
+      "laterality": "bilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
+    },
+    {
+      "id": "Dumbbell_Alternating_Renegade_Row",
+      "name": "Dumbbell Alternating Renegade Row",
+      "instructions": [
+        "Place two dumbbells on the floor about shoulder width apart. Grip the handles and take a high-plank position on your toes, with your body straight from head to heels.",
+        "If your hips rotate or your lower back sags, widen your feet or use lighter dumbbells. Press one dumbbell firmly into the floor to support your body.",
+        "Row the other dumbbell toward your side by pulling your elbow back. Keep your working shoulder blade pulled toward your spine.",
+        "Lower the dumbbell to the floor with control, then row the dumbbell in your other hand. Keep your hips square to the floor throughout the movement.",
+        "Do 6-12 repetitions on each side. Stop if you feel sharp pain in your shoulders, wrists, or lower back."
+      ],
+      "equipment": "dumbbell",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "level": "expert",
+      "movementPattern": "horizontal_pull",
+      "primaryMuscles": [
+        "middle back"
+      ],
+      "secondaryMuscles": [
+        "abdominals",
+        "biceps",
+        "chest",
+        "lats",
+        "triceps"
+      ],
+      "laterality": "unilateral",
+      "measurements": [
+        {
+          "dimension": "reps",
+          "compatibleUnits": [
+            "reps"
+          ]
+        },
+        {
+          "dimension": "weight",
+          "compatibleUnits": [
+            "kg",
+            "lb"
+          ]
+        }
+      ],
+      "loadSemantics": "per_implement"
     }
   ]
 }
