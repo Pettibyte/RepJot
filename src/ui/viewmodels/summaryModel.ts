@@ -125,6 +125,8 @@ export interface SummaryExerciseRow {
   valuesLabel: string;
   /** The alternating split, for example `9 total / 5 left / 4 right`. */
   alternatingLabel?: string;
+  /** Free text recorded with this exercise result. */
+  notes?: string;
   reasonCode?: ReasonCode;
   reasonLabel?: string;
   /** True when the current bundle cannot place this result. */
@@ -633,6 +635,7 @@ function buildExerciseRow(
     if (matchedNode.stimulus !== undefined) row.stimulus = matchedNode.stimulus;
   }
   if (result.side !== undefined) row.side = result.side;
+  if (result.notes !== undefined) row.notes = result.notes;
   if (result.reasonCode !== undefined) {
     row.reasonCode = result.reasonCode;
     row.reasonLabel = reasonLabel(result.reasonCode);

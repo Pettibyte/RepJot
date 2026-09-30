@@ -60,6 +60,7 @@ export const REVIEWED_GLYPHS: string[] = [
   'arrow_back', // BackHeader back control
   'add', // AMRAP quick round control
   'input', // Fill with last time data control
+  'note_add', // add a note to one recorded set
 ];
 
 const PACKAGE_NAME = '@iconify-json/material-symbols';

@@ -72,6 +72,8 @@ export interface ExerciseOccurrence {
   attempt: number;
   status: ResultStatus;
   values?: ResultValues;
+  /** Free text recorded with this exercise result. */
+  notes?: string;
   /**
    * When the recorded work finished.
    *

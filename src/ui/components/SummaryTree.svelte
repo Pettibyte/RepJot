@@ -103,6 +103,7 @@
       <p class="summary-row__values">{row.alternatingLabel}</p>
     {/if}
     {#if row.reasonLabel !== undefined}<p class="summary-row__reason">{row.reasonLabel}</p>{/if}
+    {#if row.notes !== undefined}<p class="summary-row__notes">{row.notes}</p>{/if}
   </div>
 {/snippet}
 

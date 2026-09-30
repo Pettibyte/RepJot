@@ -33,8 +33,13 @@
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
+    noteDrafts = {},
     openRowPanels = {},
+    openNoteEditors = {},
     onpaneltoggle = undefined,
+    onnotetoggle = undefined,
+    onnotechange = undefined,
+    onnoteblur = undefined,
     groupcontrols = undefined,
     onfieldchange = undefined,
     onfieldblur = undefined,
@@ -68,10 +73,17 @@
     startingSideDrafts?: Record<string, StartingSide>;
     /** Draft effort choice, keyed by row key. */
     effortDrafts?: Record<string, string>;
+    /** Draft note text, keyed by row key. */
+    noteDrafts?: Record<string, string>;
     /** Which rows have their **Set options** panel open, keyed by row key. */
     openRowPanels?: Record<string, boolean>;
+    /** Which rows have their note editor open, keyed by row key. */
+    openNoteEditors?: Record<string, boolean>;
     /** Reports a panel opening or closing, so the state survives a rebuild. */
     onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    onnotetoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    onnotechange?: ((rowKey: string, value: string) => void) | undefined;
+    onnoteblur?: ((rowKey: string) => void) | undefined;
     /** Scored-container controls, kept beside their group heading. */
     groupcontrols?: Snippet<[GroupModel]>;
     onfieldchange?: ((rowKey: string, dimension: string, value: string) => void) | undefined;
@@ -150,8 +162,13 @@
           {sideDrafts}
           {startingSideDrafts}
           {effortDrafts}
+          {noteDrafts}
           {openRowPanels}
+          {openNoteEditors}
           {onpaneltoggle}
+          {onnotetoggle}
+          {onnotechange}
+          {onnoteblur}
           {onfieldchange}
           {onfieldblur}
           {onstatuschange}
@@ -177,7 +194,12 @@
           startingSide={startingSideDrafts[block.row.key] ?? block.row.startingSide ?? 'left'}
           effortChoice={effortDrafts[block.row.key]}
           panelOpen={openRowPanels[block.row.key] === true}
+          noteText={noteDrafts[block.row.key]}
+          noteOpen={openNoteEditors[block.row.key] === true}
           onpaneltoggle={onpaneltoggle}
+          {onnotetoggle}
+          {onnotechange}
+          {onnoteblur}
           {idPrefix}
           {disabled}
           {busy}

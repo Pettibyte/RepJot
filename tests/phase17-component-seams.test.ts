@@ -73,6 +73,12 @@ describe('ExerciseRow reaches the effort and attempt controls', () => {
     // A unilateral exercise needs a side control. REQUIREMENT 11.5.
     expect(code).toMatch(/onsidechange[?.]*\(/);
   });
+
+  test('the row sends changed note text and saves it on blur', () => {
+    expect(code).toMatch(/onnotechange[?.]*\(/);
+    expect(code).toMatch(/onnoteblur[?.]*\(/);
+    expect(code).toContain('note_add');
+  });
 });
 
 describe('WorkoutTreeEditable forwards every row callback', () => {
@@ -87,6 +93,8 @@ describe('WorkoutTreeEditable forwards every row callback', () => {
     'onsidechange',
     'onstartingchange',
     'oneffortchange',
+    'onnotechange',
+    'onnoteblur',
     'onaddattempt'
   ]) {
     test(`the tree forwards ${name}`, () => {

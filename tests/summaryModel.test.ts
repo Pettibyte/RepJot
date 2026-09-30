@@ -92,6 +92,19 @@ describe('buildSummaryModel: header', () => {
     });
     expect(model.notes).toBeUndefined();
   });
+
+  test('carries an exercise result note to its recorded row', () => {
+    const session = validSession();
+    const [key] = Object.keys(session.exerciseResults);
+    session.exerciseResults[key].notes = 'Pause at the bottom.';
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(),
+      localTimeZone: 'UTC',
+      nowUtc: NOW
+    });
+    expect(allRows(model).find((row) => row.key === key)?.notes).toBe('Pause at the bottom.');
+  });
 });
 
 describe('buildSummaryModel: date labels', () => {

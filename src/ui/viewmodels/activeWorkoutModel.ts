@@ -214,6 +214,8 @@ export interface ActiveExerciseRow {
   attempt: number;
   status: ResultStatus;
   reasonCode?: ReasonCode;
+  /** Free-text detail recorded on this set, side, and attempt. */
+  notes?: string;
   /** True when the bundle does not hold the exercise. */
   unresolved: boolean;
   /**
@@ -958,6 +960,7 @@ export function buildActiveWorkoutModel(
       // remains a UI default rather than exercise reference data.
       else if (result === null && side === 'alternating') row.startingSide = 'left';
       if (result?.reasonCode !== undefined) row.reasonCode = result.reasonCode;
+      if (result?.notes !== undefined) row.notes = result.notes;
       if (values !== undefined) row.storedValues = values;
 
       rows.push(row);

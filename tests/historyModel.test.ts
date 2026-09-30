@@ -206,6 +206,16 @@ describe('buildExerciseHistoryModel', () => {
     expect(rows[0].detailLabel).toBe('');
   });
 
+  test('carries an exercise result note for display', () => {
+    const rows = buildExerciseHistoryModel(
+      [occurrence({ notes: 'Used wrist wraps.' })],
+      'UTC',
+      NOW,
+      'Back Squat'
+    );
+    expect(rows[0].notes).toBe('Used wrist wraps.');
+  });
+
   test('falls back to the exercise id when no name is given', () => {
     const rows = buildExerciseHistoryModel([occurrence()], 'UTC', NOW);
     expect(rows[0].workoutName).toBe('back-squat');

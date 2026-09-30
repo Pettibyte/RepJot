@@ -99,6 +99,10 @@
   let startingSideDrafts = $state<Record<string, StartingSide>>({});
   /** Draft effort choice keyed by row key. Empty string clears the effort. */
   let effortDrafts = $state<Record<string, string>>({});
+  /** Draft note text keyed by row key. An empty string clears a saved note. */
+  let noteDrafts = $state<Record<string, string>>({});
+  /** Which rows have their note editor open. */
+  let openNoteEditors = $state<Record<string, boolean>>({});
   /** Draft container score text keyed by group key. */
   let containerDrafts = $state<Record<string, string>>({});
   /** Draft extra-reps text keyed by AMRAP group key. */
@@ -179,6 +183,13 @@
     return effortFromChoice(row.effortTarget, effortDrafts[row.key] ?? '');
   }
 
+  /** The note draft, preserving the saved text until the user changes it. */
+  function noteFor(row: ActiveExerciseRow): string | undefined {
+    return Object.prototype.hasOwnProperty.call(noteDrafts, row.key)
+      ? noteDrafts[row.key]
+      : undefined;
+  }
+
   /**
    * Build the exercise draft one row writes.
    *
@@ -195,7 +206,8 @@
       reasonCode: reasonFor(row),
       side: sideDrafts[row.key],
       startingSide: startingSideDrafts[row.key],
-      effort: effortFor(row)
+      effort: effortFor(row),
+      notes: noteFor(row)
     });
   }
 
@@ -227,10 +239,13 @@
     moveEntry(editedFields, fromKey, toKey);
     moveEntry(fieldErrors, fromKey, toKey);
     moveEntry(statusDrafts, fromKey, toKey);
+    moveEntry(reasonDrafts, fromKey, toKey);
     moveEntry(sideDrafts, fromKey, toKey);
     moveEntry(startingSideDrafts, fromKey, toKey);
     moveEntry(effortDrafts, fromKey, toKey);
+    moveEntry(noteDrafts, fromKey, toKey);
     moveEntry(openRowPanels, fromKey, toKey);
+    moveEntry(openNoteEditors, fromKey, toKey);
   }
 
   /** Drop every per-row draft entry for one key. */
@@ -243,7 +258,9 @@
     delete sideDrafts[rowKey];
     delete startingSideDrafts[rowKey];
     delete effortDrafts[rowKey];
+    delete noteDrafts[rowKey];
     delete openRowPanels[rowKey];
+    delete openNoteEditors[rowKey];
   }
 
   /** The row key this row takes when it records `side`. */
@@ -364,6 +381,19 @@
 
   function queueAndFlush(row: ActiveExerciseRow): void {
     void enqueueRowChange(row, persistRow);
+  }
+
+  /** Save a changed note on blur when this row has a valid result to write. */
+  function saveNoteOnBlur(rowKey: string): void {
+    const row = rowsByKey.get(rowKey);
+    if (row === undefined) return;
+    void enqueueRowChange(row, async (current: ActiveExerciseRow) => {
+      const draft = draftForRow(current);
+      // A note-only completed row is not a valid v1 result. Keep its draft;
+      // the first value or effort save will carry it into the result.
+      if (isBlankExerciseDraft(draft)) return;
+      await persistRow(current, draft);
+    });
   }
 
   function validateRow(row: ActiveExerciseRow): boolean {
@@ -1145,10 +1175,19 @@
       {sideDrafts}
       {startingSideDrafts}
       {effortDrafts}
+      {noteDrafts}
       {openRowPanels}
+      {openNoteEditors}
       onpaneltoggle={(rowKey: string, open: boolean) => {
         openRowPanels[rowKey] = open;
       }}
+      onnotetoggle={(rowKey: string, open: boolean) => {
+        openNoteEditors[rowKey] = open;
+      }}
+      onnotechange={(rowKey: string, value: string) => {
+        noteDrafts[rowKey] = value;
+      }}
+      onnoteblur={(rowKey: string) => saveNoteOnBlur(rowKey)}
       groupcontrols={groupControls}
       {busy}
       disabled={sessionService === null}

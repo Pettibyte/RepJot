@@ -19,6 +19,7 @@
      workout. REQUIREMENTS 6.10, 15.6.
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
   import DataError from './DataError.svelte';
   import ChipGroup from './ChipGroup.svelte';
   import EffortControl from './EffortControl.svelte';
@@ -52,6 +53,11 @@
     cellLabel = '',
     panelOpen = false,
     onpaneltoggle = undefined,
+    noteText = undefined,
+    noteOpen = false,
+    onnotetoggle = undefined,
+    onnotechange = undefined,
+    onnoteblur = undefined,
     onfieldchange = undefined,
     onfieldblur = undefined,
     onstatuschange = undefined,
@@ -123,6 +129,13 @@
     panelOpen?: boolean;
     /** Reports the panel opening or closing. */
     onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    /** Local text for this set's note. An empty string means clear on save. */
+    noteText?: string | undefined;
+    /** Whether the note editor is visible. */
+    noteOpen?: boolean;
+    onnotetoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    onnotechange?: ((rowKey: string, value: string) => void) | undefined;
+    onnoteblur?: ((rowKey: string) => void) | undefined;
     /**
      * Runs on every keystroke in a value field.
      *
@@ -192,6 +205,15 @@
 
   /** The effort the row shows now, draft first. */
   const currentEffort = $derived(effortChoice ?? choiceForEffort(row.effort));
+  const currentNote = $derived(noteText ?? row.notes ?? '');
+  let noteInput = $state<HTMLTextAreaElement | undefined>(undefined);
+
+  // The button reveals a new control. Put focus there so keyboard users can
+  // type immediately instead of tabbing through the rest of the row.
+  $effect(() => {
+    if (!noteOpen) return;
+    void tick().then(() => noteInput?.focus());
+  });
 
   /**
    * What the number in the reps field means, stated plainly.
@@ -257,6 +279,35 @@
       onchange={(value: string) => onreasonchange?.(value as ReasonCode)}
     />
   {/if}
+
+  <div class="exercise-row__note-control">
+    <Button
+      variant="secondary"
+      icon="note_add"
+      aria-expanded={noteOpen}
+      aria-controls={domId('note')}
+      disabled={disabled}
+      onclick={() => onnotetoggle?.(row.key, !noteOpen)}
+    >{currentNote === '' ? 'Add note' : 'Edit note'}</Button>
+    {#if noteOpen}
+      <div class="exercise-row__note-editor" id={domId('note')}>
+        <label class="exercise-row__label" for={domId('note-input')}>Note for this set</label>
+        <textarea
+          class="exercise-row__note-input"
+          id={domId('note-input')}
+          value={currentNote}
+          bind:this={noteInput}
+          {disabled}
+          rows="3"
+          oninput={(event: Event) => onnotechange?.(row.key, (event.target as HTMLTextAreaElement).value)}
+          onblur={() => onnoteblur?.(row.key)}
+        ></textarea>
+        {#if !row.hasSavedResult && currentStatus === 'completed'}
+          <p class="exercise-row__note-hint">Will save when this set has a result.</p>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   {#if canAddAttempt(row) || canDeleteAttempt(row)}
     <div class="exercise-row__attempt">

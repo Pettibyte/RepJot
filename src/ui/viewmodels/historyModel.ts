@@ -110,6 +110,8 @@ export interface HistoryRow {
    * side the split needs.
    */
   alternatingLabel?: string;
+  /** Free text recorded with this exercise result. */
+  notes?: string;
   /**
    * True when the row's own summary cannot be resolved further.
    *
@@ -263,18 +265,22 @@ export function buildExerciseHistoryModel(
   nowValue: string = wallClockUtc(),
   exerciseName = ''
 ): HistoryRow[] {
-  return occurrences.map((occurrence) => ({
-    sessionId: occurrence.sessionId,
-    workoutName: exerciseName === '' ? occurrence.exerciseId : exerciseName,
-    statusLabel: sessionStatusLabel(occurrence.status),
-    status: occurrence.status,
-    dateLabel: formatHistoryDate(occurrence.completedAtUtc, nowValue, localTimeZone),
-    startedAtUtc: occurrence.completedAtUtc,
-    href: formatRoute({ name: 'session-summary', sessionId: occurrence.sessionId }),
-    detailLabel: formatOccurrenceValues(occurrence),
-    alternatingLabel: formatOccurrenceAlternating(occurrence),
-    sessionHref: formatRoute({ name: 'session-summary', sessionId: occurrence.sessionId })
-  }));
+  return occurrences.map((occurrence) => {
+    const row: HistoryRow = {
+      sessionId: occurrence.sessionId,
+      workoutName: exerciseName === '' ? occurrence.exerciseId : exerciseName,
+      statusLabel: sessionStatusLabel(occurrence.status),
+      status: occurrence.status,
+      dateLabel: formatHistoryDate(occurrence.completedAtUtc, nowValue, localTimeZone),
+      startedAtUtc: occurrence.completedAtUtc,
+      href: formatRoute({ name: 'session-summary', sessionId: occurrence.sessionId }),
+      detailLabel: formatOccurrenceValues(occurrence),
+      alternatingLabel: formatOccurrenceAlternating(occurrence),
+      sessionHref: formatRoute({ name: 'session-summary', sessionId: occurrence.sessionId })
+    };
+    if (occurrence.notes !== undefined) row.notes = occurrence.notes;
+    return row;
+  });
 }
 
 /**

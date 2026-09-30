@@ -63,6 +63,8 @@ export interface RowDraftInput {
    * row's own effort in place. REQUIREMENT 19.9.
    */
   effort?: EffortOutcome | null;
+  /** Draft note text. `undefined` preserves the recorded note; `''` clears it. */
+  notes?: string;
 }
 
 /**
@@ -119,6 +121,8 @@ export function buildRowDraft(input: RowDraftInput): ExerciseResultDraft {
     draft.effort = input.row.effort;
   }
   if (status !== 'completed') draft.reasonCode = input.reasonCode ?? 'not_completed';
+  const notes = input.notes ?? input.row.notes;
+  if (notes !== undefined && notes !== '') draft.notes = notes;
   return draft;
 }
 

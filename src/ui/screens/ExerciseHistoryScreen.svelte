@@ -173,6 +173,7 @@
                   <span class="session-item__time">{row.alternatingLabel}</span>
                 {/if}
                 <span class="session-item__time">{row.dateLabel}</span>
+                {#if row.notes !== undefined}<span class="session-item__note">{row.notes}</span>{/if}
               </span>
             </a>
           </li>

@@ -31,8 +31,13 @@
     sideDrafts = {},
     startingSideDrafts = {},
     effortDrafts = {},
+    noteDrafts = {},
     openRowPanels = {},
+    openNoteEditors = {},
     onpaneltoggle = undefined,
+    onnotetoggle = undefined,
+    onnotechange = undefined,
+    onnoteblur = undefined,
     onfieldchange,
     onfieldblur,
     onstatuschange,
@@ -56,10 +61,17 @@
     sideDrafts?: Record<string, Side>;
     startingSideDrafts?: Record<string, StartingSide>;
     effortDrafts?: Record<string, string>;
+    /** Draft note text, keyed by row key. */
+    noteDrafts?: Record<string, string>;
     /** Which rows have their **Set options** panel open, keyed by row key. */
     openRowPanels?: Record<string, boolean>;
+    /** Which rows have their note editor open, keyed by row key. */
+    openNoteEditors?: Record<string, boolean>;
     /** Reports a panel opening or closing, so the state survives a rebuild. */
     onpaneltoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    onnotetoggle?: ((rowKey: string, open: boolean) => void) | undefined;
+    onnotechange?: ((rowKey: string, value: string) => void) | undefined;
+    onnoteblur?: ((rowKey: string) => void) | undefined;
     onfieldchange?: (rowKey: string, dimension: string, value: string) => void;
     onfieldblur?: (rowKey: string, dimension: string) => void;
     onstatuschange?: (rowKey: string, status: ResultStatus) => void;
@@ -243,7 +255,12 @@
                       startingSide={startingSideDrafts[row.key] ?? row.startingSide ?? 'left'}
                       effortChoice={effortDrafts[row.key]}
                       panelOpen={openRowPanels[row.key] === true}
+                      noteText={noteDrafts[row.key]}
+                      noteOpen={openNoteEditors[row.key] === true}
                       onpaneltoggle={onpaneltoggle}
+                      {onnotetoggle}
+                      {onnotechange}
+                      {onnoteblur}
                       {idPrefix}
                       {disabled}
                       {busy}
@@ -300,7 +317,12 @@
             startingSide={startingSideDrafts[row.key] ?? row.startingSide ?? 'left'}
             effortChoice={effortDrafts[row.key]}
             panelOpen={openRowPanels[row.key] === true}
+            noteText={noteDrafts[row.key]}
+            noteOpen={openNoteEditors[row.key] === true}
             onpaneltoggle={onpaneltoggle}
+            {onnotetoggle}
+            {onnotechange}
+            {onnoteblur}
             {idPrefix}
             {disabled}
             {busy}

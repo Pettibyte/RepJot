@@ -269,6 +269,7 @@ function toOccurrence(session: Session, key: string, result: ExerciseResult): Ex
   // side travels with the row. REQUIREMENTS 11.7.
   if (result.startingSide !== undefined) occurrence.startingSide = result.startingSide;
   if (result.values !== undefined) occurrence.values = result.values;
+  if (result.notes !== undefined) occurrence.notes = result.notes;
   return occurrence;
 }
 

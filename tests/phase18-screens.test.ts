@@ -108,6 +108,21 @@ describe('SummaryTree', () => {
     expect(out).toContain('105 lb');
   });
 
+  test('renders an exercise result note', () => {
+    const session = validSession();
+    const [key] = Object.keys(session.exerciseResults);
+    session.exerciseResults[key].notes = 'Pause at the bottom.';
+    const model = buildSummaryModel({
+      session,
+      staticData: loaded(),
+      localTimeZone: 'UTC',
+      nowUtc: '2026-08-15T18:00:00Z'
+    });
+    const out = html(SummaryTree, { groups: model.groups, idPrefix: 's' });
+    expect(out).toContain('Pause at the bottom.');
+    expect(out).toContain('summary-row__notes');
+  });
+
   test('an unresolved row renders a data-error card and keeps its neighbours', () => {
     const session = validSession();
     const total = Object.keys(session.exerciseResults).length;

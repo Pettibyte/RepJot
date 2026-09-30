@@ -211,6 +211,25 @@ describe('buildIndex: key order independence', () => {
     );
   });
 
+  test('copies an exercise result note to its occurrence', () => {
+    const value = session(
+      'session-notes',
+      'completed',
+      '2026-08-01T08:00:00Z',
+      '2026-08-01T09:00:00Z'
+    );
+    const [key] = Object.keys(value.exerciseResults);
+    value.exerciseResults[key].notes = 'Used wrist wraps.';
+
+    const index = buildIndex({
+      staticData: loadedStaticData(),
+      shards: [shard('2026-08', [value])],
+      unresolved: []
+    });
+
+    expect(index.occurrencesByExerciseId.get('back-squat')?.[0]?.notes).toBe('Used wrist wraps.');
+  });
+
   test('occurrence order follows the tree, not Record iteration order', () => {
     const value = session(
       'session-ord',

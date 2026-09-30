@@ -195,6 +195,29 @@ describe('buildRowDraft', () => {
     expect(draft.effort).toEqual({ type: 'rpe', value: 9 });
   });
 
+  test('a saved row note survives an ordinary value edit', () => {
+    const draft = buildRowDraft({
+      workoutId: 'w',
+      row: row({ notes: 'Drop weight next time.' }),
+      overrides: { weight: '90' }
+    });
+    expect(draft.notes).toBe('Drop weight next time.');
+  });
+
+  test('a note draft replaces or clears the saved note', () => {
+    const source = row({ notes: 'Old note.' });
+    expect(buildRowDraft({ workoutId: 'w', row: source, overrides: { weight: '90' }, notes: 'New note.' }).notes)
+      .toBe('New note.');
+    expect(buildRowDraft({ workoutId: 'w', row: source, overrides: { weight: '90' }, notes: '' }).notes)
+      .toBeUndefined();
+  });
+
+  test('a note alone remains a blank completed draft until work is entered', () => {
+    const draft = buildRowDraft({ workoutId: 'w', row: row(), overrides: {}, notes: 'Remember form.' });
+    expect(draft.notes).toBe('Remember form.');
+    expect(isBlankExerciseDraft(draft)).toBe(true);
+  });
+
   test('the draft carries the row path, side, and attempt unchanged', () => {
     const source = row({ side: 'left', attempt: 2 });
     const draft = buildRowDraft({ workoutId: 'w', row: source, overrides: { weight: '90' } });
