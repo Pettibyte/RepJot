@@ -87,9 +87,13 @@ export function createLookupService(input: {
 2. Recent sessions sort by `startedAtUtc` newest first, capped at five, completed and
    abandoned only.
 3. History pages sort by `startedAtUtc` newest first with an offset and page size.
-4. Exercise occurrences sort by the session `startedAtUtc` newest first.
+4. Exercise occurrences sort by the session `startedAtUtc` newest first. Inside
+   one session they sort in reverse tree order, so the final round leads and the
+   highest attempt leads within that round. The Last Time badge reads the head of
+   this list, so it reports the last set actually done. REQUIREMENTS 19.4, 20.4.
 5. When the tree cannot order a result, fall back to the encoded `executionPath`
-   string.
+   string. An unplaced row still sorts after every placed row; the reverse order
+   in rule 4 must not pull it to the head.
 6. Never use `Object.keys` order. Never use insertion order.
 
 ## Requirements traceability

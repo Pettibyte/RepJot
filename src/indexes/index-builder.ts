@@ -83,7 +83,8 @@ function newestUpdatedFirst(a: SessionSummary, b: SessionSummary): number {
  *
  * The session start, not the result's own timestamp, orders an occurrence, so
  * every row of one workout moves together through history. Phase 12 ordering
- * rule 4.
+ * rule 4. Inside one session the rows run backwards; see
+ * `compareOccurrenceWithinSession`.
  */
 function occurrenceComparator(
   sessionStarts: Map<string, string>
@@ -99,17 +100,31 @@ function occurrenceComparator(
 }
 
 /**
- * Order two occurrences inside one session: tree order first, encoded path second.
+ * Order two occurrences inside one session: reverse tree order first, encoded
+ * path second.
  *
- * A node the current tree resolves sorts ahead of one it does not, and two
- * unresolvable nodes fall back to the encoded `executionPath` string.
- * REQUIREMENTS 3.20 and 6.23.
+ * History reads backwards. The last set a session recorded leads, and the set
+ * the workout asked for first trails. The reversal carries through the whole
+ * session, so the final attempt of the final round of an exercise sits ahead of
+ * every earlier one. That is what makes the Last Time badge read as the last
+ * thing actually done rather than the first. REQUIREMENTS 19.4, 20.4.
+ *
+ * The reversal stops at the tree. An unplaced row keeps its old seat at the end
+ * of the session instead of jumping to the front. `UNRESOLVED_RANK` is the
+ * largest key there is, so negating the compare outright would pull every row
+ * the current tree cannot place up to the head of history, where one would
+ * become the Last Time answer. REQUIREMENTS 3.20 and 6.23.
  */
 function compareOccurrenceWithinSession(a: ExerciseOccurrence, b: ExerciseOccurrence): number {
-  const byPath = comparePathKeys(pathKeyOf(a), pathKeyOf(b));
+  const keyA = pathKeyOf(a);
+  const keyB = pathKeyOf(b);
+  const aUnplaced = keyA[0] === UNRESOLVED_RANK;
+  const bUnplaced = keyB[0] === UNRESOLVED_RANK;
+  if (aUnplaced !== bUnplaced) return aUnplaced ? 1 : -1;
+  const byPath = -comparePathKeys(keyA, keyB);
   if (byPath !== 0) return byPath;
-  if (a.encodedPath !== b.encodedPath) return a.encodedPath < b.encodedPath ? -1 : 1;
-  return a.resultKey < b.resultKey ? -1 : a.resultKey > b.resultKey ? 1 : 0;
+  if (a.encodedPath !== b.encodedPath) return a.encodedPath < b.encodedPath ? 1 : -1;
+  return a.resultKey < b.resultKey ? 1 : a.resultKey > b.resultKey ? -1 : 0;
 }
 
 /** Tree path key of an occurrence, or the unresolved key when the tree cannot place it. */

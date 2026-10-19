@@ -108,6 +108,112 @@ describe('lookupService: getLastTime', () => {
 
     expect(lookup.getLastTime('back-squat')?.sessionId).toBe('session-aband');
   });
+
+  /**
+   * The Last Time contract: the final attempt of the final round.
+   *
+   * One session, three rounds, and a second attempt on the last round. The
+   * session reads backwards, so the badge lands on round 3 attempt 2 rather
+   * than on the round 1 set the workout asked for first. The Fill control
+   * copies the same values, so a fill writes what the badge shows.
+   * REQUIREMENTS 19.4, 19.11, 20.4.
+   */
+  test('Last Time is the final attempt of the final round', () => {
+    const value = session(
+      'session-last',
+      'completed',
+      '2026-09-01T08:00:00Z',
+      '2026-09-01T09:00:00Z'
+    );
+    value.exerciseResults = {};
+    const recorded: [number, number, number][] = [
+      [1, 1, 11],
+      [2, 1, 21],
+      [3, 1, 31],
+      [3, 2, 33]
+    ];
+    for (const [round, attempt, reps] of recorded) {
+      const path = [
+        { nodeId: 'root' },
+        { nodeId: 'squat-sets', iteration: round },
+        { nodeId: 'back-squat-set' }
+      ];
+      value.exerciseResults[exerciseResultKey(path, 'both', attempt)] = {
+        workoutId: 'demo',
+        executionPath: path,
+        exerciseId: 'back-squat',
+        side: 'both',
+        attempt,
+        status: 'completed',
+        values: { reps: { value: reps, unit: 'reps' } }
+      };
+    }
+
+    const lookup = createLookupService({
+      staticData: loadedStaticData(),
+      shards: [shard('2026-09', [value])]
+    });
+
+    const last = lookup.getLastTime('back-squat');
+    expect(last?.attempt).toBe(2);
+    expect(last?.encodedPath).toBe('root/squat-sets:3/back-squat-set');
+    expect(last?.values?.reps?.value).toBe(33);
+  });
+
+  /**
+   * The whole session reads backwards, not just the head of it.
+   *
+   * The badge and the Exercise History list read the same list, so pinning the
+   * list order is what keeps the two from drifting. Round 3 leads and round 1
+   * trails, and the attempts inside round 1 run the same way.
+   * REQUIREMENTS 20.4.
+   */
+  test('history lists a session last round first, last attempt first', () => {
+    const value = session(
+      'session-order',
+      'completed',
+      '2026-09-01T08:00:00Z',
+      '2026-09-01T09:00:00Z'
+    );
+    value.exerciseResults = {};
+    const recorded: [number, number][] = [
+      [1, 1],
+      [1, 2],
+      [2, 1],
+      [3, 1]
+    ];
+    for (const [round, attempt] of recorded) {
+      const path = [
+        { nodeId: 'root' },
+        { nodeId: 'squat-sets', iteration: round },
+        { nodeId: 'back-squat-set' }
+      ];
+      value.exerciseResults[exerciseResultKey(path, 'both', attempt)] = {
+        workoutId: 'demo',
+        executionPath: path,
+        exerciseId: 'back-squat',
+        side: 'both',
+        attempt,
+        status: 'completed',
+        values: { reps: { value: round * 10 + attempt, unit: 'reps' } }
+      };
+    }
+
+    const lookup = createLookupService({
+      staticData: loadedStaticData(),
+      shards: [shard('2026-09', [value])]
+    });
+
+    const rows = lookup
+      .getExerciseHistory('back-squat', { offset: 0, limit: 10 })
+      .items.map((item) => `${item.encodedPath}#${item.attempt}`);
+    expect(rows).toEqual([
+      'root/squat-sets:3/back-squat-set#1',
+      'root/squat-sets:2/back-squat-set#1',
+      'root/squat-sets:1/back-squat-set#2',
+      'root/squat-sets:1/back-squat-set#1'
+    ]);
+  });
 });
 
 describe('lookupService: paging', () => {

@@ -361,7 +361,9 @@ Example allowlist shape:
 - **19.1** Active Workout renders the programmed tree with clear styling for its first three levels.
 - **19.2** Deeper content shows a compact named path, such as `Strength / Complex / Round 2`.
 - **19.3** Each exercise has a tappable Last Time badge linked to Exercise History.
-- **19.4** Last Time uses the latest completed session, shows actual values and units, and ignores the active session.
+- **19.4** Last Time uses the latest completed session and ignores the active
+  session. It shows the final recorded set of that session: the last round, and
+  the highest attempt inside that round. It shows actual values and units.
 - **19.5** The UI shows `No history` when an exercise has no completed result.
 - **19.6** A unit pill displays the exercise unit and updates its preference when tapped.
 - **19.7** AMRAP provides a large `+` control to add one completed round quickly.
@@ -376,6 +378,9 @@ Example allowlist shape:
 - **20.2** Workout History does not show an aggregate workout-volume metric.
 - **20.3** Workout Summary shows all recorded work, units, attempts, status, and container scores. The Summary renders from the session's own stored results and does not require the current workout tree. See Section 6.23.
 - **20.4** Exercise History uses `Load older` and sorts results newest first.
+  Within one session the list runs backwards: the final set leads and the first
+  set the workout asked for trails. This matches Last Time, because both read the
+  same list.
 - **20.5** History dates include the year when the event is not in the current year.
 
 ### 21.0 Settings

@@ -77,6 +77,8 @@ export function buildActiveWorkoutModel(input: {
    labeled `Inferred`. Nothing saves until the user saves.
 7. A saved child set shows **Detailed** when the score is `nonstandard`.
 8. Last Time reads the latest completed session and ignores the active session.
+   It reports the final set of that session, and **Fill with last time** writes
+   the same values the badge shows. REQUIREMENTS 19.4, 19.11.
 9. Finish Workout offers `Return to workout` and `Finish as incomplete` when
    prescribed work is missing.
 10. Back navigation flushes local edits and leaves the session `in_progress`.

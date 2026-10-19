@@ -251,11 +251,12 @@ describe('buildIndex: key order independence', () => {
 
     const occurrences = index.occurrencesByExerciseId.get('back-squat') ?? [];
     expect(occurrences.length).toBe(3);
-    // One session start, so the tree rank orders them: round 1, 2, 3.
+    // One session start, so the tree rank orders them. History reads backwards,
+    // so the last round leads: round 3, 2, 1. REQUIREMENTS 19.4, 20.4.
     expect(occurrences.map((o: ExerciseOccurrence) => o.encodedPath)).toEqual([
-      'root/squat-sets:1/back-squat-set',
+      'root/squat-sets:3/back-squat-set',
       'root/squat-sets:2/back-squat-set',
-      'root/squat-sets:3/back-squat-set'
+      'root/squat-sets:1/back-squat-set'
     ]);
   });
 
@@ -295,7 +296,7 @@ describe('buildIndex: key order independence', () => {
     const paths = (index.occurrencesByExerciseId.get('back-squat') ?? []).map(
       (o) => o.encodedPath
     );
-    expect(paths).toEqual(['root/root-aaa', 'root/root-mmm', 'root/root-zzz']);
+    expect(paths).toEqual(['root/root-zzz', 'root/root-mmm', 'root/root-aaa']);
   });
 
   test('unresolved occurrences sort by path whatever the insertion order', () => {
@@ -330,7 +331,7 @@ describe('buildIndex: key order independence', () => {
     const forward = build(['root-aaa', 'root-mmm', 'root-zzz']);
     const backward = build(['root-zzz', 'root-mmm', 'root-aaa']);
     expect(backward).toEqual(forward);
-    expect(forward).toEqual(['root/root-aaa', 'root/root-mmm', 'root/root-zzz']);
+    expect(forward).toEqual(['root/root-zzz', 'root/root-mmm', 'root/root-aaa']);
   });
 
   test('resolved occurrences sort ahead of unresolved ones', () => {
@@ -368,8 +369,10 @@ describe('buildIndex: key order independence', () => {
 
   // Regression: the old rank keyed on the node ID alone, so every iteration of a
   // container shared one rank and the tie-break fell to the lexicographic path
-  // string, which put round 10 ahead of round 2. REQUIREMENTS 3.20.
-  test('round 10 sorts after round 2, not before it', () => {
+  // string, which read round 10 as a neighbour of round 1. The guard still holds
+  // under the reverse order: rounds sort by number, highest first, so 10 sits
+  // between 9 and 11 and nowhere near 1. REQUIREMENTS 3.20, 20.4.
+  test('rounds sort by number, highest round first', () => {
     const value = session(
       'session-rounds',
       'completed',
@@ -391,13 +394,13 @@ describe('buildIndex: key order independence', () => {
 
     const paths = (index.occurrencesByExerciseId.get('back-squat') ?? []).map((o) => o.encodedPath);
     expect(paths).toEqual([
-      'root/squat-sets:1/back-squat-set',
-      'root/squat-sets:2/back-squat-set',
-      'root/squat-sets:3/back-squat-set',
-      'root/squat-sets:9/back-squat-set',
-      'root/squat-sets:10/back-squat-set',
+      'root/squat-sets:20/back-squat-set',
       'root/squat-sets:11/back-squat-set',
-      'root/squat-sets:20/back-squat-set'
+      'root/squat-sets:10/back-squat-set',
+      'root/squat-sets:9/back-squat-set',
+      'root/squat-sets:3/back-squat-set',
+      'root/squat-sets:2/back-squat-set',
+      'root/squat-sets:1/back-squat-set'
     ]);
   });
 

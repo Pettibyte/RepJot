@@ -14,6 +14,7 @@ import ActiveWorkoutScreen from '../../src/ui/screens/ActiveWorkoutScreen.svelte
 import ExerciseSetTable from '../../src/ui/components/ExerciseSetTable.svelte';
 import type { ActiveExerciseRow, ActiveSetTable } from '../../src/ui/viewmodels/activeWorkoutModel';
 import type { ResultsShard, Session } from '../../src/domain/types';
+import { exerciseResultKey } from '../../src/domain/execution-path';
 import { createMemoryLocalStore } from '../../src/storage/memory-local-store';
 import { createCoordinator } from '../../src/sync/sync-coordinator';
 import { createPreferenceService } from '../../src/preferences/preference-service';
@@ -32,33 +33,53 @@ let sessionService: SessionService;
 
 afterEach(() => teardown());
 
-/** The prior session, reduced to one squat set so the fill has one answer. */
+/**
+ * The prior session: a full squat progression.
+ *
+ * Three rounds, and a second attempt on the last round. Every set carries a
+ * different value, so a fill that reads anything other than the final attempt
+ * of the final round writes a number these tests can see is wrong.
+ * REQUIREMENTS 19.4, 19.11.
+ */
 function priorSession(): Session {
   const session = validSession();
   session.id = PRIOR_KEY;
   session.status = 'completed';
   session.completedAtUtc = '2026-08-10T15:05:00Z';
-  session.exerciseResults = {
-    'root/squat-sets:1/back-squat-set|both|1': {
+  session.exerciseResults = {};
+  const progression: [number, number, number, number][] = [
+    // [round, attempt, reps, weight lb]
+    [1, 1, 5, 80],
+    [2, 1, 6, 90],
+    [3, 1, 7, 95],
+    [3, 2, 8, 100]
+  ];
+  for (const [round, attempt, reps, weight] of progression) {
+    const path = [
+      { nodeId: 'root' },
+      { nodeId: 'squat-sets', iteration: round },
+      { nodeId: 'back-squat-set' }
+    ];
+    session.exerciseResults[exerciseResultKey(path, 'both', attempt)] = {
       workoutId: WORKOUT_ID,
-      executionPath: [
-        { nodeId: 'root' },
-        { nodeId: 'squat-sets', iteration: 1 },
-        { nodeId: 'back-squat-set' }
-      ],
+      executionPath: path,
       exerciseId: 'back-squat',
       side: 'both',
-      attempt: 1,
+      attempt,
       status: 'completed',
       values: {
-        reps: { value: 7, unit: 'reps' },
-        weight: { value: 95, unit: 'lb' }
+        reps: { value: reps, unit: 'reps' },
+        weight: { value: weight, unit: 'lb' }
       }
-    }
-  };
+    };
+  }
   session.containerResults = {};
   return session;
 }
+
+/** The value the badge shows and the fill writes: round 3, attempt 2. */
+const LAST_REPS = '8';
+const LAST_WEIGHT = '100';
 
 /** The session under edit. Nothing is recorded in it yet. */
 function activeSession(): Session {
@@ -168,13 +189,21 @@ describe('fill with last time data', () => {
 
   test('one tap fills every set of that exercise', async () => {
     const target = await mountScreen(true);
+
+    // The badge and the fill must agree. The badge reads the final attempt of
+    // the final round, so it reads 8 reps · 100 lb, and that is the pair the
+    // fill writes. A fill that read an earlier round would disagree with the
+    // number the user just read. REQUIREMENTS 19.4, 19.11.
+    const badge = squatTable(target).querySelector('.last-time__values');
+    expect(badge?.textContent?.trim()).toBe('8 reps · 100 lb');
+
     tap(fillButton(squatTable(target)));
     await settle(40);
     flushSync();
 
     for (const iteration of [1, 2, 3]) {
-      expect(setField(iteration, 'reps')?.value).toBe('7');
-      expect(setField(iteration, 'weight')?.value).toBe('95');
+      expect(setField(iteration, 'reps')?.value).toBe(LAST_REPS);
+      expect(setField(iteration, 'weight')?.value).toBe(LAST_WEIGHT);
     }
   });
 
@@ -190,8 +219,8 @@ describe('fill with last time data', () => {
     expect(keys.length).toBe(3);
     for (const key of keys) {
       const result = stored.exerciseResults[key];
-      expect(result?.values?.reps?.value).toBe(7);
-      expect(result?.values?.weight?.value).toBe(95);
+      expect(result?.values?.reps?.value).toBe(8);
+      expect(result?.values?.weight?.value).toBe(100);
       expect(result?.status).toBe('completed');
     }
   });
@@ -213,7 +242,7 @@ describe('fill with last time data', () => {
     await settle(40);
     flushSync();
 
-    expect(warmupRow(target).querySelector('input')?.value).toBe('7');
+    expect(warmupRow(target).querySelector('input')?.value).toBe(LAST_REPS);
     expect(setField(1, 'reps')?.value ?? '').toBe('');
   });
 
