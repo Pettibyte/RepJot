@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readable } from 'svelte/store';
 import App from '../src/App.svelte';
+import type { Router } from '../src/routing/hash-router';
 import type { Route } from '../src/routing/routes';
+import { setRouter } from '../src/routing/router-registry';
 import {
   clearError,
   setSaveStatus,
@@ -24,7 +26,20 @@ afterEach(() => {
   setSaveStatus('idle');
   clearError();
   clearRawPayloads();
+  setRouter(null);
 });
+
+/** A router that reports one recorded origin for every screen. */
+function routerWithOrigin(origin: Route): Router {
+  return {
+    current: () => readable(origin),
+    navigate: (): void => {},
+    originFor: (): Route | null => origin,
+    lastNavigation: () => ({ from: { name: 'home' }, to: origin, traversed: false }),
+    start: (): void => {},
+    stop: (): void => {}
+  };
+}
 
 describe('shell header variant', () => {
   test('a tab root renders the wordmark header and the three tabs', () => {
@@ -71,6 +86,35 @@ describe('shell header variant', () => {
       clientId: 'cid'
     });
     expect(out).toContain('href="#/history"');
+  });
+
+  // No router is installed in the test above, so that case proves the fallback.
+  // A fresh load reaches the same state before bootstrap installs the real
+  // router, so the static parent is what a bookmarked address gets.
+  test('with no router installed the back control falls back to the static parent', () => {
+    setStartupStatus('ready');
+    const out = html(App, {
+      route: routeStore({ name: 'session-summary', sessionId: 'session-abc' }),
+      account: ACCOUNT,
+      clientId: 'cid'
+    });
+    expect(out).toContain('href="#/"');
+  });
+
+  test('the back control prefers the origin the router recorded', () => {
+    setStartupStatus('ready');
+    setRouter(routerWithOrigin({ name: 'session-active', sessionId: 'session-abc' }));
+
+    const out = html(App, {
+      route: routeStore({ name: 'exercise-history', exerciseId: 'Barbell_Squat' }),
+      account: ACCOUNT,
+      clientId: 'cid'
+    });
+
+    expect(out).toContain('class="back-header__back" href="#/sessions/session-abc/active"');
+    // The screen's own footer button still says "Back to history". That is a
+    // separate control and is correct. Only the header control changed.
+    expect(out).toContain('Back to history');
   });
 });
 

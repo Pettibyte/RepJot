@@ -7,6 +7,7 @@ import { createSessionService, type SessionService } from '../../src/sessions/se
 import { setServices } from '../../src/services/registry';
 import { setRouter } from '../../src/routing/router-registry';
 import type { Route } from '../../src/routing/routes';
+import type { NavigateOptions } from '../../src/routing/hash-router';
 import {
   buttonWithText,
   mountTo,
@@ -64,11 +65,15 @@ describe('WorkoutSummaryScreen session deletion', () => {
     const { service, id } = await setupSession();
 
     let navigated: Route | null = null;
+    let replaceMode = false;
     setRouter({
       current: () => ({ subscribe: () => () => {} }),
-      navigate: (route: Route): void => {
+      navigate: (route: Route, options?: NavigateOptions): void => {
         navigated = route;
+        replaceMode = options?.replace === true;
       },
+      originFor: (): Route | null => null,
+      lastNavigation: () => null,
       start: (): void => {},
       stop: (): void => {}
     });
@@ -88,6 +93,9 @@ describe('WorkoutSummaryScreen session deletion', () => {
     await settle(20);
 
     expect(navigated).toEqual({ name: 'history' });
+    // Replace, so Back cannot return to the summary of a session that no
+    // longer exists.
+    expect(replaceMode).toBe(true);
     await expect(service.load(id)).rejects.toThrow('No shard is known for that session.');
 
     // The next History render reads this live index. It must not see the

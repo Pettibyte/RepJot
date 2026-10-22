@@ -41,6 +41,8 @@
   import WorkoutOverviewScreen from './ui/screens/WorkoutOverviewScreen.svelte';
   import Tabs from './ui/components/Tabs.svelte';
   import { parentRoute, formatRoute, isTabRoot, type Route } from './routing/routes';
+  import { getRouter } from './routing/router-registry';
+  import { createScrollController } from './routing/scroll-position';
   import {
     activeError,
     clearError,
@@ -78,7 +80,12 @@
 
   const current = $derived($route);
   const tabRoot = $derived(isTabRoot(current));
-  const backHref = $derived(formatRoute(parentRoute(current)));
+  // The in-app Back target. The router's origin map wins when it holds one, so
+  // Exercise History returns to the session that opened it. `parentRoute` stays
+  // as the fallback, which is what a bookmarked address gets, and what every
+  // render gets before bootstrap installs a router.
+  const backRoute = $derived(getRouter()?.originFor(current) ?? parentRoute(current));
+  const backHref = $derived(formatRoute(backRoute));
   const headerTitle = $derived(HEADER_TITLES[current.name] ?? '');
 
   /**
@@ -175,6 +182,27 @@
 
   /** The banner error, with the sign-in failure pulled out to the landing page. */
   const bannerError = $derived(signInFailureInline ? null : $activeError);
+
+  /**
+   * Scroll the new screen to the top on a forward navigation.
+   *
+   * The shell owns this because the shell owns the outlet. A hash route names no
+   * element, so the browser performs no scroll and the offset from the screen
+   * being left carries straight onto the new one. `createScrollController` holds
+   * the rule; this effect only feeds it and keeps it tied to the route store.
+   *
+   * The `nav.to` comparison stops the effect acting on a snapshot that belongs
+   * to an earlier publish. A Svelte effect runs after the DOM update for the
+   * values it read, so the new screen is already mounted when the write lands.
+   */
+  const scrollController = createScrollController();
+
+  $effect(() => {
+    const nav = getRouter()?.lastNavigation() ?? null;
+    if (nav === null) return;
+    if (formatRoute(nav.to) !== formatRoute(current)) return;
+    scrollController.handle(nav);
+  });
 </script>
 
 {#snippet saveStatusBadge()}

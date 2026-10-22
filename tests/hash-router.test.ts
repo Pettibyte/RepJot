@@ -157,16 +157,28 @@ function drain(): Promise<void> {
  * `setHash` fires the registered listeners, the way a browser fires
  * `hashchange` after a write. That makes the fake prove the real publish path:
  * a programmatic `navigate` publishes through the listener, once.
+ *
+ * `replaceHash` deliberately fires nothing. `history.replaceState` fires no
+ * `hashchange`, and a fake that fired one would hide the difference between a
+ * push and a replace.
+ *
+ * `traverseTo` stands in for a browser back or forward step. It fires
+ * `popstate` first and then `hashchange`, which is the order the browser uses.
  */
 function fakeEnv(initial = '#/'): RouterEnv & {
   hash: string;
   writes: string[];
+  replaceWrites: string[];
   listeners: Array<() => void>;
+  popStateListeners: Array<() => void>;
+  traverseTo(hash: string): void;
 } {
   const env = {
     hash: initial,
     writes: [] as string[],
+    replaceWrites: [] as string[],
     listeners: [] as Array<() => void>,
+    popStateListeners: [] as Array<() => void>,
     getHash(): string {
       return env.hash;
     },
@@ -175,10 +187,27 @@ function fakeEnv(initial = '#/'): RouterEnv & {
       env.hash = hash;
       env.listeners.forEach((listener: () => void): void => listener());
     },
+    replaceHash(hash: string): void {
+      env.replaceWrites.push(hash);
+      env.hash = hash;
+    },
+    traverseTo(hash: string): void {
+      env.hash = hash;
+      env.popStateListeners.forEach((listener: () => void): void => listener());
+      env.listeners.forEach((listener: () => void): void => listener());
+    },
     onHashChange(listener: () => void): () => void {
       env.listeners.push(listener);
       return (): void => {
         env.listeners = env.listeners.filter((item: () => void): boolean => item !== listener);
+      };
+    },
+    onPopState(listener: () => void): () => void {
+      env.popStateListeners.push(listener);
+      return (): void => {
+        env.popStateListeners = env.popStateListeners.filter(
+          (item: () => void): boolean => item !== listener
+        );
       };
     }
   };
@@ -324,5 +353,203 @@ describe('createRouter', () => {
     await drain();
 
     expect(get(router.current())).toEqual({ name: 'settings' });
+  });
+});
+
+describe('origin tracking for the in-app Back control', () => {
+  test('a forward navigation records the route it left, params included', () => {
+    const env = fakeEnv('#/workouts/arms-day-a');
+    const router = createRouter({ env });
+    router.start();
+
+    router.navigate({ name: 'exercise-history', exerciseId: 'Barbell_Squat' });
+
+    expect(router.originFor({ name: 'exercise-history', exerciseId: 'Barbell_Squat' })).toEqual({
+      name: 'workout-overview',
+      workoutId: 'arms-day-a'
+    });
+  });
+
+  test('originFor is null for a screen the user never entered', () => {
+    const env = fakeEnv('#/');
+    const router = createRouter({ env });
+    router.start();
+
+    expect(router.originFor({ name: 'exercise-history', exerciseId: 'Barbell_Squat' })).toBeNull();
+  });
+
+  // This is the regression the traversal signal exists for. Without it a back
+  // step records the screen it came from as that screen's own origin, and the
+  // in-app Back then bounces between History and Exercise History forever.
+  test('a back traversal does not overwrite the origin of the screen it lands on', () => {
+    const env = fakeEnv('#/');
+    const router = createRouter({ env });
+    router.start();
+    router.navigate({ name: 'history' });
+    router.navigate({ name: 'exercise-history', exerciseId: 'Barbell_Squat' });
+
+    env.traverseTo('#/history');
+
+    expect(get(router.current())).toEqual({ name: 'history' });
+    expect(router.originFor({ name: 'history' })).toEqual({ name: 'home' });
+  });
+
+  test('a forward navigation after a back traversal records the new origin', () => {
+    const env = fakeEnv('#/');
+    const router = createRouter({ env });
+    router.start();
+    router.navigate({ name: 'history' });
+    router.navigate({ name: 'exercise-history', exerciseId: 'Barbell_Squat' });
+    env.traverseTo('#/history');
+
+    router.navigate({ name: 'exercise-history', exerciseId: 'Bench_Press' });
+
+    expect(router.originFor({ name: 'exercise-history', exerciseId: 'Bench_Press' })).toEqual({
+      name: 'history'
+    });
+  });
+
+  test('navigate to the hash already in the address bar records no self-origin', () => {
+    const env = fakeEnv('#/history');
+    const router = createRouter({ env });
+    router.start();
+
+    router.navigate({ name: 'history' });
+
+    expect(router.originFor({ name: 'history' })).toBeNull();
+  });
+
+  test('the origin map is keyed by screen name, so a second exercise keeps it', () => {
+    const env = fakeEnv('#/workouts/arms-day-a');
+    const router = createRouter({ env });
+    router.start();
+    router.navigate({ name: 'exercise-history', exerciseId: 'Barbell_Squat' });
+    env.traverseTo('#/workouts/arms-day-a');
+
+    router.navigate({ name: 'exercise-history', exerciseId: 'Bench_Press' });
+
+    expect(router.originFor({ name: 'exercise-history', exerciseId: 'Bench_Press' })).toEqual({
+      name: 'workout-overview',
+      workoutId: 'arms-day-a'
+    });
+  });
+});
+
+describe('replace navigation', () => {
+  test('replace writes through replaceHash and never through setHash', () => {
+    const env = fakeEnv('#/sessions/s-1/active');
+    const router = createRouter({ env });
+    router.start();
+
+    router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
+
+    expect(env.replaceWrites).toEqual(['#/sessions/s-1/summary']);
+    expect(env.writes).toEqual([]);
+    expect(get(router.current())).toEqual({ name: 'session-summary', sessionId: 's-1' });
+  });
+
+  // The replaced entry is gone from history, so the new screen takes its place.
+  // The in-app Back then matches browser Back exactly.
+  test('replace inherits the origin of the entry it replaced', () => {
+    const env = fakeEnv('#/workouts/arms-day-a');
+    const router = createRouter({ env });
+    router.start();
+    router.navigate({ name: 'session-active', sessionId: 's-1' });
+
+    router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
+
+    expect(router.originFor({ name: 'session-summary', sessionId: 's-1' })).toEqual({
+      name: 'workout-overview',
+      workoutId: 'arms-day-a'
+    });
+  });
+
+  test('replace falls back to the static parent when the replaced screen has no origin', () => {
+    const env = fakeEnv('#/sessions/s-1/active');
+    const router = createRouter({ env });
+    router.start();
+
+    router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
+
+    expect(router.originFor({ name: 'session-summary', sessionId: 's-1' })).toEqual({ name: 'home' });
+  });
+
+  test('replace with no prior route records nothing', () => {
+    const env = fakeEnv('#/sessions/s-1/active');
+    const router = createRouter({ env });
+
+    router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
+
+    expect(router.originFor({ name: 'session-summary', sessionId: 's-1' })).toBeNull();
+    expect(get(router.current())).toEqual({ name: 'session-summary', sessionId: 's-1' });
+  });
+
+  test('replace runs the pre-route hook once', async () => {
+    const seen: string[] = [];
+    const env = fakeEnv('#/sessions/s-1/active');
+    const router = createRouter({
+      env,
+      beforeRouteChange: (next: Route): void => {
+        seen.push(next.name);
+      }
+    });
+    router.start();
+    await drain();
+    seen.length = 0;
+
+    router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
+    await drain();
+
+    expect(seen).toEqual(['session-summary']);
+  });
+});
+
+describe('the traversal signal', () => {
+  test('start subscribes to popstate and stop releases it', () => {
+    const env = fakeEnv('#/');
+    const router = createRouter({ env });
+    router.start();
+    expect(env.popStateListeners).toHaveLength(1);
+
+    router.stop();
+
+    expect(env.popStateListeners).toHaveLength(0);
+  });
+
+  test('lastNavigation marks a traversal and leaves a forward navigation unmarked', () => {
+    const env = fakeEnv('#/history');
+    const router = createRouter({ env });
+    router.start();
+    expect(router.lastNavigation()).toEqual({
+      from: null,
+      to: { name: 'history' },
+      traversed: false
+    });
+
+    router.navigate({ name: 'settings' });
+    expect(router.lastNavigation()).toEqual({
+      from: { name: 'history' },
+      to: { name: 'settings' },
+      traversed: false
+    });
+
+    env.traverseTo('#/history');
+    expect(router.lastNavigation()).toEqual({
+      from: { name: 'settings' },
+      to: { name: 'history' },
+      traversed: true
+    });
+  });
+
+  test('a traversal clears the mark, so the next forward navigation reads as forward', () => {
+    const env = fakeEnv('#/');
+    const router = createRouter({ env });
+    router.start();
+    env.traverseTo('#/settings');
+
+    router.navigate({ name: 'history' });
+
+    expect(router.lastNavigation()?.traversed).toBe(false);
+    expect(router.originFor({ name: 'history' })).toEqual({ name: 'settings' });
   });
 });

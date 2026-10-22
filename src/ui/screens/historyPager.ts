@@ -77,7 +77,9 @@ export function appendPage<T extends PagedRow>(
 ): PagerState<T> {
   const page = read(state.offset, limit);
   if (page.items.length === 0) {
-    return { ...state, indexExhausted: !page.hasMore };
+    const exhausted = !page.hasMore;
+    if (state.indexExhausted === exhausted) return state;
+    return { ...state, indexExhausted: exhausted };
   }
   return {
     rows: [...state.rows, ...page.items],

@@ -66,7 +66,10 @@
     deleteError = '';
     try {
       await sessionService.remove(sessionId);
-      getRouter()?.navigate({ name: 'history' });
+      // Replace, not push. The session no longer exists, so Back must not
+      // return to its summary. The History screen inherits the summary's
+      // origin instead of the deleted session's.
+      getRouter()?.navigate({ name: 'history' }, { replace: true });
     } catch (error) {
       deleteError = error instanceof Error ? error.message : 'REP JOT could not delete this session.';
     } finally {

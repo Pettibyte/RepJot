@@ -41,6 +41,7 @@ import {
 } from '../../domain/execution-path';
 import { unitLabel, formatAlternatingReps, formatMinuteValue } from '../../units/format';
 import { formatEditable } from '../../units/conversion';
+import { formatRoute } from '../../routing/routes';
 import { formatHistoryDate } from './historyModel';
 import { workoutSectionLabel } from './overviewModel';
 
@@ -553,11 +554,6 @@ export function reasonLabel(code: ReasonCode | string): string {
   return REASON_LABELS.get(code) ?? code;
 }
 
-/** The Exercise History address for one exercise. */
-function exerciseHistoryHref(exerciseId: string): string {
-  return `#/exercises/${encodeURIComponent(exerciseId)}/history`;
-}
-
 /**
  * The data-error card text for one unresolved summary row.
  *
@@ -648,7 +644,7 @@ function buildExerciseRow(
   }
   if (unresolvedReason === undefined) {
     row.unresolved = false;
-    row.href = exerciseHistoryHref(result.exerciseId);
+    row.href = formatRoute({ name: 'exercise-history', exerciseId: result.exerciseId });
   } else {
     row.unresolved = true;
     row.unresolvedReason = unresolvedReason;

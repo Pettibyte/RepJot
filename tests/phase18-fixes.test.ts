@@ -163,6 +163,30 @@ describe('Fix 2 and Fix 10: the pager keeps the two ends apart and drops nothing
     expect(hasOlder(state)).toBeTrue();
   });
 
+  // The Exercise History screen assigns `pager` inside a `$effect`. An empty
+  // read that returned a fresh object made that effect re-run forever, and
+  // Svelte threw `effect_update_depth_exceeded`. Any exercise with fewer than
+  // one page of history hit this. Returning the same object when nothing
+  // changed stops the churn.
+  test('an empty read on a settled pager returns the same object', () => {
+    const index = makeIndex(rowsFor('2026-08', 3));
+    const settled = appendPage(emptyPager<Row>(), index.read, 20);
+
+    const again = appendPage(settled, index.read, 20);
+
+    expect(again).toBe(settled);
+  });
+
+  test('a read that changes the exhausted flag still returns a new object', () => {
+    const index = makeIndex(rowsFor('2026-08', 3));
+    const fresh = emptyPager<Row>();
+
+    const settled = appendPage(fresh, index.read, 20);
+
+    expect(settled).not.toBe(fresh);
+    expect(settled.indexExhausted).toBeTrue();
+  });
+
   test('a 45-row index walks to the end and shows all 45 rows', async () => {
     const index = makeIndex([
       ...rowsFor('2026-08', 20),

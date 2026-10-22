@@ -995,7 +995,13 @@
         return;
       }
       await service.complete(session.id);
-      getRouter()?.navigate({ name: 'session-summary', sessionId: session.id });
+      // Replace, not push. The editor is finished, so Back must not return to it.
+      // The summary inherits the editor's origin and lands on the workout
+      // overview, the same place browser Back goes.
+      getRouter()?.navigate(
+        { name: 'session-summary', sessionId: session.id },
+        { replace: true }
+      );
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not finish the workout.';
     } finally {
@@ -1013,7 +1019,11 @@
     try {
       await service.queueFlush();
       await service.complete(session.id);
-      getRouter()?.navigate({ name: 'session-summary', sessionId: session.id });
+      // Replace, for the same reason as `finish` above.
+      getRouter()?.navigate(
+        { name: 'session-summary', sessionId: session.id },
+        { replace: true }
+      );
     } catch (error: unknown) {
       errorText = error instanceof Error ? error.message : 'REP JOT could not finish the workout.';
     } finally {
@@ -1048,7 +1058,8 @@
     try {
       await service.queueFlush();
       await service.abandon(session.id, 'user_skipped');
-      getRouter()?.navigate({ name: 'home' });
+      // Replace, so Back does not return to a session the user just abandoned.
+      getRouter()?.navigate({ name: 'home' }, { replace: true });
     } catch (error: unknown) {
       errorText = error instanceof Error
         ? error.message
