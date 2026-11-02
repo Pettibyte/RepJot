@@ -23,6 +23,7 @@
   // 18 registers the summary, history, and exercise-history screens. Phase 19
   // registers the Settings screen.
 
+  import { onMount, setContext, tick } from 'svelte';
   import type { Readable } from 'svelte/store';
   import AppHeader from './ui/components/AppHeader.svelte';
   import BackHeader from './ui/components/BackHeader.svelte';
@@ -42,7 +43,13 @@
   import Tabs from './ui/components/Tabs.svelte';
   import { parentRoute, formatRoute, isTabRoot, type Route } from './routing/routes';
   import { getRouter } from './routing/router-registry';
-  import { createScrollController } from './routing/scroll-position';
+  import {
+    createScrollController, manageScrollRestoration, windowScrollEnv
+  } from './routing/scroll-position';
+  import {
+    SCREEN_READINESS_CONTEXT, SCREEN_NAVIGATION_CONTEXT, type ScreenReadyReporter
+  } from './routing/screen-ready';
+  import type { NavigationInfo } from './routing/hash-router';
   import {
     activeError,
     clearError,
@@ -80,10 +87,8 @@
 
   const current = $derived($route);
   const tabRoot = $derived(isTabRoot(current));
-  // The in-app Back target. The router's origin map wins when it holds one, so
-  // Exercise History returns to the session that opened it. `parentRoute` stays
-  // as the fallback, which is what a bookmarked address gets, and what every
-  // render gets before bootstrap installs a router.
+  // Keep a real link for bookmarks, modified clicks, and no-router rendering.
+  // Ordinary clicks traverse the previous app entry instead of pushing a URL.
   const backRoute = $derived(getRouter()?.originFor(current) ?? parentRoute(current));
   const backHref = $derived(formatRoute(backRoute));
   const headerTitle = $derived(HEADER_TITLES[current.name] ?? '');
@@ -183,25 +188,111 @@
   /** The banner error, with the sign-in failure pulled out to the landing page. */
   const bannerError = $derived(signInFailureInline ? null : $activeError);
 
-  /**
-   * Scroll the new screen to the top on a forward navigation.
-   *
-   * The shell owns this because the shell owns the outlet. A hash route names no
-   * element, so the browser performs no scroll and the offset from the screen
-   * being left carries straight onto the new one. `createScrollController` holds
-   * the rule; this effect only feeds it and keeps it tied to the route store.
-   *
-   * The `nav.to` comparison stops the effect acting on a snapshot that belongs
-   * to an earlier publish. A Svelte effect runs after the DOM update for the
-   * values it read, so the new screen is already mounted when the write lands.
-   */
   const scrollController = createScrollController();
+  let handledNavigation: NavigationInfo | null = null;
+  let departureCapturedFor: NavigationInfo | null = null;
+  let readinessNavigation = $state.raw<NavigationInfo | null>(null);
+  let readyNavigation = $state.raw<NavigationInfo | null>(null);
 
-  $effect(() => {
+  setContext(SCREEN_NAVIGATION_CONTEXT, () => readinessNavigation);
+  setContext<ScreenReadyReporter>(SCREEN_READINESS_CONTEXT, (key) => {
+    if (key === formatRoute(current)) readyNavigation = readinessNavigation;
+  });
+
+  $effect.pre(() => {
+    const key = formatRoute(current);
     const nav = getRouter()?.lastNavigation() ?? null;
-    if (nav === null) return;
-    if (formatRoute(nav.to) !== formatRoute(current)) return;
-    scrollController.handle(nav);
+    if (nav !== null && formatRoute(nav.to) === key && readinessNavigation !== nav) {
+      readinessNavigation = nav;
+      readyNavigation = null;
+    }
+  });
+
+  // Async screens report after their content (or error state) has rendered.
+  // Other screens have no initial async content that affects their height.
+  $effect(() => {
+    const router = getRouter();
+    const nav = router?.lastNavigation() ?? null;
+    if (router === null || nav === null || $startupStatus === 'loading_static') return;
+    const key = formatRoute(current);
+    if (formatRoute(nav.to) !== key) return;
+    const blocked = ($startupStatus === 'static_failed' || $startupStatus === 'blocked') &&
+      current.name !== 'raw-json';
+    const waitsForContent = !blocked && (current.name === 'session-active' ||
+      current.name === 'session-summary' || current.name === 'exercise-history' ||
+      current.name === 'history');
+    if (waitsForContent && readyNavigation !== nav) return;
+    let cancelled = false;
+    void tick().then(() => {
+      if (cancelled || router.lastNavigation() !== nav) return;
+      scrollController.handle(nav, router.scrollForCurrent());
+      handledNavigation = nav;
+      router.saveScroll(windowScrollEnv.getY());
+    });
+    return () => { cancelled = true; };
+  });
+
+  function saveScroll(): void {
+    const router = getRouter();
+    // Ignore layout clamping while a different entry is loading.
+    if (router === null || router.lastNavigation() !== handledNavigation) return;
+    router.saveScroll(windowScrollEnv.getY());
+  }
+
+  function saveDepartingScroll(): void {
+    const router = getRouter();
+    const nav = router?.lastNavigation();
+    // The address has changed, but Svelte still shows the departing DOM. Save
+    // by entry ID so this cannot overwrite the destination's scroll snapshot.
+    if (router === null || nav === null || nav === undefined || handledNavigation === null ||
+        nav === handledNavigation || nav === departureCapturedFor ||
+        nav.fromEntryId !== handledNavigation.entryId) return;
+    departureCapturedFor = nav;
+    router.saveScroll(windowScrollEnv.getY(), handledNavigation.entryId);
+  }
+
+  function goBack(event: MouseEvent): void {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey ||
+        event.ctrlKey || event.shiftKey || event.altKey) return;
+    const router = getRouter();
+    if (router === null) return;
+    event.preventDefault();
+    saveScroll();
+    router.back();
+  }
+
+  onMount(() => {
+    const restoreMode = manageScrollRestoration();
+    const cancelRestore = (): void => {
+      scrollController.cancel(getRouter()?.lastNavigation() ?? null);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) {
+        cancelRestore();
+      }
+    };
+    // Capture links before the router sees their fragment navigation.
+    document.addEventListener('click', saveScroll, true);
+    window.addEventListener('scroll', saveScroll, { passive: true });
+    window.addEventListener('pagehide', saveScroll);
+    window.addEventListener('popstate', saveDepartingScroll);
+    window.addEventListener('hashchange', saveDepartingScroll);
+    window.addEventListener('wheel', cancelRestore, { passive: true });
+    window.addEventListener('touchstart', cancelRestore, { passive: true });
+    window.addEventListener('pointerdown', cancelRestore, { passive: true });
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', saveScroll, true);
+      window.removeEventListener('scroll', saveScroll);
+      window.removeEventListener('pagehide', saveScroll);
+      window.removeEventListener('popstate', saveDepartingScroll);
+      window.removeEventListener('hashchange', saveDepartingScroll);
+      window.removeEventListener('wheel', cancelRestore);
+      window.removeEventListener('touchstart', cancelRestore);
+      window.removeEventListener('pointerdown', cancelRestore);
+      window.removeEventListener('keydown', onKey);
+      restoreMode();
+    };
   });
 </script>
 
@@ -234,7 +325,7 @@
       <AppHeader status={saveStatusBadge} />
       <Tabs items={tabItems} label="Sections" />
     {:else}
-      <BackHeader href={backHref} title={headerTitle} backLabel="Back" status={saveStatusBadge} />
+      <BackHeader href={backHref} title={headerTitle} backLabel="Back" status={saveStatusBadge} onclick={goBack} />
     {/if}
 
     {#if bannerError !== null}

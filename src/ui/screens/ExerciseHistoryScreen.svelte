@@ -20,13 +20,14 @@
   list, because an empty list reads as an exercise with no history.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
 
   import Button from '../components/Button.svelte';
   import LoadOlder from '../components/LoadOlder.svelte';
   import StatusLabel from '../components/StatusLabel.svelte';
   import { services } from '../../services/registry';
   import { formatRoute } from '../../routing/routes';
+  import { createScreenReadyReporter } from '../../routing/screen-ready';
   import {
     HISTORY_PAGE_SIZE,
     buildExerciseHistoryModel,
@@ -45,6 +46,9 @@
   import type { ResultsShard } from '../../domain/types';
 
   let { exerciseId = '' }: { exerciseId?: string } = $props();
+  const reportScreenReady = createScreenReadyReporter();
+  let pagerGeneration = 0;
+  onDestroy(() => { pagerGeneration += 1; });
 
   /** The paging state. The pager owns every rule behind it. */
   let pager = $state<PagerState<HistoryRow>>(emptyPager<HistoryRow>());
@@ -100,14 +104,22 @@
 
   async function loadOlderRows(): Promise<void> {
     if (busy) return;
+    const generation = pagerGeneration;
     busy = true;
     errorText = '';
     try {
-      pager = await loadOlder(pager, readPage, loadShard, HISTORY_PAGE_SIZE);
+      const loaded = await loadOlder(
+        pager, readPage,
+        (month) => generation === pagerGeneration ? loadShard(month) : Promise.resolve(false),
+        HISTORY_PAGE_SIZE
+      );
+      if (generation === pagerGeneration) pager = loaded;
     } catch (error) {
-      errorText = error instanceof Error ? error.message : 'REP JOT could not load older results.';
+      if (generation === pagerGeneration) {
+        errorText = error instanceof Error ? error.message : 'REP JOT could not load older results.';
+      }
     } finally {
-      busy = false;
+      if (generation === pagerGeneration) busy = false;
     }
   }
 
@@ -124,15 +136,28 @@
   // presses drive the list, so a warm-up cannot scroll the page by itself.
   $effect(() => {
     const lookup = $services.lookup;
-    if (lookup === null) return;
-    if (busy) return;
     let current = untrack(() => pager);
     if (untrack(() => pagedExerciseId) !== exerciseId) {
+      pagerGeneration += 1;
       pagedExerciseId = exerciseId;
       current = emptyPager<HistoryRow>();
+      pager = current;
+      busy = false;
+      errorText = '';
     }
+    if (lookup === null || busy) return;
     if (current.rows.length >= HISTORY_PAGE_SIZE) return;
     pager = appendPage(current, readPage, HISTORY_PAGE_SIZE);
+  });
+
+  $effect(() => {
+    void rows;
+    void exercise;
+    if (busy || pagedExerciseId !== exerciseId) return;
+    return reportScreenReady(
+      formatRoute({ name: 'exercise-history', exerciseId }),
+      hasOlder(pager) && errorText === '' ? () => { void loadOlderRows(); } : undefined
+    );
   });
 </script>
 

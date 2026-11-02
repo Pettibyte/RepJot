@@ -31,6 +31,10 @@ check_owner_path() {
   fi
 }
 
+# Install the browser and system libraries for the anchor regression test.
+bun install
+bunx --bun playwright install --with-deps chromium
+
 # Print the effective runtime identity so it is easy to verify that the
 # container user matches the expected host UID/GID mapping.
 echo "Devcontainer setup complete."

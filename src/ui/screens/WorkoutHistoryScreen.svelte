@@ -19,13 +19,14 @@
   coordinator and never touches a store or Drive directly.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
 
   import Button from '../components/Button.svelte';
   import LoadOlder from '../components/LoadOlder.svelte';
   import StatusLabel from '../components/StatusLabel.svelte';
   import { services } from '../../services/registry';
   import { formatRoute } from '../../routing/routes';
+  import { createScreenReadyReporter } from '../../routing/screen-ready';
   import {
     HISTORY_PAGE_SIZE,
     buildWorkoutHistoryModel,
@@ -51,6 +52,9 @@
   let errorText = $state('');
 
   const localTimeZone = resolveLocalTimeZone();
+  const reportScreenReady = createScreenReadyReporter();
+  let disposed = false;
+  onDestroy(() => { disposed = true; });
 
   /** Rows shown so far. The list grows in place; it never re-renders from zero. */
   const rows = $derived(pager.rows);
@@ -95,11 +99,18 @@
     busy = true;
     errorText = '';
     try {
-      pager = await loadOlder(pager, readPage, loadShard, HISTORY_PAGE_SIZE);
+      const loaded = await loadOlder(
+        pager, readPage,
+        (month) => disposed ? Promise.resolve(false) : loadShard(month),
+        HISTORY_PAGE_SIZE
+      );
+      if (!disposed) pager = loaded;
     } catch (error) {
-      errorText = error instanceof Error ? error.message : 'REP JOT could not load older sessions.';
+      if (!disposed) {
+        errorText = error instanceof Error ? error.message : 'REP JOT could not load older sessions.';
+      }
     } finally {
-      busy = false;
+      if (!disposed) busy = false;
     }
   }
 
@@ -119,6 +130,15 @@
     const current = untrack(() => pager);
     if (current.rows.length >= HISTORY_PAGE_SIZE) return;
     pager = appendPage(current, readPage, HISTORY_PAGE_SIZE);
+  });
+
+  $effect(() => {
+    void rows;
+    if (busy) return;
+    return reportScreenReady(
+      formatRoute({ name: 'history' }),
+      hasOlder(pager) && errorText === '' ? () => { void loadOlderRows(); } : undefined
+    );
   });
 </script>
 

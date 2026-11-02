@@ -1,4 +1,5 @@
-# Client-mode test harness. Run from this directory: `cd tests/dom && bun test`.
+# Client-mode test harness. Prefer `bun run test:dom` from the repo root.
+# Direct command: `cd tests/dom && bun --conditions=browser test`.
 #
 # The root `bunfig.toml` compiles `.svelte` in SSR mode, which renders the
 # initial value and nothing more. It cannot tap a pill, log an event after

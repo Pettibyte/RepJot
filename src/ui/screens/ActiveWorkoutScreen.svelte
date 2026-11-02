@@ -34,6 +34,8 @@
 -->
 <script lang="ts">
   import { tick } from 'svelte';
+  import { formatRoute } from '../../routing/routes';
+  import { createScreenReadyReporter } from '../../routing/screen-ready';
   import Button from '../components/Button.svelte';
   import ChipGroup from '../components/ChipGroup.svelte';
   import WorkoutTreeEditable from '../components/WorkoutTreeEditable.svelte';
@@ -73,6 +75,8 @@
   import { formatTimeLabel, resolveLocalTimeZone } from '../viewmodels/chooserModel';
 
   let { sessionId = '' }: { sessionId?: string } = $props();
+  const reportScreenReady = createScreenReadyReporter();
+  let settledSessionId = $state<string | null>(null);
 
   /** The loaded session. Null until the first load resolves. */
   let session = $state<Session | null>(null);
@@ -1072,21 +1076,43 @@
   /** Load the session on mount and whenever the id changes. */
   $effect(() => {
     const service = sessionService;
-    if (service === null || sessionId === '') return;
-    if (session !== null && session.id === sessionId) return;
-    loading = true;
+    const id = sessionId;
+    let cancelled = false;
+    session = null;
+    settledSessionId = null;
     errorText = '';
+    loading = service !== null && id !== '';
+    if (service === null || id === '') {
+      settledSessionId = id;
+      return;
+    }
     void service
-      .load(sessionId)
+      .load(id)
       .then((loaded: Session) => {
-        session = loaded;
+        if (!cancelled) session = loaded;
       })
       .catch((error: unknown) => {
-        errorText = error instanceof Error ? error.message : 'REP JOT could not open that workout.';
+        if (!cancelled) {
+          errorText = error instanceof Error ? error.message : 'REP JOT could not open that workout.';
+        }
       })
       .finally(() => {
-        loading = false;
+        if (!cancelled) {
+          loading = false;
+          settledSessionId = id;
+        }
       });
+    return () => { cancelled = true; };
+  });
+
+  $effect(() => {
+    // Read the derived model before scheduling tick: loading alone does not
+    // prove the editable tree has been built and committed to the DOM.
+    void model;
+    if (loading || settledSessionId !== sessionId) return;
+    // A null model after loading is the rendered unavailable state, not an
+    // unfinished load (including absent services and unknown workouts).
+    return reportScreenReady(formatRoute({ name: 'session-active', sessionId }));
   });
 </script>
 

@@ -5,7 +5,8 @@
 //
 // 1. `.svelte` compiles with `generate: 'client'`, so `mount()` exists. The
 //    `svelte` package entry resolves to the server build under `bun test`,
-//    which throws `lifecycle_function_unavailable` on `mount`.
+//    which throws `lifecycle_function_unavailable` on `mount`. The test command
+//    also sets `--conditions=browser` for hand-written lifecycle/context imports.
 // 2. `happy-dom` supplies `document` and friends. It is already a tracked
 //    devDependency, so this costs the project nothing new.
 

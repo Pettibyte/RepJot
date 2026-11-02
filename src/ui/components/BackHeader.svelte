@@ -7,6 +7,7 @@
     backLabel = 'Back',
     title = '',
     status = undefined,
+    onclick = undefined,
     class: className = ''
   }: {
     /** Target for the back control, for example `#/workout`. */
@@ -17,6 +18,8 @@
     title?: string;
     /** Slot for the save-status line, the same shape `AppHeader` accepts. */
     status?: Snippet;
+    /** The shell intercepts ordinary clicks to traverse app history. */
+    onclick?: (event: MouseEvent) => void;
     class?: string;
   } = $props();
 
@@ -25,7 +28,7 @@
 
 <header class={classes}>
   <div class="back-header__row">
-    <a class="back-header__back" {href}>
+    <a class="back-header__back" {href} {onclick}>
       <Icon name="arrow_back" decorative />
       {backLabel}
     </a>

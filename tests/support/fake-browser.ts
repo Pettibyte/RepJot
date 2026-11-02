@@ -60,6 +60,16 @@ export interface FakeBrowser {
   };
   sessionStorage: MemoryStorage;
   localStorage: MemoryStorage;
+  history: {
+    readonly state: unknown;
+    readonly length: number;
+    backCalls: number;
+    back(): void;
+    forward(): void;
+    go(delta: number): void;
+    pushState(state: unknown, title: string, url?: string): void;
+    replaceState(state: unknown, title: string, url?: string): void;
+  };
   submittedForm: FakeElement | null;
   removedElementCount: number;
   /** Event listeners the fake window holds, by type. */
@@ -69,6 +79,49 @@ export interface FakeBrowser {
 export function installFakeBrowser(route = '#/settings'): FakeBrowser {
   const sessionStorage = new MemoryStorage();
   const localStorage = new MemoryStorage();
+  const entries: Array<{ hash: string; state: unknown }> = [{ hash: route, state: null }];
+  let index = 0;
+  let hash = route;
+  function fire(type: string): void {
+    for (const listener of [...(browser.eventListeners[type] ?? [])]) listener();
+  }
+  function updateUrl(url: string): void {
+    const parsed = new URL(url, browser.location.href);
+    browser.location.href = parsed.href;
+    browser.location.pathname = parsed.pathname;
+    browser.location.search = parsed.search;
+    hash = parsed.hash;
+  }
+  const history: FakeBrowser['history'] = {
+    get state(): unknown { return structuredClone(entries[index]!.state); },
+    get length(): number { return entries.length; },
+    backCalls: 0,
+    back(): void { ++history.backCalls; history.go(-1); },
+    forward(): void { history.go(1); },
+    go(delta: number): void {
+      const target = index + delta;
+      if (target < 0 || target >= entries.length || delta === 0) return;
+      const oldHash = hash;
+      index = target;
+      updateUrl(`${browser.location.pathname}${browser.location.search}${entries[index]!.hash}`);
+      fire('popstate');
+      if (oldHash !== hash) fire('hashchange');
+    },
+    pushState(state: unknown, _title: string, url?: string): void {
+      if (url !== undefined) updateUrl(url);
+      entries.splice(index + 1);
+      entries.push({ hash, state: structuredClone(state) });
+      ++index;
+    },
+    replaceState(state: unknown, _title: string, url?: string): void {
+      entries[index]!.state = structuredClone(state);
+      if (url !== undefined) {
+        browser.replacedUrl = url;
+        updateUrl(url);
+        entries[index]!.hash = hash;
+      }
+    }
+  };
   const browser: FakeBrowser = {
     assignedUrl: '',
     replacedUrl: '',
@@ -83,10 +136,26 @@ export function installFakeBrowser(route = '#/settings'): FakeBrowser {
     },
     sessionStorage,
     localStorage,
+    history,
     submittedForm: null,
     removedElementCount: 0,
     eventListeners: {}
   };
+
+  Object.defineProperty(browser.location, 'hash', {
+    configurable: true,
+    get: (): string => hash,
+    set: (value: string): void => {
+      const next = value.startsWith('#') || value === '' ? value : `#${value}`;
+      if (next === hash) return;
+      updateUrl(`${browser.location.pathname}${browser.location.search}${next}`);
+      entries.splice(index + 1);
+      entries.push({ hash, state: null });
+      ++index;
+      fire('popstate');
+      fire('hashchange');
+    }
+  });
 
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -95,12 +164,7 @@ export function installFakeBrowser(route = '#/settings'): FakeBrowser {
       location: browser.location,
       sessionStorage,
       localStorage,
-      history: {
-        replaceState: (_state: unknown, _title: string, url: string): void => {
-          browser.replacedUrl = url;
-          browser.location.hash = url.includes('#') ? url.slice(url.indexOf('#')) : '';
-        }
-      },
+      history,
       setTimeout: globalThis.setTimeout,
       clearTimeout: globalThis.clearTimeout,
       // Event listener registry. The hash router subscribes here, and a test

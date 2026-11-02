@@ -165,6 +165,19 @@ describe('callback validation', () => {
     expect(browser.location.hash).toBe('#/settings');
   });
 
+  test('fragment cleanup preserves router metadata and unrelated history state', () => {
+    const browser = installFakeBrowser();
+    beginAuthorization(CLIENT_ID, { remember: true, returnRoute: '#/settings' });
+    browser.location.hash = responseFragment({ state: authorizationState(browser.assignedUrl) });
+    const state = { __repjotRouter: { id: 'entry-before-oauth' }, fixture: 'preserved' };
+    browser.history.replaceState(state, '');
+
+    consumeCallback();
+
+    expect(browser.location.hash).toBe('#/settings');
+    expect(browser.history.state).toEqual(state);
+  });
+
   test('a callback without the app-data scope is rejected', () => {
     const browser = installFakeBrowser();
     beginAuthorization(CLIENT_ID, { remember: false });

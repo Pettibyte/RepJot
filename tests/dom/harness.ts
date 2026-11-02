@@ -4,8 +4,8 @@
 // service, and `FakeDrive`, then taps them the way a person would. The point is
 // to see what the SSR suite cannot: what happens after the first render.
 //
-// Run from this directory with `bun test`, or from the repo root with
-// `bun run test:dom`.
+// Run from the repo root with `bun run test:dom`, or from this directory with
+// `bun --conditions=browser test` so lifecycle imports use the client runtime.
 
 import { clearServices, setServices } from '../../src/services/registry';
 import { clearRawPayloads } from '../../src/state/raw-payload-store';

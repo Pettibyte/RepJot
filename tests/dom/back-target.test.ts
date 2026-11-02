@@ -75,12 +75,15 @@ function backHref(target: HTMLElement): string {
 }
 
 /** Mount the shell over a real router on a fake address bar. */
-async function mountShell(initialHash: string): Promise<{
+async function mountShell(
+  initialHash: string,
+  startup: 'ready' | 'loading_static' | 'blocked' | 'static_failed' = 'ready'
+): Promise<{
   target: HTMLElement;
   env: RouterEnv & { traverseTo(hash: string): void };
 }> {
   harness = await signIn();
-  setStartupStatus('ready');
+  setStartupStatus(startup);
   const env = fakeEnv(initialHash);
   const router = createRouter({ env });
   setRouter(router);
@@ -149,6 +152,29 @@ describe('in-app Back through the real router and shell', () => {
   });
 });
 
+describe('startup scroll readiness', () => {
+  test('the loading placeholder does not consume a generic route restoration', async () => {
+    const { target } = await mountShell(OVERVIEW_HASH, 'loading_static');
+    expect(target.textContent).toContain('Loading REP JOT');
+    expect(getRouter()?.scrollForCurrent()).toBeNull();
+    document.documentElement.scrollTop = 640;
+
+    setStartupStatus('ready');
+    await settle(12);
+
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(getRouter()?.scrollForCurrent()).toBe(0);
+  });
+
+  for (const status of ['blocked', 'static_failed'] as const) {
+    test(`${status} treats a terminal blocker as rendered content`, async () => {
+      const { target } = await mountShell('#/sessions/session-one/active', status);
+      expect(target.textContent).toContain('REP JOT cannot start');
+      expect(getRouter()?.scrollForCurrent()).toBe(0);
+    });
+  }
+});
+
 describe('scroll on route change through the real shell', () => {
   /** The offset the shell sees. happy-dom backs this with `documentElement`. */
   function scrollOffset(): number {
@@ -172,17 +198,21 @@ describe('scroll on route change through the real shell', () => {
     expect(scrollOffset()).toBe(0);
   });
 
-  test('a browser back does not reset the offset, so the position is restored', async () => {
+  test('a browser back explicitly restores the destination entry offset', async () => {
     const { env } = await mountShell(OVERVIEW_HASH);
+    setScrollOffset(512);
+    window.dispatchEvent(new Event('scroll'));
 
     getRouter()?.navigate({ name: 'exercise-history', exerciseId: EXERCISE_ID });
     await settle(8);
-    setScrollOffset(512);
+    setScrollOffset(200);
+    window.dispatchEvent(new Event('scroll'));
 
     env.traverseTo(OVERVIEW_HASH);
     await settle(8);
 
-    // The shell must leave this alone for the browser to restore.
+    // The outgoing screen has a different offset. Restoration belongs to the
+    // destination entry and happens only after its content has rendered.
     expect(scrollOffset()).toBe(512);
   });
 

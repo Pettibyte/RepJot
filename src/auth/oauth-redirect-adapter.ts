@@ -142,7 +142,8 @@ function replaceFragment(returnRoute: string): void {
   const route = safeReturnRoute(returnRoute);
   const cleanUrl = `${window.location.pathname}${window.location.search}${route}`;
   if (typeof window.history.replaceState === 'function') {
-    window.history.replaceState(null, document.title, cleanUrl);
+    // Keep the router's entry metadata and any unrelated history state.
+    window.history.replaceState(window.history.state, document.title, cleanUrl);
     return;
   }
   window.location.hash = route;

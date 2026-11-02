@@ -34,8 +34,14 @@ function routerWithOrigin(origin: Route): Router {
   return {
     current: () => readable(origin),
     navigate: (): void => {},
+    back: (): void => {},
+    saveScroll: (): void => {},
+    scrollForCurrent: () => null,
     originFor: (): Route | null => origin,
-    lastNavigation: () => ({ from: { name: 'home' }, to: origin, traversed: false }),
+    lastNavigation: () => ({
+      from: { name: 'home' }, to: origin, traversed: false,
+      entryId: 'shell-entry', fromEntryId: 'shell-parent', scrollY: null
+    }),
     start: (): void => {},
     stop: (): void => {}
   };

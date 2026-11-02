@@ -27,10 +27,13 @@
   import { services } from '../../services/registry';
   import { getRouter } from '../../routing/router-registry';
   import { formatRoute } from '../../routing/routes';
+  import { createScreenReadyReporter } from '../../routing/screen-ready';
   import { buildSummaryModel, type SummaryModel } from '../viewmodels/summaryModel';
   import { resolveLocalTimeZone } from '../viewmodels/chooserModel';
 
   let { sessionId = '' }: { sessionId?: string } = $props();
+  const reportScreenReady = createScreenReadyReporter();
+  let settledSessionId = $state<string | null>(null);
 
   /** True while the session load is in flight. */
   let loading = $state(false);
@@ -77,35 +80,51 @@
     }
   }
 
-  async function loadSummary(): Promise<void> {
+  $effect(() => {
     const { sessionService, staticData } = $services;
-    if (sessionService === null || staticData === null || sessionId === '') return;
-    loading = true;
+    const id = sessionId;
+    let cancelled = false;
+    model = null;
+    settledSessionId = null;
     errorText = '';
-    try {
-      const session = await sessionService.load(sessionId);
-      if (session === null) {
-        model = null;
-        errorText = 'REP JOT has no session with that id.';
-        return;
-      }
-      model = buildSummaryModel({
-        session,
-        staticData,
-        localTimeZone,
-        nowUtc: new Date().toISOString()
-      });
-    } catch (error) {
-      // The message is the AppError's safe text. It names the failure family
-      // and carries no token, note, or measurement. REQUIREMENTS 15.6.
-      errorText = error instanceof Error ? error.message : 'REP JOT could not open this session.';
-    } finally {
-      loading = false;
+    loading = sessionService !== null && staticData !== null && id !== '';
+    if (sessionService === null || staticData === null || id === '') {
+      settledSessionId = id;
+      return;
     }
-  }
+    void (async () => {
+      try {
+        const session = await sessionService.load(id);
+        if (cancelled) return;
+        if (session === null) {
+          errorText = 'REP JOT has no session with that id.';
+          return;
+        }
+        model = buildSummaryModel({
+          session,
+          staticData,
+          localTimeZone,
+          nowUtc: new Date().toISOString()
+        });
+      } catch (error) {
+        // AppError messages contain safe text, not account or result data.
+        if (!cancelled) {
+          errorText = error instanceof Error ? error.message : 'REP JOT could not open this session.';
+        }
+      } finally {
+        if (!cancelled) {
+          loading = false;
+          settledSessionId = id;
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  });
 
   $effect(() => {
-    void loadSummary();
+    void model;
+    if (loading || settledSessionId !== sessionId) return;
+    return reportScreenReady(formatRoute({ name: 'session-summary', sessionId }));
   });
 </script>
 

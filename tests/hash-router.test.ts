@@ -171,10 +171,24 @@ function fakeEnv(initial = '#/'): RouterEnv & {
   replaceWrites: string[];
   listeners: Array<() => void>;
   popStateListeners: Array<() => void>;
+  backCalls: number;
   traverseTo(hash: string): void;
+  forward(): void;
+  state(): unknown;
+  seedState(state: unknown): void;
+  pushSameHash(): void;
 } {
+  const history: Array<{ hash: string; state: unknown }> = [{ hash: initial, state: null }];
+  let index = 0;
+  function fireTraversal(): void {
+    const oldHash = env.hash;
+    env.hash = history[index]!.hash;
+    env.popStateListeners.forEach((listener) => listener());
+    if (oldHash !== env.hash) env.listeners.forEach((listener) => listener());
+  }
   const env = {
     hash: initial,
+    backCalls: 0,
     writes: [] as string[],
     replaceWrites: [] as string[],
     listeners: [] as Array<() => void>,
@@ -184,17 +198,54 @@ function fakeEnv(initial = '#/'): RouterEnv & {
     },
     setHash(hash: string): void {
       env.writes.push(hash);
+      if (env.hash === hash) return;
+      history.splice(index + 1);
+      history.push({ hash, state: null });
+      ++index;
       env.hash = hash;
-      env.listeners.forEach((listener: () => void): void => listener());
+      // Native fragment pushes fire popstate before hashchange too.
+      env.popStateListeners.forEach((listener) => listener());
+      env.listeners.forEach((listener) => listener());
     },
     replaceHash(hash: string): void {
       env.replaceWrites.push(hash);
+      history[index]!.hash = hash;
       env.hash = hash;
     },
+    getHistoryState(): unknown {
+      return structuredClone(history[index]!.state);
+    },
+    replaceHistoryState(state: unknown): void {
+      history[index]!.state = structuredClone(state);
+    },
+    state(): unknown {
+      return env.getHistoryState();
+    },
+    seedState(state: unknown): void {
+      env.replaceHistoryState(state);
+    },
+    back(): void {
+      ++env.backCalls;
+      if (index === 0) return;
+      --index;
+      fireTraversal();
+    },
+    forward(): void {
+      if (index + 1 === history.length) return;
+      ++index;
+      fireTraversal();
+    },
+    pushSameHash(): void {
+      history.splice(index + 1);
+      history.push({ hash: env.hash, state: null });
+      ++index;
+      env.popStateListeners.forEach((listener) => listener());
+    },
     traverseTo(hash: string): void {
-      env.hash = hash;
-      env.popStateListeners.forEach((listener: () => void): void => listener());
-      env.listeners.forEach((listener: () => void): void => listener());
+      const target = history.findIndex((item) => item.hash === hash);
+      if (target < 0) throw new Error(`No history entry for ${hash}`);
+      index = target;
+      fireTraversal();
     },
     onHashChange(listener: () => void): () => void {
       env.listeners.push(listener);
@@ -419,7 +470,7 @@ describe('origin tracking for the in-app Back control', () => {
     expect(router.originFor({ name: 'history' })).toBeNull();
   });
 
-  test('the origin map is keyed by screen name, so a second exercise keeps it', () => {
+  test('a second exercise records its own entry predecessor', () => {
     const env = fakeEnv('#/workouts/arms-day-a');
     const router = createRouter({ env });
     router.start();
@@ -464,14 +515,14 @@ describe('replace navigation', () => {
     });
   });
 
-  test('replace falls back to the static parent when the replaced screen has no origin', () => {
+  test('a replacement of a deep link has no known predecessor', () => {
     const env = fakeEnv('#/sessions/s-1/active');
     const router = createRouter({ env });
     router.start();
 
     router.navigate({ name: 'session-summary', sessionId: 's-1' }, { replace: true });
 
-    expect(router.originFor({ name: 'session-summary', sessionId: 's-1' })).toEqual({ name: 'home' });
+    expect(router.originFor({ name: 'session-summary', sessionId: 's-1' })).toBeNull();
   });
 
   test('replace with no prior route records nothing', () => {
@@ -520,21 +571,21 @@ describe('the traversal signal', () => {
     const env = fakeEnv('#/history');
     const router = createRouter({ env });
     router.start();
-    expect(router.lastNavigation()).toEqual({
+    expect(router.lastNavigation()).toMatchObject({
       from: null,
       to: { name: 'history' },
       traversed: false
     });
 
     router.navigate({ name: 'settings' });
-    expect(router.lastNavigation()).toEqual({
+    expect(router.lastNavigation()).toMatchObject({
       from: { name: 'history' },
       to: { name: 'settings' },
       traversed: false
     });
 
     env.traverseTo('#/history');
-    expect(router.lastNavigation()).toEqual({
+    expect(router.lastNavigation()).toMatchObject({
       from: { name: 'settings' },
       to: { name: 'history' },
       traversed: true
@@ -545,6 +596,8 @@ describe('the traversal signal', () => {
     const env = fakeEnv('#/');
     const router = createRouter({ env });
     router.start();
+    router.navigate({ name: 'settings' });
+    router.navigate({ name: 'raw-json', source: 'example' });
     env.traverseTo('#/settings');
 
     router.navigate({ name: 'history' });
