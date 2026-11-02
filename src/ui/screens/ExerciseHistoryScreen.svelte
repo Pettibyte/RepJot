@@ -2,14 +2,8 @@
   The Exercise History screen.
   Phase 18. REQUIREMENTS 20.4, 20.5. ARCHITECTURE §9.
 
-  One exercise, every recorded occurrence, newest first. Each row links back
-  to the session summary, so the user reads the whole workout around the one
-  set they came to look at.
-
-  The row shows the exercise name, not the workout name. The screen is
-  already scoped to one exercise, so repeating the exercise name in the
-  heading and the row keeps the row honest: it names the thing the user is
-  tracking.
+  One exercise, every recorded occurrence, newest first, grouped by session.
+  Each group has a local date-and-time heading linked to the session summary.
 
   Load older. The screen holds no paging rule of its own. `historyPager`
   owns the page offset, the two end-of-list flags, and the walk past the
@@ -31,6 +25,7 @@
   import {
     HISTORY_PAGE_SIZE,
     buildExerciseHistoryModel,
+    groupExerciseHistory,
     type HistoryRow
   } from '../viewmodels/historyModel';
   import { resolveLocalTimeZone } from '../viewmodels/chooserModel';
@@ -63,6 +58,9 @@
 
   /** Rows shown so far. The list grows in place. */
   const rows = $derived(pager.rows);
+  const groups = $derived(groupExerciseHistory(
+    rows, $services.lookup?.index.sessionsById ?? new Map(), localTimeZone
+  ));
 
   /** The exercise name, or `undefined` when the bundle lacks the exercise. */
   const exercise = $derived($services.lookup?.getExercise(exerciseId) ?? undefined);
@@ -184,11 +182,15 @@
     {#if rows.length === 0 && !busy}
       <p class="history-screen__empty">No recorded sets yet for this exercise.</p>
     {:else}
-      <ul class="history-list">
-        {#each rows as row, index (`eh-${index}`)}
+      {#each groups as group (group.sessionId)}
+        <section class="exercise-history-group">
+          <h2 class="exercise-history-group__title">
+            <a href={group.href}><time datetime={group.startedAtUtc}>{group.dateLabel}</time></a>
+          </h2>
+          <ul class="history-list">
+        {#each group.rows as row, index (`eh-${index}`)}
           <li class="session-row">
             <a class="session-row session-item" href={row.href}>
-              <span class="session-item__name">{row.workoutName}</span>
               <span class="session-item__meta">
                 <StatusLabel class="session-item__status" status={row.status} label={row.statusLabel} />
                 {#if row.detailLabel !== undefined && row.detailLabel !== ''}
@@ -197,13 +199,14 @@
                 {#if row.alternatingLabel !== undefined && row.alternatingLabel !== ''}
                   <span class="session-item__time">{row.alternatingLabel}</span>
                 {/if}
-                <span class="session-item__time">{row.dateLabel}</span>
                 {#if row.notes !== undefined}<span class="session-item__note">{row.notes}</span>{/if}
               </span>
             </a>
           </li>
         {/each}
-      </ul>
+          </ul>
+        </section>
+      {/each}
 
       <LoadOlder
         loadedCount={rows.length}

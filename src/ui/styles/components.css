@@ -2022,6 +2022,17 @@
   padding: 0;
 }
 
+.exercise-history-group + .exercise-history-group {
+  margin-top: var(--space-4);
+}
+
+.exercise-history-group__title {
+  font-size: var(--text-headline-sm);
+  font-weight: var(--weight-bold);
+  border-bottom: var(--border-weight) solid var(--color-primary);
+  padding-bottom: var(--space-2);
+}
+
 /* Settings screen ---------------------------------------------------- */
 /* Phase 19. Units list, raw export, diagnostics, license, danger zone. */
 

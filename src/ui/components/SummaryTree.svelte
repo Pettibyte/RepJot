@@ -114,7 +114,7 @@
         <p class="set-table__section">{block.table.sectionTitle}</p>
         <div class="set-table__head">
           <h2 class="set-table__title" id={`${idPrefix}-${block.table.key}-title`}>
-            {#if block.table.rows[0]?.href !== undefined}
+            {#if !block.table.multiExercise && block.table.rows[0]?.href !== undefined}
               <a class="summary-row__name" href={block.table.rows[0].href}>{block.table.title}</a>
             {:else}
               {block.table.title}
@@ -139,7 +139,11 @@
                   {#each matrix.rows as line (line.key)}
                     <tr class="set-matrix__line">
                       <th class="set-matrix__name" scope="row">
-                        <span class="set-matrix__exercise">{line.label}</span>
+                        {#if line.href !== undefined}
+                          <a class="set-matrix__exercise summary-row__name" href={line.href}>{line.label}</a>
+                        {:else}
+                          <span class="set-matrix__exercise">{line.label}</span>
+                        {/if}
                       </th>
                       {#each line.cells as cell (cell.key)}
                         <td class="set-matrix__cell">

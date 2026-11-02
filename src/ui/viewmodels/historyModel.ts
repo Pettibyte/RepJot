@@ -223,6 +223,42 @@ export function formatHistoryDate(
   return day;
 }
 
+export interface ExerciseHistoryGroup {
+  sessionId: string;
+  dateLabel: string;
+  startedAtUtc: string;
+  href: string;
+  rows: HistoryRow[];
+}
+
+/** Group all loaded sets, including sets appended across a page boundary. */
+export function groupExerciseHistory(
+  rows: readonly HistoryRow[],
+  sessions: ReadonlyMap<string, Pick<SessionSummary, 'startedAtUtc'>>,
+  timeZone: string,
+  nowValue: string = wallClockUtc()
+): ExerciseHistoryGroup[] {
+  const groups = new Map<string, ExerciseHistoryGroup>();
+  for (const row of rows) {
+    let group = groups.get(row.sessionId);
+    if (group === undefined) {
+      const startedAtUtc = sessions.get(row.sessionId)?.startedAtUtc ?? row.startedAtUtc;
+      const date = formatHistoryDate(startedAtUtc, nowValue, timeZone);
+      const clock = localClock(startedAtUtc, timeZone);
+      group = {
+        sessionId: row.sessionId,
+        dateLabel: date.startsWith('Today ') || clock === null ? date : `${date} ${clock}`,
+        startedAtUtc,
+        href: row.href,
+        rows: []
+      };
+      groups.set(row.sessionId, group);
+    }
+    group.rows.push(row);
+  }
+  return Array.from(groups.values());
+}
+
 /** The status label for one session status. */
 export function sessionStatusLabel(status: SessionStatus | string): string {
   return STATUS_LABELS.get(status) ?? status;
